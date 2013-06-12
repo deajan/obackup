@@ -3,10 +3,42 @@ obackup
 
 A local or remote file & database backup script tailored for multiple virtualhost backups. Yet it actually works for a lot of backup tasks.
 
+## About
+
 OBackup is designed from ground to make the backup process as reliable as possible.
 It divides the whole backup process into tasks, allowing each task to execute for a certain amount of time.
 If a task doesn't finish in time, it's stopped and the next task is processed.
 Before a task gets stopped, a first warning message is generated telling the task takes too long.
-Every action gets logged, and at the end of the backup process, if there was a warning, a stopped task or an error an email will be sent.
+Every action gets logged, and at the end of the backup process, if there was a warning,
+a stopped task or an error an alert email will be sent.
 
-Obackup manages to backup MariaDB / MySQL databases and files (with or without root rights).
+OBackup can enumerate and backup all MariaDB / MySQL databases present on a server.
+It can also enumerate all subdirectories of a given path and process them as separate tasks (usefull for multiple vhosts).
+It will do several checks before launching a backup like checking backup size and available local disk space.
+
+Obackup will work well to backup to a snapshot aware filesystem like ZFS or btrfs.
+In case you don't work with one of these, it may also rotate backups for you.
+
+As of today, obackup has been tested successfully on RHEL / CentOS 5, CentOS 6, Debian 6.0.7 and Linux Mint 14
+but it should basically run on any linux flavor. It relies on well known programs like rsync, ssh, mysqldump along
+with other great GNU coreutils.
+
+## Installation
+
+You can download the latest obackup script from authors website.
+You may also clone this git which will maybe have some recent bugfixes.
+
+  $ git clone git://github.com/sickill/bitpocket.git
+  $ chmod +x ./bin/obackup.sh
+  
+Once you have grabbed a copy of Obackup, just edit it with your favorite text editor to setup your environment
+and you're ready to run.
+
+You can run multiple instances of obackup scripts with different backup environments. Just copy the script to another
+filename, edit it's environment and you're ready to run concurrently.
+
+## Author
+
+Orsiris "Ozy" de Jong.
+
+ 
