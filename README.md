@@ -1,7 +1,8 @@
 obackup
 =======
 
-A local or remote file & database backup script tailored for multiple virtualhost backups. Yet it actually works for a lot of backup tasks.
+A file & database backup script tailored for multiple virtualhost backups locally or remotely via ssh.
+Yet it actually works for a lot of backup tasks.
 
 ## About
 
@@ -12,7 +13,7 @@ Before a task gets stopped, a first warning message is generated telling the tas
 Every action gets logged, and at the end of the backup process, if there was a warning,
 a stopped task or an error an alert email will be sent.
 
-OBackup can enumerate and backup all MariaDB / MySQL databases present on a server.
+OBackup can enumerate and backup all MariaDB / MySQL databases present on a server
 It can also enumarate all subdirectories of a given path and process them as separate tasks (usefull for multiple vhosts).
 It will do several checks before launching a backup like execution checks, dryruns,
 checking backup size and available local disk space.
@@ -37,6 +38,20 @@ and you're ready to run. A detailled documentation can be found in the CONFIG.TX
 
 You can run multiple instances of obackup scripts with different backup environments. Just copy the script to another
 filename, edit it's environment and you're ready to run concurrently.
+
+## Usage
+
+MariaDB / MySQL backups are consistent because dumps are done with the --single-transaction option.
+File backups can be done directly of the data won't change while backing up but a snapshot of the actual data to backup
+is preferable as it will stay consistent (LVM, zfs or btrfs snapshots will do fine).
+
+    $ ./obackup.sh TASKNAME --dry
+    $ ./obackup.sh TASKNAME
+    
+
+
+
+
 
 ## Author
 
