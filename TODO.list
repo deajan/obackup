@@ -1,0 +1,14 @@
+## Main version 1.82 build 30052013
+
+Upcomming features:
+
+- Check for environment sanity before execution
+- Local disk space check triggers an error if backup size is bigger than a given value but should also trigger an alert if space is lower than a given value.
+
+Bugs not yet addressed:
+
+- Recursive task creation doesn't include files, it should
+
+Future plans:
+
+- Conquest world :)
