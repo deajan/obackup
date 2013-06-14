@@ -2,6 +2,8 @@
 
 Upcomming features:
 
+- Write proper documentation
+
 Bugs not yet addressed that will be done a bit later:
 
 - Recursive task creation doesn't include files, it should
