@@ -165,7 +165,7 @@ function LoadConfigFile
 		LogError "Wrong configuration file supplied [$1]. Backup cannot start."
 	else 
 		egrep '^#|^[^ ]*=[^;&]*'  "$1" > "/dev/shm/obackup_config_$SCRIPT_PID"
-		source $1
+		source "/dev/shm/obackup_config_$SCRIPT_PID"
 	fi
 } 
 
