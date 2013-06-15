@@ -36,8 +36,11 @@ You may also clone this git which will maybe have some more recent build.
     $ chmod +x ./obackup.sh
   
 Once you have grabbed a copy of Obackup, just edit the config file with your favorite text editor to setup your environment and you're ready to run. A detailled documentation can be found in the DOCUMENTATION.md file.
-
 You can run multiple instances of obackup scripts with different backup environments. Just create another configuration file, edit it's environment and you're ready to run concurrently.
+
+Performing remote backups requires you to create RSA private / public key pair. Please see documentation for further information.
+Performing mysql backups requires to create a mysql user with SELECT rights on all databases. Please see documentation for further information.
+Performing backup with SUDO_EXEC option requires to configure sudoers file to allow some commands without password. Keep in mind that running backup as superuser might be a security risk. You should generally prefer a read only enabled user. Please see documentation for further information.
 
 ## Usage
 
