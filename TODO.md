@@ -6,12 +6,12 @@ Upcomming features:
 - Add usage function (ie --help or no option specified)
 - Add GetCmdlineParameter function
 - Add --silent parameter
-- 
+- Add option to enable ACL backup (with rsync, and tar rotated copies)
 
 Bugs not yet addressed that will be done a bit later:
 
-- Recursive task creation doesn't include files, it should
-- Disk usage check doesn't care about excluded directories
+- Recursive task creation doesn't include files in root directory but only subdirectories
+- Disk usage check doesn't calculate excluded directories
 
 Future plans:
 
