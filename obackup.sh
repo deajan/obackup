@@ -2,15 +2,13 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.83 #### Build 1606201301
+OBACKUP_VERSION=1.83 #### Build 1606201302
 
-LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
 DEBUG=no
 SCRIPT_PID=$$
 
 LOCAL_USER=$(whoami)
 LOCAL_HOST=$(hostname)
-MAIL_ALERT_MSG="Warning: Execution of obackup instance $BACKUP_ID (pid $SCRIPT_PID) as $LOCAL_USER@$LOCAL_HOST produced errors."
 
 ## Log a state message every $KEEP_LOGGING seconds. Should generally not be equal to soft or hard execution time so your log won't be unnecessary big.
 KEEP_LOGGING=1801
@@ -30,8 +28,8 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 # /dev/shm/obackup_fsize_$SCRIPT_PID			Size of $DIRECTORIES_TO_BACKUP
 # /dev/shm/obackup_rsync_output_$SCRIPT_PID		Output of Rsync command
 # /dev/shm/obackup_config_$SCRIPT_PID			Parsed configuration file
-# /dev/shm/obackup_run_before_$SCRIPT_PID		Output of command to be run before backup
-# /dev/shm/obackup_run_after_$SCRIPT_PID		Output of command to be run after backup
+# /dev/shm/obackup_run_local_$SCRIPT_PID		Output of command to be run localy
+# /dev/shm/obackup_run_remote_$SCRIPT_PID		Output of command to be run remotely
 
 # Alert flags
 soft_alert_total=0
@@ -126,8 +124,8 @@ function CleanUp
         rm -f /dev/shm/obackup_fsize_$SCRIPT_PID
         rm -f /dev/shm/obackup_rsync_output_$SCRIPT_PID
 	rm -f /dev/shm/obackup_config_$SCRIPT_PID
-	rm -f /dev/shm/obackup_run_before_$SCRIPT_PID
-	rm -f /dev/shm/obackup_run_after_$SCRIPT_PID
+	rm -f /dev/shm/obackup_run_local_$SCRIPT_PID
+	rm -f /dev/shm/obackup_run_remote_$SCRIPT_PID
 }
 
 function SendAlert
@@ -219,74 +217,111 @@ function CheckEnvironment
 	fi
 }
 
-function RunBefore
+# Waits for pid $1 to complete. Will log an alert if $2 seconds exec time exceeded unless $2 equals 0. Will stop task and log alert if $3 seconds exec time exceeded.
+function WaitForTaskCompletition
 {
-	if [ "$RUN_BEFORE_CMD" != "" ]
+        soft_alert=0
+        SECONDS_BEGIN=$SECONDS
+        while ps -p$1 > /dev/null
+        do
+                Spinner
+                sleep 1
+                EXEC_TIME=$(($SECONDS - $SECONDS_BEGIN))
+                if [ $(($EXEC_TIME % $KEEP_LOGGING)) -eq 0 ]
+                then
+                        Log "Current task still running."
+                fi
+                if [ $EXEC_TIME -gt $2 ]
+                then
+                        if [ $soft_alert -eq 0 ] && [ $2 != 0 ]
+                        then
+                                LogError "Max soft execution time exceeded for task."
+                                soft_alert=1
+                        fi
+                        if [ $EXEC_TIME -gt $3 ] && [ $3 != 0 ]
+                        then
+                                LogError "Max hard execution time exceeded for task. Stopping task execution."
+                                return 1
+                        fi
+                fi
+        done
+}
+
+
+## Runs local command $1 and waits for completition in $2 seconds
+function RunLocalCommand
+{
+	CheckConnectivity3rdPartyHosts
+	$1 > /dev/shm/obackup_run_local_$SCRIPT_PID &
+	child_pid=$!
+	WaitForTaskCompletition $child_pid 0 $2
+	wait $child_pid
+	retval=$?
+	if [ $retval -eq 0 ]
 	then
-		CheckConnectivity3rdPartyHosts
-		if [ "$REMOTE_BACKUP" == "yes" ]
+		Log "Running command [$1] on local host succeded."
+	else
+		Log "Running command [$1] on local host failed."
+	fi
+
+	Log "Command output:"
+	Log "$(cat /dev/shm/obackup_run_local_$SCRIPT_PID)"
+}
+
+## Runs remote command $1 and waits for completition in $2 seconds
+function RunRemoteCommand
+{
+	CheckConnectivity3rdPartyHosts
+	if [ "$REMOTE_BACKUP" == "yes" ]
+	then
+		CheckConnectivityRemoteHost
+		if [ $? != 0 ]
 		then
-			CheckConnectivityRemoteHost
-			if [ $? != 0 ]
-			then
-				LogError "Cannectivity test failed. Stopping run before execution."
-				return 1
-			else
-				$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$RUN_BEFORE_CMD" > /dev/shm/obackup_run_before_$SCRIPT_PID &
-			fi
+			LogError "Connectivity test failed. Cannot run remote command."
+			return 1
 		else
-			$RUN_BEFORE_CMD > /dev/shm/obackup/run_before_$SCRIPT_PID &
+			$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$1" > /dev/shm/obackup_run_remote_$SCRIPT_PID &
 		fi
-		retval=$?
 		child_pid=$!
-		WaitForTaskCompletition $child_pid 0 $MAX_EXEC_TIME_BEFORE
+		WaitForTaskCompletition $child_pid 0 $2
 		wait $child_pid
 		retval=$?
- 		if [ $retval -eq 0 ]
+		if [ $retval -eq 0 ]
 		then
-			Log "Running command [$RUN_BEFORE_CMD] succeeded."
+			Log "Running command [$1] succeded."
 		else
-			LogError "Running command [$RUN_BEFORE_CMD] failed."
+			LogError "Running command [$1] failed."
 		fi
-
+		
 		Log "Command output:"
-		Log "$(cat /dev/shm/obackup/run_before_$SCRIPT_PID)"
+		Log "$(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
 	fi
 }
 
-function RunAfter
+function RunBeforeHook
 {
-        if [ "$RUN_AFTER_CMD" != "" ]
-        then
-                CheckConnectivity3rdPartyHosts
-                if [ "$REMOTE_BACKUP" == "yes" ]
-                then
-                        CheckConnectivityRemoteHost
-                        if [ $? != 0 ]
-                        then
-                                LogError "Cannectivity test failed. Stopping run before execution."
-                                return 1
-                        else
-                                $(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$RUN_AFTER_CMD" > /dev/shm/obackup_run_after_$SCRIPT_PID &
-                        fi
-                else
-                        $RUN_AFTER_CMD > /dev/shm/obackup/run_after_$SCRIPT_PID &
-                fi
-                retval=$?
-                child_pid=$!
-                WaitForTaskCompletition $child_pid 0 $MAX_EXEC_TIME_AFTER
-                wait $child_pid
-                retval=$?
-                if [ $retval -eq 0 ]
-                then
-                        Log "Running command [$RUN_AFTER_CMD] succeeded."
-                else
-                        LogError "Running command [$RUN_AFTER_CMD] failed."
-                fi
+	if [ "$LOCAL_RUN_BEFORE_CMD" != "" ]
+	then
+		RunLocalCommand "$LOCAL_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE
+	fi
 
-                Log "Command output:"
-                Log "$(cat /dev/shm/obackup/run_after_$SCRIPT_PID)"
+	if [ "$REMOTE_RUN_BEFORE_CMD" != "" ]
+	then
+		RunRemoteCommand "$REMOTE_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE
+	fi	
+}
+
+function RunAfterHook
+{
+        if [ "$LOCAL_RUN_AFTER_CMD" != "" ]
+        then
+		RunLocalCommand "$LOCAL_RUN_AFTER_CMD" $MAX_EXEC_TIME_PER_CMD_AFTER
         fi
+
+	if [ "$REMOTE_RUN_AFTER_CMD" != "" ]
+	then
+		RunRemoteCommand "$REMOTE_RUN_AFTER_CMD" $MAX_EXEC_TIME_PER_CMD_AFTER
+	fi
 }
 
 function SetCompressionOptions
@@ -364,37 +399,7 @@ function CheckLocalSpace
 	fi
 	Log "Local Space: $LOCAL_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko - Files size: $TOTAL_FILES_SIZE Ko"
 }
-
-# Waits for pid $1 to complete. Will log an alert if $2 seconds exec time exceeded unless $2 equals 0. Will stop task and log alert if $3 seconds exec time exceeded.
-function WaitForTaskCompletition
-{
-        soft_alert=0
-	SECONDS_BEGIN=$SECONDS
-	while ps -p$1 > /dev/null
-        do
-                Spinner
-                sleep 1
-                EXEC_TIME=$(($SECONDS - $SECONDS_BEGIN))
-                if [ $(($EXEC_TIME % $KEEP_LOGGING)) -eq 0 ]
-		then
-			Log "Current task still running."
-		fi
-		if [ $EXEC_TIME -gt $2 ]
-                then
-                        if [ $soft_alert -eq 0 ] && [ $2 != 0 ]
-                        then
-                                LogError "Max soft execution time exceeded for task."
-                                soft_alert=1
-                        fi
-                        if [ $EXEC_TIME -gt $3 ]
-                        then
-                                LogError "Max hard execution time exceeded for task. Stopping task execution."
-                                return 1
-                        fi
-                fi
-        done
-}
-
+      
 function CheckTotalExecutionTime
 {
 	 #### Check if max execution time of whole script as been reached
@@ -467,7 +472,6 @@ function ListDatabases
 	else
 		mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > /dev/shm/oback_dblist_$SCRIPT_PID &
 	fi
-	retval=$?
 	child_pid=$!
 	WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
 	wait $child_pid
@@ -758,7 +762,10 @@ function FilesBackup
 		if [ $retval -ne 0 ]
 		then
 			LogError "Backup failed on remote files."
-			LogError "$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
+			if [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
+			then
+				LogError "$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
+			fi
 		else
 			Log "Backup succeeded."
 		fi
@@ -780,7 +787,10 @@ function FilesBackup
                 if [ $retval -ne 0 ]
                 then
                         LogError "Backup failed on remote files."
-                        LogError "$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
+			if [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
+			then
+                        	LogError "$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
+			fi
                 else
                         Log "Backup succeeded."
                 fi
@@ -833,6 +843,10 @@ function Init
 	then
 		trap 'TrapError ${LINENO} $?' ERR
 	fi
+
+	LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
+	MAIL_ALERT_MSG="Warning: Execution of obackup instance $BACKUP_ID (pid $SCRIPT_PID) as $LOCAL_USER@$LOCAL_HOST produced errors."
+
 }
 
 function DryRun
@@ -904,11 +918,10 @@ function Usage
 {
 	echo "Obackup $OBACKUP_VERSION"
 	echo ""
-	echo "obackup backup_name [options]"
+	echo "usage: obackup backup_name [--dry] [--silent]"
 	echo ""
-	echo "General options"
-	echo "--dry will run obackup without actually doing anything, just testing"
-	echo "--silent will run obackup without any output to stdout, usefull for cron backups"
+	echo "--dry: will run obackup without actually doing anything, just testing"
+	echo "--silent: will run obackup without any output to stdout, usefull for cron backups"
 }
 
 # Command line argument flags
@@ -954,9 +967,9 @@ then
 			then
 				DryRun
 			else
-				RunBefore
+				RunBeforeHook
 				Main
-				RunAfter
+				RunAfterHook
 			fi
 			CleanUp
 		else
