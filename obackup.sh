@@ -73,6 +73,11 @@ function TrapStop
 
 function Spinner
 {
+	if [ $silent -eq 1 ]
+	then
+		return 1
+	fi
+
 	case $toggle
 	in
 	1)
