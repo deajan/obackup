@@ -1,8 +1,8 @@
 obackup
 =======
 
-A file & database backup script tailored for multiple virtualhost backups locally or remotely via ssh.
-Yet it actually works for a lot of backup tasks.
+A small robust file & database backup script tailored for multiple virtualhost backups locally or remotely via ssh.
+Yet it is very versatile and actually works for a lot of backup tasks.
 
 ## About
 
@@ -23,9 +23,14 @@ checking backup size and available local disk space.
 Obackup will work well to backup to a snapshot aware filesystem like ZFS or btrfs.
 In case you don't work with one of these, it may also rotate backups for you.
 
+Obackup can execute local and remote commands before and after backup execution, thus providing possibilites to handle snapshots (see https://github.com/deajan/zsnap for a zfs snapshot management script).
+
 As of today, obackup has been tested successfully on RHEL / CentOS 5, CentOS 6, Debian 6.0.7 and Linux Mint 14
-but should basically run on your favorite linux flavor. It relies on well known programs like rsync, ssh, mysqldump along
-with other great GNU coreutils.
+but should basically run on your favorite linux flavor. It relies on well known programs like rsync, ssh, mysqldump along with other great GNU coreutils.
+
+Project is customizable, and one can easily modify its code as it weights only 1 KLOC. Obackup is distributed under BSD Licence which gives most freedom to include it in your own code.
+
+Feel free to drop me a mail for limited support in my free time.
 
 ## Installation
 
