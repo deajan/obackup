@@ -3,9 +3,6 @@
 Upcomming features:
 
 - Write proper documentation
-- Add usage function (ie --help or no option specified)
-- Add GetCmdlineParameter function
-- Add --silent parameter
 - Add option to enable ACL backup (with rsync, and tar rotated copies)
 
 Bugs not yet addressed that will be done a bit later:

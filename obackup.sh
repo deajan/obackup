@@ -2,7 +2,7 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.83 #### Build 3005201301
+OBACKUP_VERSION=1.83 #### Build 1606201301
 
 LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
 DEBUG=no
@@ -29,14 +29,21 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 # /dev/shm/obackup_local_space_$SCRIPT_PID		Local free space
 # /dev/shm/obackup_fsize_$SCRIPT_PID			Size of $DIRECTORIES_TO_BACKUP
 # /dev/shm/obackup_rsync_output_$SCRIPT_PID		Output of Rsync command
+# /dev/shm/obackup_config_$SCRIPT_PID			Parsed configuration file
+# /dev/shm/obackup_run_before_$SCRIPT_PID		Output of command to be run before backup
+# /dev/shm/obackup_run_after_$SCRIPT_PID		Output of command to be run after backup
 
+# Alert flags
 soft_alert_total=0
 error_alert=0
 
 function Log
 {
 	echo "TIME: $SECONDS - $1" >> "$LOG_FILE"
-	echo "TIME: $SECONDS - $1"
+	if [ $silent -eq 0 ]
+	then
+		echo "TIME: $SECONDS - $1"
+	fi
 }
 
 function LogError
@@ -50,7 +57,10 @@ function TrapError
 	local JOB="$0"
 	local LINE="$1"
 	local CODE="${2:-1}"
-	echo " /!\ Error in ${JOB}: Near line ${LINE}, exit code ${CODE}"
+	if [ $silent -eq 0 ]
+	then
+		echo " /!\ Error in ${JOB}: Near line ${LINE}, exit code ${CODE}"
+	fi
 }
 
 function TrapStop
@@ -116,6 +126,8 @@ function CleanUp
         rm -f /dev/shm/obackup_fsize_$SCRIPT_PID
         rm -f /dev/shm/obackup_rsync_output_$SCRIPT_PID
 	rm -f /dev/shm/obackup_config_$SCRIPT_PID
+	rm -f /dev/shm/obackup_run_before_$SCRIPT_PID
+	rm -f /dev/shm/obackup_run_after_$SCRIPT_PID
 }
 
 function SendAlert
@@ -125,7 +137,7 @@ function SendAlert
 	cat $LOG_FILE | gzip -9 > /tmp/obackup_lastlog.gz
         if type -p mutt > /dev/null 2>&1
         then
-                echo $MAIL_ALERT_MSG | $(which mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAIL -a /tmp/obackup_lastlog.gz
+                echo $MAIL_ALERT_MSG | $(which mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a /tmp/obackup_lastlog.gz
                 if [ $? != 0 ]
                 then
                         Log "WARNING: Cannot send alert email via $(which mutt) !!!"
@@ -134,11 +146,11 @@ function SendAlert
                 fi
         elif type -p mail > /dev/null 2>&1
 	then
-                echo $MAIL_ALERT_MSG | $(which mail) -a /tmp/obackup_lastlog.gz -s "Backup alert for $BACKUP_ID" $DESTINATION_MAIL
+                echo $MAIL_ALERT_MSG | $(which mail) -a /tmp/obackup_lastlog.gz -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
                 if [ $? != 0 ]
                 then
                         Log "WARNING: Cannot send alert email via $(which mail) with attachments !!!"
-			echo $MAIL_ALERT_MSG | $(which mail) -s "Backup alert for $BACKUP_ID" $DESTINATION_MAIL
+			echo $MAIL_ALERT_MSG | $(which mail) -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
 			if [ $? != 0 ]
 			then
 				Log "WARNING: Cannot send alert email via $(which mail) without attachments !!!"
@@ -206,7 +218,77 @@ function CheckEnvironment
 		fi
 	fi
 }
-	
+
+function RunBefore
+{
+	if [ "$RUN_BEFORE_CMD" != "" ]
+	then
+		CheckConnectivity3rdPartyHosts
+		if [ "$REMOTE_BACKUP" == "yes" ]
+		then
+			CheckConnectivityRemoteHost
+			if [ $? != 0 ]
+			then
+				LogError "Cannectivity test failed. Stopping run before execution."
+				return 1
+			else
+				$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$RUN_BEFORE_CMD" > /dev/shm/obackup_run_before_$SCRIPT_PID &
+			fi
+		else
+			$RUN_BEFORE_CMD > /dev/shm/obackup/run_before_$SCRIPT_PID &
+		fi
+		retval=$?
+		child_pid=$!
+		WaitForTaskCompletition $child_pid 0 $MAX_EXEC_TIME_BEFORE
+		wait $child_pid
+		retval=$?
+ 		if [ $retval -eq 0 ]
+		then
+			Log "Running command [$RUN_BEFORE_CMD] succeeded."
+		else
+			LogError "Running command [$RUN_BEFORE_CMD] failed."
+		fi
+
+		Log "Command output:"
+		Log "$(cat /dev/shm/obackup/run_before_$SCRIPT_PID)"
+	fi
+}
+
+function RunAfter
+{
+        if [ "$RUN_AFTER_CMD" != "" ]
+        then
+                CheckConnectivity3rdPartyHosts
+                if [ "$REMOTE_BACKUP" == "yes" ]
+                then
+                        CheckConnectivityRemoteHost
+                        if [ $? != 0 ]
+                        then
+                                LogError "Cannectivity test failed. Stopping run before execution."
+                                return 1
+                        else
+                                $(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$RUN_AFTER_CMD" > /dev/shm/obackup_run_after_$SCRIPT_PID &
+                        fi
+                else
+                        $RUN_AFTER_CMD > /dev/shm/obackup/run_after_$SCRIPT_PID &
+                fi
+                retval=$?
+                child_pid=$!
+                WaitForTaskCompletition $child_pid 0 $MAX_EXEC_TIME_AFTER
+                wait $child_pid
+                retval=$?
+                if [ $retval -eq 0 ]
+                then
+                        Log "Running command [$RUN_AFTER_CMD] succeeded."
+                else
+                        LogError "Running command [$RUN_AFTER_CMD] failed."
+                fi
+
+                Log "Command output:"
+                Log "$(cat /dev/shm/obackup/run_after_$SCRIPT_PID)"
+        fi
+}
+
 function SetCompressionOptions
 {
 	if [ "$COMPRESSION_PROGRAM" == "xz" ] && type -p xz > /dev/null 2>&1
@@ -283,7 +365,7 @@ function CheckLocalSpace
 	Log "Local Space: $LOCAL_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko - Files size: $TOTAL_FILES_SIZE Ko"
 }
 
-# Waits for pid $1 to complete. Will log an alert if $2 seconds exec time exceeded. Will stop task and log alert if $3 seconds exec time exceeded.
+# Waits for pid $1 to complete. Will log an alert if $2 seconds exec time exceeded unless $2 equals 0. Will stop task and log alert if $3 seconds exec time exceeded.
 function WaitForTaskCompletition
 {
         soft_alert=0
@@ -299,7 +381,7 @@ function WaitForTaskCompletition
 		fi
 		if [ $EXEC_TIME -gt $2 ]
                 then
-                        if [ $soft_alert -eq 0 ]
+                        if [ $soft_alert -eq 0 ] && [ $2 != 0 ]
                         then
                                 LogError "Max soft execution time exceeded for task."
                                 soft_alert=1
@@ -769,10 +851,11 @@ function DryRun
                 ListDirectories
 		GetDirectoriesSize
         fi
-	echo "DB backup list: $DATABASES_TO_BACKUP"
-	echo "DB exclude list: $DATABASES_EXCLUDED_LIST"
-	echo "Dirs backup list: $DIRECTORIES_TO_BACKUP"
-	echo "Dirs exclude list: $DIRECTORIES_EXCLUDED_LIST"
+
+	Log "DB backup list: $DATABASES_TO_BACKUP"
+	Log "DB exclude list: $DATABASES_EXCLUDED_LIST"
+	Log "Dirs backup list: $DIRECTORIES_TO_BACKUP"
+	Log "Dirs exclude list: $DIRECTORIES_EXCLUDED_LIST"
 	
 	CheckLocalSpace
 }
@@ -817,6 +900,43 @@ function Main
 	# Be a happy sysadmin (and drink a coffee ? Nahh... it's past midnight.)
 }
 
+function Usage
+{
+	echo "Obackup $OBACKUP_VERSION"
+	echo ""
+	echo "obackup backup_name [options]"
+	echo ""
+	echo "General options"
+	echo "--dry will run obackup without actually doing anything, just testing"
+	echo "--silent will run obackup without any output to stdout, usefull for cron backups"
+}
+
+# Command line argument flags
+dryrun=0
+silent=0
+
+if [ $# -eq 0 ]
+then
+	Usage
+	exit
+fi
+
+for i in "$@"
+do
+	case $i in
+		--dry)
+		dryrun=1
+		;;
+		--silent)
+		silent=1
+		;;
+		--help|-h)
+		Usage
+		exit
+		;;
+	esac
+done
+
 CheckEnvironment
 if [ $? == 0 ]
 then
@@ -830,12 +950,13 @@ then
 			Log "--------------------------------------------------------------------"
 			Log "$DATE - Obackup v$OBACKUP_VERSION script begin."
 			Log "--------------------------------------------------------------------"
-			if [ "$2" == "--dry" ]
+			if [ $dryrun -eq 1 ]
 			then
 				DryRun
 			else
-				/root/zsnap_vds2268.sh create
+				RunBefore
 				Main
+				RunAfter
 			fi
 			CleanUp
 		else
