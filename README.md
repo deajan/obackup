@@ -54,8 +54,8 @@ File backups can be done directly if data won't change while a backup is going o
 
 You may try your setup by specifying the "--dry" parameter which will run a simulation of what will be done.
 
-    $ ./obackup.sh path/to/config/file --dry
-    $ ./obackup.sh path/to/config/file
+    $ ./obackup.sh path/to/backup.conf --dry
+    $ ./obackup.sh path/to/backup.conf
 
 One you're happy with a test run, you may run obackup as a cron task with the "--silent" parameter so output will not be written to stdout.
 All backup activity is logged to "/var/log/obackup_backupname.log".
