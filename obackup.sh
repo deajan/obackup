@@ -2,7 +2,7 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.83 #### Build 1606201302
+OBACKUP_VERSION=1.83 #### Build 1606201303
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -132,7 +132,7 @@ function SendAlert
 {
 	CheckConnectivityRemoteHost
 	CheckConnectivity3rdPartyHosts
-	cat $LOG_FILE | gzip -9 > /tmp/obackup_lastlog.gz
+	cat "$LOG_FILE" | gzip -9 > /tmp/obackup_lastlog.gz
         if type -p mutt > /dev/null 2>&1
         then
                 echo $MAIL_ALERT_MSG | $(which mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a /tmp/obackup_lastlog.gz
@@ -967,8 +967,10 @@ then
 			then
 				DryRun
 			else
+				OLD_IFS=$IFS
 				RunBeforeHook
 				Main
+				IFS=$OLD_IFS
 				RunAfterHook
 			fi
 			CleanUp
