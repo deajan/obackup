@@ -3,7 +3,6 @@
 Upcomming features:
 
 - Write proper documentation
-- Add option to enable ACL backup (with rsync, and tar rotated copies)
 
 Bugs not yet addressed that will be done a bit later:
 

@@ -2,7 +2,7 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.83 #### Build 1606201303
+OBACKUP_VERSION=1.83 #### Build 1706201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -705,6 +705,25 @@ function RsyncExcludePattern
 	IFS=$OLD_IFS
 }
 
+function RsyncArgs
+{
+	RSYNC_ARGS=-rlptgoDE
+	if [ "$PRESERVE_ACLS" == "yes" ]
+	then
+		RSYNC_ARGS=$RSYNC_ARGS"A"
+	fi
+
+	if [ "$PRESERVE_XATTR" == "yes" ]
+	then
+		RSYNC_ARGS=$RSYNC_ARGS"X"
+	fi
+
+	if [ "$RSYNC_COMPRESS" == "yes" ]
+	then
+		RSYNC_ARGS=$RSYNC_ARGS"z"
+	fi
+}
+
 function Rsync
 {
 	i="$(StripQuotes $1)"
@@ -734,9 +753,9 @@ function Rsync
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		rsync_cmd="$(which rsync) -rlptgoDE --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(which rsync) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	else
-		rsync_cmd="$(which rsync) -rlptgoDE --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(which rsync) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	fi
 	#### Eval is used so the full command is processed without bash adding single quotes round variables
 	if [ "$DEBUG" == "yes" ]
@@ -914,6 +933,7 @@ function Main
 			RotateBackups $LOCAL_FILE_STORAGE
 		fi
 		RsyncExcludePattern
+		RsyncArgs
 		FilesBackup
 	fi
 	# Be a happy sysadmin (and drink a coffee ? Nahh... it's past midnight.)
