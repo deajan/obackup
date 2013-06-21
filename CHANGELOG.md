@@ -1,5 +1,6 @@
 ## Latest changelog
 
+- Added ability to run another executable than rsync (see documentation on sudo execution)
 - Added some Rsync argument parameters (preserve ACL, Xattr, and stream compression)
 - Internal hook execution logic revised
 - Updated WaitForTaskCompletition function to handle skipping alerts
