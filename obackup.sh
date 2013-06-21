@@ -357,10 +357,10 @@ function SetSudoOptions
 {
 	if [ "$SUDO_EXEC" == "yes" ]
 	then
-		RSYNC_PATH="sudo $(which rsync)"
+		RSYNC_PATH="sudo $(which $RSYNC_EXECUTABLE)"
 		COMMAND_SUDO="sudo"
 	else
-		RSYNC_PATH="$(which rsync)"
+		RSYNC_PATH="$(which $RSYNC_EXECUTABLE)"
 		COMMAND_SUDO=""
 	fi
 }
@@ -753,9 +753,9 @@ function Rsync
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		rsync_cmd="$(which rsync) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	else
-		rsync_cmd="$(which rsync) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	fi
 	#### Eval is used so the full command is processed without bash adding single quotes round variables
 	if [ "$DEBUG" == "yes" ]
