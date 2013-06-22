@@ -2,7 +2,7 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.83 #### Build 1706201301
+OBACKUP_VERSION=1.83 #### Build 2206201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -24,7 +24,8 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 
 # /dev/shm/obackup_dblist_$SCRIPT_PID                   Databases list and sizes
 # /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID	Recursive directories list
-# /dev/shm/obackup_local_space_$SCRIPT_PID		Local free space
+# /dev/shm/obackup_local_sql_storage_$SCRIPT_PID	Local free space for sql backup
+# /dev/shm/obackup_local_file_storage_$SCRIPT_PID	Local free space for file backup
 # /dev/shm/obackup_fsize_$SCRIPT_PID			Size of $DIRECTORIES_TO_BACKUP
 # /dev/shm/obackup_rsync_output_$SCRIPT_PID		Output of Rsync command
 # /dev/shm/obackup_config_$SCRIPT_PID			Parsed configuration file
@@ -124,7 +125,8 @@ function EscapeSpaces
 function CleanUp
 {
         rm -f /dev/shm/obackup_dblist_$SCRIPT_PID
-        rm -f /dev/shm/obackup_local_space_$SCRIPT_PID
+        rm -f /dev/shm/obackup_local_sql_storage_$SCRIPT_PID
+        rm -f /dev/shm/obackup_local_file_storage_$SCRIPT_PID
         rm -f /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID
         rm -f /dev/shm/obackup_fsize_$SCRIPT_PID
         rm -f /dev/shm/obackup_rsync_output_$SCRIPT_PID
@@ -355,6 +357,12 @@ function SetCompressionOptions
 
 function SetSudoOptions
 {
+	## Add this to support prior config files without RSYNC_EXECUTABLE option
+	if [ "$RSYNC_EXECUTABLE" == "" ]
+	then
+		RSYNC_EXECUTABLE=rsync
+	fi
+
 	if [ "$SUDO_EXEC" == "yes" ]
 	then
 		RSYNC_PATH="sudo $(which $RSYNC_EXECUTABLE)"
@@ -378,29 +386,72 @@ function CreateLocalStorageDirectories
 	fi
 }
 
-function CheckLocalSpace
+function CheckSpaceRequirements
 {
-	# Not elegant solution to make df silent on errors
-	df -P $LOCAL_FILE_STORAGE > /dev/shm/obackup_local_space_$SCRIPT_PID 2>&1
-	if [ $? != 0 ]
+	if [ "$BACKUP_SQL" == "yes" ]
 	then
-		LOCAL_SPACE=0
-	else
-		LOCAL_SPACE=$(cat /dev/shm/obackup_local_space_$SCRIPT_PID | tail -1 | awk '{print $4}')
+		if [ -d $LOCAL_SQL_STORAGE ]
+		then
+			# Not elegant solution to make df silent on errors
+			df -P $LOCAL_SQL_STORAGE > /dev/shm/obackup_local_sql_storage_$SCRIPT_PID 2>&1
+			if [ $? != 0 ]
+			then
+				LOCAL_SQL_SPACE=0
+			else
+				LOCAL_SQL_SPACE=$(cat /dev/shm/obackup_local_sql_storage_$SCRIPT_PID | tail -1 | awk '{print $4}')
+				LOCAL_SQL_DRIVE=$(cat /dev/shm/obackup_local_sql_storage_$SCRIPT_PID | tail -1 | awk '{print $1}')
+			fi
+
+			if [ $LOCAL_SQL_SPACE -eq 0 ]
+			then
+				LogError "Local sql storage space reported to be 0Ko."
+			elif [ $LOCAL_SQL_SPACE -lt $TOTAL_DATABASES_SIZE ]
+			then
+				LogError "Local disk space may be insufficient to backup files (available space is lower than non compressed databases)."
+			fi
+		else
+			LogError "SQL storage path [$LOCAL_SQL_STORAGE] doesn't exist."
+		fi
 	fi
 
-	if [ $LOCAL_SPACE -eq 0 ]
+        if [ "$BACKUP_FILES" == "yes" ]
+        then
+                if [ -d $LOCAL_FILE_STORAGE ]
+                then
+                        df -P $LOCAL_FILE_STORAGE > /dev/shm/obackup_local_file_storage_$SCRIPT_PID 2>&1
+                        if [ $? != 0 ]
+                        then
+                                LOCAL_FILE_SPACE=0
+                        else
+                                LOCAL_FILE_SPACE=$(cat /dev/shm/obackup_local_file_storage_$SCRIPT_PID | tail -1 | awk '{print $4}')
+                                LOCAL_FILE_DRIVE=$(cat /dev/shm/obackup_local_file_storage_$SCRIPT_PID | tail -1 | awk '{print $1}')
+                        fi
+
+                        if [ $LOCAL_FILE_SPACE -eq 0 ]
+                        then
+                                LogError "Local file storage space reported to be 0Ko."
+                        elif [ $LOCAL_FILE_SPACE -lt $TOTAL_FILES_SIZE ]
+			then
+				LogError "Local disk space may be insufficient to backup files (available space is lower than full backup)."
+			fi
+                else
+                        LogError "File storage path [$LOCAL_FILE_STORAGE] doesn't exist."
+                fi
+        fi
+
+	if [ "$LOCAL_SQL_DRIVE" == "$LOCAL_FILE_DRIVE" ]
 	then
-		LogError "Local disk space reported to be 0 Ko. This may also happen if local storage path doesn't exist."
-	elif [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ]
-	then
-		LogError "Backup size is smaller then expected."
+		LOCAL_SPACE=$LOCAL_FILE_SPACE
+	else
+		LOCAL_SPACE=$(($LOCAL_SQL_SPACE+$LOCAL_FILE_SPACE))
+	fi
+
+        if [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ]
+        then
+                LogError "Backup size is smaller then expected."
 	elif [ $LOCAL_STORAGE_WARN_MIN_SPACE -gt $LOCAL_SPACE ]
 	then
-		LogError "Local disk space is lower than warning value ($LOCAL_SPACE free Ko)."
-	elif [ $LOCAL_SPACE -lt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ]
-	then
-		LogError "Local disk space may be insufficient (depending on rsync delta and DB compression ratio)."
+		LogError "Local disk space is lower than warning value [$LOCAL_STORAGE_WARN_MIN_SPACE Ko]."
 	fi
 	Log "Local Space: $LOCAL_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko - Files size: $TOTAL_FILES_SIZE Ko"
 }
@@ -895,7 +946,7 @@ function DryRun
 	Log "Dirs backup list: $DIRECTORIES_TO_BACKUP"
 	Log "Dirs exclude list: $DIRECTORIES_EXCLUDED_LIST"
 	
-	CheckLocalSpace
+	CheckSpaceRequirements
 }
 
 function Main
@@ -915,7 +966,7 @@ function Main
 		GetDirectoriesSize
 	fi
 	CreateLocalStorageDirectories
-	CheckLocalSpace
+	CheckSpaceRequirements
 
 	# Make Backup
 	if [ "$BACKUP_SQL" != "no" ]
