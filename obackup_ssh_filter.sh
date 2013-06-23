@@ -14,7 +14,7 @@ CMD1=
 CMD2=
 CMD3=
 
-LOG_FILE=/var/log/obackup_ssh_filter.log
+LOG_FILE=~/.ssh/obackup_ssh_filter.log
 
 function Log
 {
@@ -68,15 +68,12 @@ case ${SSH_ORIGINAL_COMMAND%% *} in
 		then
 			Go
 		else
-			Log "Sudo command not allowed."
-			Log "$SSH_ORIGINAL_COMMAND" 1
+			Log "Command [$SSH_ORIGINAL_COMMAND] not allowed."
 		fi
 	else
-		Log "Sudo command not enabled."
-		Log "$SSH_ORIGINAL_COMMAND" 1
+		Log "Command [$SSH_ORIGINAL_COMMAND] not allowed. sudo not enabled."
 	fi
 	;;
 	*)
-	Log "Not allowed."
-	Log "$SSH_ORIGINAL_COMMAND" 1
+	Log "Command [$SSH_ORIGINAL_COMMAND] not allowed."
 esac
