@@ -1,5 +1,8 @@
 ## Latest changelog
 
+- Updated obackup to log failed ssh command results
+- Updated ssh command filter to log failed commands
+- Updated ssh command filter to accept personalized commands
 - 23/06/2013 v 1.84 RC1 approaching
 - Added ssh commands filter, updated documentation
 - Rewrote local space check function

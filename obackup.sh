@@ -2,7 +2,8 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.83 #### Build 2206201301
+OBACKUP_VERSION=1.83
+OBACKUP_BUILD=2306201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -300,8 +301,10 @@ function RunRemoteCommand
 			LogError "Running command [$1] failed."
 		fi
 		
-		Log "Command output:"
-		Log "$(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
+		if [ -f /dev/shm/obackup_run_remote_$SCRIPT_PID ]
+		then
+			Log "Command output: $(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
+		fi
 	fi
 }
 
@@ -537,6 +540,10 @@ function ListDatabases
 		Log "Listing databases succeeded."
 	else
 		LogError "Listing databases failed."
+		if [ -f /dev/shm/obackup_dblist_$SCRIPT_PID ]
+		then
+			LogError "Command output: $(cat /dev/shm/obackup_dblist_$SCRIPT_PID)"
+		fi
 		return $retval
 	fi
 	
@@ -663,6 +670,10 @@ function ListDirectories
 		if  [ $retval != 0 ]
 		then
 			LogError "Could not enumerate recursive directories in $i."
+			if [ -f /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID ]
+			then
+				LogError "Command output: $(cat /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID)"
+			fi
 			return 1
 		else
 			Log "Listing of recursive directories succeeded for $i."
@@ -733,6 +744,10 @@ function GetDirectoriesSize
 	if  [ $retval != 0 ]
 	then
 		LogError "Could not get files size."
+		if [ -f /dev/shm/obackup_fsize_$SCRIPT_PID ]
+		then
+			LogError "Command output: $(cat /dev/shm/obackup_fsize_$SCRIPT_PID)"
+		fi
 		return 1
 	else
 		Log "File size fetched successfully."
@@ -992,7 +1007,7 @@ function Main
 
 function Usage
 {
-	echo "Obackup $OBACKUP_VERSION"
+	echo "Obackup $OBACKUP_VERSION $OBACKUP_BUILD"
 	echo ""
 	echo "usage: obackup backup_name [--dry] [--silent]"
 	echo ""
