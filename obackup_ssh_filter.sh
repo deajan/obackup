@@ -34,6 +34,8 @@ case ${SSH_ORIGINAL_COMMAND%% *} in
 	Go ;;
 	"mysql")
 	Go ;;
+	"echo")
+	Go ;;
 	"find")
 	Go ;;
 	"du")

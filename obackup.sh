@@ -391,7 +391,7 @@ function CreateLocalStorageDirectories
 
 function CheckSpaceRequirements
 {
-	if [ "$BACKUP_SQL" == "yes" ]
+	if [ "$BACKUP_SQL" != "no" ]
 	then
 		if [ -d $LOCAL_SQL_STORAGE ]
 		then
@@ -417,7 +417,7 @@ function CheckSpaceRequirements
 		fi
 	fi
 
-        if [ "$BACKUP_FILES" == "yes" ]
+        if [ "$BACKUP_FILES" != "no" ]
         then
                 if [ -d $LOCAL_FILE_STORAGE ]
                 then
