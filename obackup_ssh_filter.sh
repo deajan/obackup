@@ -19,22 +19,20 @@ LOG_FILE=~/.ssh/obackup_ssh_filter.log
 function Log
 {
 	DATE=$(date)
-	if [ "$2" != "1" ]
-	then
-		echo "$1"
-	fi
 	echo "$DATE - $1" >> $LOG_FILE
 }
 
 function Go
 {
-	$SSH_ORIGINAL_COMMAND
+	eval $SSH_ORIGINAL_COMMAND
 }
 
 case ${SSH_ORIGINAL_COMMAND%% *} in
 	"$RSYNC_EXECUTABLE")
 	Go ;;
 	"mysqldump")
+	Go ;;
+	"mysql")
 	Go ;;
 	"find")
 	Go ;;
