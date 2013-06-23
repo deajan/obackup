@@ -1,5 +1,7 @@
 ## Latest changelog
 
+- 23/06/2013 v 1.84 RC1 approaching
+- Added ssh commands filter, updated documentation
 - Rewrote local space check function
 - Added ability to run another executable than rsync (see documentation on sudo execution)
 - Added some Rsync argument parameters (preserve ACL, Xattr, and stream compression)
