@@ -529,7 +529,7 @@ function ListDatabases
 			$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'" > /dev/shm/obackup_dblist_$SCRIPT_PID &
 		fi
 	else
-		mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > /dev/shm/oback_dblist_$SCRIPT_PID &
+		mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > /dev/shm/obackup_dblist_$SCRIPT_PID &
 	fi
 	child_pid=$!
 	WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
