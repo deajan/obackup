@@ -2,7 +2,7 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.83
+OBACKUP_VERSION=1.84
 OBACKUP_BUILD=2306201301
 
 DEBUG=no
@@ -917,7 +917,7 @@ function RotateBackups
 		then
 			cp -R "$1/$backup" "$1/$backup.obackup.1"
 		else
-			mv "$1/backup" "$1/$backup.obackup.1"
+			mv "$1/$backup" "$1/$backup.obackup.1"
 		fi
 	done
 }
