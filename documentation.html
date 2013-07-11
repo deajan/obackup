@@ -1,0 +1,1244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="generator" content="http://www.nongnu.org/elyxer/"/>
+<meta name="create-date" content="2013-06-24"/>
+<link rel="stylesheet" href="http://elyxer.nongnu.org/lyx.css" type="text/css" media="all"/>
+<title>Obackup v1.84 Documentation</title>
+</head>
+<body>
+<div id="globalWrapper">
+<h1 class="title">
+Obackup v1.84 Documentation
+</h1>
+<h2 class="author">
+Orsiris &ldquo;Ozy&rdquo; de Jong
+</h2>
+<h2 class="Date">
+06/24/13
+</h2>
+<div class="Unindented">
+<a class="URL" href="http://www.netpower.fr">http://www.netpower.fr</a>
+</div>
+<div class="Indented">
+<hr class="line" />
+</div>
+<div class="fulltoc">
+<div class="tocheader">
+Table of Contents
+</div>
+<div class="tocindent">
+<div class="toc">
+<a class="Link" href="#toc-Section-1">Section 1: Introduction</a>
+</div>
+<div class="tocindent">
+<div class="toc">
+<a class="Link" href="#toc-Subsection-1.1">Subsection 1.1: Basic backup concepts</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-1.2">Subsection 1.2: What exactly does Obackup</a>
+</div>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Section-2">Section 2: Prerequisites</a>
+</div>
+<div class="tocindent">
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.1">Subsection 2.1: General packages</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.2">Subsection 2.2: Remote backups</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.3">Subsection 2.3: Databases backup</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.4">Subsection 2.4: File backups</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.5">Subsection 2.5: Performing superuser backups</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.6">Subsection 2.6: Mail transport agent</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.7">Subsection 2.7: Enhancing remote backup security</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-2.8">Subsection 2.8: Security for the paranoid</a>
+</div>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Section-3">Section 3: Setup Obackup</a>
+</div>
+<div class="tocindent">
+<div class="toc">
+<a class="Link" href="#toc-Subsection-3.1">Subsection 3.1: Create your first backup scenario</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-3.2">Subsection 3.2: Create regular backup scenarios</a>
+</div>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Section-4">Section 4: Configuration appendix</a>
+</div>
+<div class="tocindent">
+<div class="toc">
+<a class="Link" href="#toc-Subsection-4.1">Subsection 4.1: Command line parameters</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-4.2">Subsection 4.2: Configuration file parameters</a>
+</div>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Section-5">Section 5: Troubleshooting</a>
+</div>
+<div class="tocindent">
+<div class="toc">
+<a class="Link" href="#toc-Subsection-5.1">Subsection 5.1: Local backups</a>
+</div>
+<div class="toc">
+<a class="Link" href="#toc-Subsection-5.2">Subsection 5.2: Remote backups</a>
+</div>
+</div>
+</div>
+
+</div>
+<h1 class="Section">
+<a class="toc" name="toc-Section-1">1</a> Introduction
+</h1>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-1.1">1.1</a> Basic backup concepts
+</h2>
+<div class="Unindented">
+Backup plans are often setup fast without any checks. There are three main points to consider:
+</div>
+<ul>
+<li>
+As long as you did not try to restore your backup, you won’t know if it’s reliable.
+</li>
+
+</ul>
+<div class="Unindented">
+You should always try to restore your backup to a test server, in order to make sure nothing is missing. Once you’ll restore, you’ll find other steps will be necessary, like reapplying file rights and ACLs, restore user permissions in databases, etc... You should always write a quick restore procedure in case someone else is going to restore your data in your holidays.
+</div>
+<ul>
+<li>
+A single problem in your backup process can render the whole backup process unreliable.
+</li>
+
+</ul>
+<div class="Unindented">
+Immagine you’re making a backup of 100 virtualhosts. Now immagine one of your vhosts get hacked, and hundreds of gigabytes of nice but unsubtitled mangas get uploaded. The same schema will apply if suddently a user decides to upload it’s whole wildlife photo repository. If your backup solution can’t handle the whole amount of data in a given time, every other vhost or user that comes next in backup process won’t be backed up.
+</div>
+<ul>
+<li>
+Your backup process should be secure
+</li>
+
+</ul>
+<div class="Unindented">
+A lot of people initiate their backups from a production server to a backup server. Altough it’s easy that way, if your production server gets compromised, it contains the everything needed to access to your backup storage. The only good way to keep your backup server out of trouble is to initate your backups from the backup server that will contain the necessary keys to access your production servers. No production server has to know your where your backup server is. Professionnal backup products resolve this by adding a backup agent on the source servers.
+</div>
+<div class="Indented">
+Obackup has been designed to address this issue, with a certain degree of fault tolerance.
+</div>
+<div class="Indented">
+Example: backup directory /home
+</div>
+<div class="Indented">
+John has 3GB of data to backup.
+</div>
+<div class="Indented">
+Kelly has 2.1GB of data to backup.
+</div>
+<div class="Indented">
+Remote backup goes through an ADSL link providing 1Mb upload speed (128KB/s) which means that 5.1GB would theoretically take 696 minutes (11,5 hours).
+</div>
+<div class="Indented">
+Now immagine John just received his 22,4GB of brand new city plans, and decides to store them in his home directory.
+</div>
+<div class="Indented">
+Backup of 27.5GB would then take 3754 minutes (about 62 ½ hours).
+</div>
+<div class="Indented">
+As a matter of fact, a usual backup solution would continue backing up John’s data, and Kelly’s data would not be backed up until next run. This means Kelly’s data won’t be backed up for the next 3 days !
+</div>
+<div class="Paragraph">
+<a class="toc" name="toc-Paragraph-1"></a>Obackup tries to resolve these issues differently.
+</div>
+<div class="Unindented">
+It will enumerate all folders in /home, and let each folder backup for a certain amount of time. Example of backup configuration:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DIRECTORIES_RECURSE_LIST=/home
+DIRECTORIES_RECURSE_EXCLUDE=/home/lost+found
+SOFT_MAX_EXECUTION_TIME_FILE_TASK=18000
+HARD_MAX_EXECUTION_TIME_FILE_TASK=36000
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+This backup configuration will backup every directory in /home as a separate task except lost+found, granting each one a maximum of 36000 seconds (600 minutes) time to achieve backup. If backup isn’t finised in 18000 seconds, an alert will be generated. If backup won’t finish in 36000 seconds (10 hours), an second alert will be generated, the task will be stopped and next task gets executed.
+</div>
+<div class="Indented">
+Thanks to rsync next execution of that task will resume were it stopped.
+</div>
+<div class="Indented">
+In our case, when John uploads 22.4GB of city plans, only 4,39GB of it’s city plans will be backed up (128KB x 36000 seconds), then Kelly’s documents will be backed up.
+</div>
+<div class="Indented">
+Next days, John gets another 4,39GB backup per day, until everything is synchronized without preventing other backups from running, and you (the administrator) will get email reports about what’s going on.
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-1.2">1.2</a> What exactly does Obackup
+</h2>
+<div class="Unindented">
+Obackup can backup files and MariaDB or MySQL databases, on both local and remote systems.
+</div>
+<div class="Indented">
+It can enumerate all databases on a system and process them as separate tasks.
+</div>
+<div class="Indented">
+It can enumerate all directories in a given path and process them as separate tasks.
+</div>
+<div class="Indented">
+Tasks are executed and warnings generated if they are long. Tasks can be stopped and next one processed if they take too long.
+</div>
+<div class="Indented">
+Backups can be done as superuser via sudo command.
+</div>
+<div class="Indented">
+Local disk space and minimum backup sizes are checked.
+</div>
+<div class="Indented">
+Connectivity to remote host can be checked before running a backup task.
+</div>
+<div class="Indented">
+Internet connectivity can be checked before running a backup task.
+</div>
+<div class="Indented">
+It will send a warning email including the whole backup process execution log if a warning is triggered.
+</div>
+<div class="Indented">
+Backups can be rotated in case you don’t use snapshots on your backup server.
+</div>
+<div class="Indented">
+Pre-processing and post-processing commands can be launched, and their results logged.
+</div>
+<div class="Indented">
+Multiple concurrent instances of obackup can be run as long as they don’t backup to into the same destination directory.
+</div>
+<div class="Indented">
+Everything can be compressed (ssh tunnel, mysql dumps, rsync file transfers).
+</div>
+<div class="Indented">
+Obackup has been successfully tested on RHEL / CentOS 5.8, CentOS 6.4, Debian Linux 6.0.7, Linux Mint 14 but should basically run on any *nix flavor.
+</div>
+<h1 class="Section">
+<a class="toc" name="toc-Section-2">2</a> Prerequisites
+</h1>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.1">2.1</a> General packages
+</h2>
+<div class="Unindented">
+The following binaries are needed on both local backup system and remote source system.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">rsync mysql mysqldump xz lzma gzip coreutils
+</pre>
+</div>
+
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.2">2.2</a> Remote backups
+</h2>
+<div class="Unindented">
+Remote backups are done through an SSH tunnel. To be able to establish such a tunnel without having to enter a password, you’ll have to generate a pair of private and public RSA keys.
+</div>
+<div class="Indented">
+The private part is kept by the computer that initiates the connection. The public part is kept by the source computer that will be backed up.
+</div>
+<div class="Indented">
+The following steps will be required to generate a ssh key. Please create a dedicated backup user and log in as that user on your backup system to perform the following actions.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ ssh-keygen -t rsa
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+This should create two files named ~/.ssh/id_rsa and ~/.ssh/id_rsa.pub
+</div>
+<div class="Indented">
+The source server should also have a dedicated backup user (&ldquo;backupuser&rdquo; in this example). Both backup and source server don’t need to have the same user.
+</div>
+<div class="Indented">
+Copy the public part to the target server with scp (replace 22 with your ssh port number if needed).
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ scp –P 22 ~/.ssh/id_rsa backupuser@remotesystem.tld:/home/backupuser/.ssh/authorized_keys
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Make sure the file is readable by the backupuser on the remote system.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># chmod 600 /home/backupuser/.ssh/authorized_keys
+# chown backupuser:root /home/backupuser/.ssh/authorized_keys
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Now you should be able to login as “backupuser” on the target server without any password. You can try this by entering the following:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ ssh –p 22 backupuser@remotesystem.tld
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Be aware that only the user that generated the ssh key can remotely log in.
+</div>
+<div class="Indented">
+After having set up your backups and performed tests, you may read the chapter <a class="Reference" href="#sub:Enhancing-remote-backup">2.7↓</a>.
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.3">2.3</a> Databases backup
+</h2>
+<div class="Unindented">
+To perform MariaDB or MySQL database backups, you’ll need to create a database user that has read only permissions on all databases.
+</div>
+<div class="Indented">
+On the system that runs the sql daemon, create the database user with the following commands:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ mysql -u root -p
+mysql&gt; CREATE USER ’sqlbackup’@’localhost’ IDENTIFIED BY ’YourPassWord!’;
+mysql&gt; GRANT SELECT, SHOW DATABASES, LOCK TABLES on *.* to ’sqlbackup’@’localhost’;
+mysql&gt; FLUSH PRIVILEGES;
+mysql&gt; exit
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+There’s no need for this user to exist as unix user, but the following file needs to exist in the user’s home directory you’re going to use as backup user.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ cat ~/.my.cnf
+[client]
+password="YourPassWord!"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+You should then be able to connect to mysql without specifying a password as your backup user.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ mysql –u backupuser 
+</pre>
+</div>
+
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.4">2.4</a> File backups
+</h2>
+<div class="Unindented">
+File backups don’t need any special configurations. You only have to worry about your backup user having enough rights to open directories and read files.
+</div>
+<div class="Indented">
+In the best case, your backup user should only have read permissions on your data. A good way is to make your user member of the files group that has read permissions.
+</div>
+<div class="Indented">
+Another way to achieve this is using ACLs if your filesystem supports them. You can add the following permissions for user “backupuser” on directory “/home/web”. Setting a default rule will add rights on new files.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># setfacl -mR d:g:r-x,g:r-x /home/web
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Be aware that ACLs are tricky and default group permissions serve as mask for ACLs.
+</div>
+<div class="Indented">
+Make sure you can read your data with your backup user:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># su backupuser
+$ cat /home/data/to/backup/test.file
+</pre>
+</div>
+
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.5">2.5</a> <a class="Label" name="sub:Performing-superuser-backups"> </a>Performing superuser backups
+</h2>
+<div class="Unindented">
+Obackup can run it’s backup tasks as superuser. In order to be able to use the sudo command without having to enter a password, you’ll need to modify the source system allowing commands rsync, du and find to be executed as superuser. Edit the file /etc/sudoers and add the following
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">backupuser ALL= NOPASSWD:/usr/bin/rsync
+backupuser ALL= NOPASSWD:/usr/bin/du
+backupuser ALL= NOPASSWD:/usr/bin/find
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+You might check your paths to commands with the following: 
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># which rsync
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+You should be aware that there is a minor security risk with having rsync command run as superuser. A user who can run rsync command as superuser can upload any file he wants to the system, including a tweaked /etc/sudoers or /etc/passwd file.
+</div>
+<div class="Indented">
+Please read chapter <a class="Reference" href="#sub:Enhancing-remote-backup">2.7↓</a> to secure your installation.
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.6">2.6</a> Mail transport agent
+</h2>
+<div class="Unindented">
+You should make sure your system can send emails so obackup can warn you if something happens. Obackup will use mutt or mail command. Please make sure you can send a test mail with at least one of the following commands run by your backup user:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ echo “your test message” | mutt -x -s “This is a test message” your@mail.tld
+$ echo “your test message” | mail -s “This is a test message” your@mail.tld
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Check your antispam if you don’t get your message. If you still don’t get your message, check your distributions documentation about the mail command.
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.7">2.7</a> <a class="Label" name="sub:Enhancing-remote-backup"> </a>Enhancing remote backup security
+</h2>
+<div class="Unindented">
+We may want to secure a password-less ssh access by removing non necessary services offered by SSH.
+</div>
+<div class="Indented">
+Edit the file ~/.ssh/authorized_keys created earlier and add the following line in the beginning of the file:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Also, we may want to prevent any host except of our backup server to passwordless connect.
+</div>
+<div class="Indented">
+Add the following line:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">from=*.my.backup.servers.domain.tld
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Your authorized_keys file should look like this:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">from="*.mydomain.tld",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-rsa AAS3NzaC1yc2EASZAABIwAAAQEApVJp/qWM3RnCnCFW610yEWy794BvB/N95fWjELbuKRtAWX2vn/2Y857mIsSGZEGJSDJZEJTZOSDFaizm+ofyPRbwU6PplF+j0KAGu9Wcw5iSjwk/1taPZ/Bu20qeRMo4155n1D2lmTJsOznhMH04yB+GbV6Hw== user@host.tld
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+We may also restrict the ssh session to only a couple of commands we’ll need. Obackup package comes with a script called obackup_ssh_filter.sh that will only execute commands Obackup might send.
+</div>
+<div class="Indented">
+Once again edit your authorized_keys file and add the following
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">command=”/usr/local/bin/obackup_ssh_filter.sh”
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Your file should then look like this:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">from="*.mydomain.tld",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty,command=”/usr/local/bin/obackup_ssh_filter.sh" ssh-rsa AAS3NzaC1yc2EASZAABIwAAAQEApVJp/qWM3RnCnCFW610yEWy794BvB/N95fWjELbuKRtAWX2vn/2Y857mIsSGZEGJSDJZEJTZOSDFaizm+ofyPRbwU6PplF+j0KAGu9Wcw5iSjwk/1taPZ/Bu20qeRMo4155n1D2lmTJsOznhMH04yB+GbV6Hw== backupuser@remotesystem.tld 
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Copy then the script obackup_ssh_filter.sh to /usr/local/bin on the remote source server.
+</div>
+<div class="Indented">
+Don’t forget to make it executable and make it owned by root
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># chmod 755 /usr/local/bin/obackup_ssh_filter.sh
+# chown root:root /usr/local/bin/obackup_ssh_filter.sh
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Now, only the commands &ldquo;find, du, rsync, echo, mysql, mysqldump and sudo&rdquo; may be executed via the ssh tunnel.
+</div>
+<div class="Indented">
+You may enable / disable the usage of sudo command by editing the following value in the obackup_ssh_filter.sh script:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SUDO_EXEC=yes
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Also, adding remote pre- and postexecution commands in your configuration files will not work if you use the ssh filter. You’ll have to add your main command in obackup_ssh_filter.
+</div>
+<div class="Indented">
+Example if you want to perform remote snapshots you’ll have to allow one of the following:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">CMD1=zfs
+CMD2=xfs
+CMD3=lvm
+</pre>
+</div>
+
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-2.8">2.8</a> <a class="Label" name="sub:More-security-(or"> </a>Security for the paranoid
+</h2>
+<div class="Unindented">
+Executing rsync as superuser is a security risk. A way to prevent rsync usage allowing only a symlink to be executed. Thus, a attacker script using rsync would not work. This kind of security is called &ldquo;security by obscurity&rdquo; and should generally not be the only security process, but makes any attack harder.
+</div>
+<div class="Indented">
+First, let’s create a symlink to rsync called let’s say o_rsync
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># ln -s $(which rsync) $(dirname $(which rsync))/o_rsync
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Now edit obackup_ssh_filter.sh and change the following value:
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">RSYNC_EXECUTABLE=o_rsync
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Also, edit RSYNC_EXECUTABLE value on any of your backup configuration files and you’re done. 
+</div>
+<h1 class="Section">
+<a class="toc" name="toc-Section-3">3</a> Setup Obackup
+</h1>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-3.1">3.1</a> Create your first backup scenario
+</h2>
+<div class="Unindented">
+Download your copy of obackup to your backup server and make it executable.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># chmod +x obackup.sh
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Now copy the original host_backup.conf file to a name that will reflect your backup and the file to match your needs.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># cp host_backup.conf personal_backup.sh
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Obackup will consider any database or directory as separate task, allowing it to skip a malfunctioning task and get the next one in list.
+</div>
+<div class="Indented">
+There are three main parameters called BACKUP_SQL, BACKUP_FILES and REMOTE_BACKUP. Disabling one of these will ignore any related configuration entries later.
+</div>
+<div class="Indented">
+The following minimum example will make a local backup of your /home directory to /backup/path/files/home, excluding lost+found directory.
+</div>
+<div class="Indented">
+The warning flag i set you if the whole backup is smaller than 1MB, or if there is less than 1GB of free space on drive.
+</div>
+<div class="Indented">
+Also, it will exit backup if it can’t ping www.kernel.org nor google.com
+</div>
+<div class="Indented">
+If task takes more than 1 hour (3600 seconds), the warning flag is set. If task takes more than 2 hours (7200 seconds), the warning flag is set and it’ll get stopped.
+</div>
+<div class="Indented">
+At least five copies of directory /home are kept in /backup/path/files/home.
+</div>
+<div class="Indented">
+At the end of the script, if the warning flag is set, an email is sent to your@mail.address
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">#!/bin/bash
+BACKUP_ID="personal_backup"
+BACKUP_SQL=no
+BACKUP_FILES=yes
+LOCAL_FILE_STORAGE="/backup/path/files"
+LOCAL_STORAGE_KEEP_ABSOLUTE_PATHS=no
+BACKUP_SIZE_MINIMUM=1024
+LOCAL_STORAGE_WARN_MIN_SPACE=1048576
+REMOTE_BACKUP=no
+REMOTE_3RD_PARTY_HOST="www.kernel.org"
+PATH_SEPARATOR_CHAR=";"
+DIRECTORIES_SIMPLE_LIST="/home"
+DIRECTORIES_RECURSE_LIST=""
+DIRECTORIES_RECURSE_EXCLUDE_LIST="/home/lost+found"
+RSYNC_EXCLUDE_PATTERN="*/tmp"
+SOFT_MAX_EXEC_TIME_FILE_TASK=3600
+HARD_MAX_EXEC_TIME_FILE_TASK=7200
+DESTINATION_MAILS="your@mail.address"
+SOFT_MAX_EXEC_TIME_TOTAL=30000
+HARD_MAX_EXEC_TIME_TOTAL=36000
+ROTATE_BACKUPS=yes
+ROTATE_COPIES=5
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Now try your setup by specifying parameter --dry.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># ./obackup.sh /path/to/personal_backup.conf --dry
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Backup should only enumerate what will be processed. If destination directory doesn’t exist, you may get a warning about destination disk space.
+</div>
+<div class="Indented">
+If everything worked out right, you might process the actual backup.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing"># ./obackup.sh /path/to/personal_backup.conf
+</pre>
+</div>
+
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-3.2">3.2</a> Create regular backup scenarios
+</h2>
+<div class="Unindented">
+Creating regular backup is quite simple as long as you don’t schedule two backups in a shorter time span than your HARD_MAX_EXEC_TIME_TOTAL value.
+</div>
+<div class="Indented">
+Just create a crontab entry and add parameter --silent so your local mailbox won’t get filled up.
+</div>
+<div class="Indented">
+Example, having a backup scheduled every hour in /etc/crontab
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">00 * * * * localbackupuser /usr/local/bin/obackup.sh /home/localbackupuser/databases_backup.sh --silent
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+You may find the backup log under /var/log/obackup-version-your_backup.log
+</div>
+<h1 class="Section">
+<a class="toc" name="toc-Section-4">4</a> Configuration appendix
+</h1>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-4.1">4.1</a> Command line parameters
+</h2>
+<div class="Unindented">
+Obackup takes at minimum one parameter, which must be a valid configuration file.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ ./obackup.sh /path/to/your/backup.conf
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Other parameters obackup will take are
+</div>
+<div class="Labeling">
+--dry Will make obackup run a simulation only.
+</div>
+<div class="Labeling">
+--silent Will run obackup silently, to be used in a cron schedule.
+</div>
+<div class="Labeling">
+--help Will print Obackup version and usage.
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-4.2">4.2</a> Configuration file parameters
+</h2>
+<div class="Unindented">
+Set this to whatever you want to identify your backup. This value is also in the log name and in the warning mails.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">BACKUP_ID=personal_backup
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Enable / disable database backups
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">BACKUP_SQL=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Enable / disable files backup
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">BACKUP_FILEs=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Database backups storage absolute path on backup system
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">LOCAL_SQL_STORAGE=/backup/path/sql
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Files backups storage absolute path on backup system
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">LOCAL_FILE_STORAGE=/backup/path/files
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Keep absolute paths in your backup. Very usefull to know where exactly to restore files to the source server.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">LOCAL_STORAGE_KEEP_ABSOLUTE_PATHS=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Generate an alert if backup size is lower than given value in KB. This generally works to detect unmounted local devices.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">BACKUP_SIZE_MINIMUM=99999999
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Generate an alert if local storage space is lower than given value in KB.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">LOCAL_STORAGE_WARN_MIN_SPACE=99999999
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Backups may be executed as root to enable system files backup like /etc. See prerequisites in chapter <a class="Reference" href="#sub:Performing-superuser-backups">2.5↑</a>.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SUDO_EXEC=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Paranoia option. Don’t change this unless you read chapter <a class="Reference" href="#sub:More-security-(or">2.8↑</a>.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">RSYNC_EXECUTABLE=rsync
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Backup a remote host via ssh or not.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">REMOTE_BACKUP=yes|no
+</pre>
+</div>
+
+</div>
+<ul>
+<li>
+The following options only apply is REMOTE_BACKUP=yes
+</li>
+
+</ul>
+<div class="Unindented">
+Location of the private RSA key
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SSH_RSA_PRIVATE_KEY=~/.ssh/id_rsa
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+The name of the user on the remote system that has the corresponding public RSA key
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">REMOTE_USER=backupuser
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Remote system hostname or IP address
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">REMOTE_HOST=your.host.local
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Remote SSH port
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">REMOTE_PORT=22
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Enable / disable ssh compression. Leave this enabled unless your connection to remote system is high speed (LAN)
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SSH_COMPRESSION=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Ping remote host before launching backup. Be sure the host responds to ping. Failing to ping will skip current task.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">REMOTE_HOST_PING=yes|no
+</pre>
+</div>
+
+</div>
+<ul>
+<li>
+Check for internet access by pinging one or more hosts before remote backup tasks. Leave this empty do disable the check. Failing to ping will skip current task.
+</li>
+
+</ul>
+<div class="Unindented">
+<div class="listing">
+<pre class="listing">REMOTE_3RD_PARTY_HOST="www.kernel.org"
+</pre>
+</div>
+
+</div>
+<ul>
+<li>
+Database options, only apply if BACKUP_SQL=yes
+</li>
+
+</ul>
+<div class="Unindented">
+Database backup user that has read only rights on all databases
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SQL_USER=sqlbackup
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Save all databases
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DATABASES_ALL=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Database exclude list only when DATABASES_ALL=yes, list separated by space character
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DATABASES_ALL_EXCLUDE_LIST="test otherdb"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+If DATABASES_ALL=no, the following space separated list of databases will be processed.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DATABASES_LIST="mydb myseconddb workdb"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Maximum backup execution time per database. Soft value generates a warning only. Hard value generates a warning, stops current task and processes next one in list. Time is specified in seconds.
+</div>
+<div class="Indented">
+Can be set to 0 if you don’t want a task to be stopped.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SOFT_MAX_EXEC_TIME_DB_TASK=3600
+HARD_MAX_EXEC_TIME_DB_TASK=7200
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Preferred database dump compression program. Leave this set to xz for best results. Compression level 5 is a good compromise between cpu, memory hunger and compression ratio.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">COMPRESS_PROGRAM=xz|lzma|gz
+COMPRESS_RATIO=1-9
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Sets database dump compression to be done on remote site. Can also be set locally to lower remote system cpu usage in expense for more bandwidth. Don’t forget to set at least ssh compression if you set this value to no.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">COMPRESSION_REMOTE=yes|no
+</pre>
+</div>
+
+</div>
+<ul>
+<li>
+File backup options, only apply if BACKUP_FILES=yes
+</li>
+
+</ul>
+<div class="Unindented">
+Path separator charracter for directories list. You can change this to whatever unholy separator you want in your directories list below. (try to use unconventional separators like &ldquo;|&rdquo;).
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">PATH_SEPARATOR_CHAR=";"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Double quoted directory list separated by the specified PATH_SEPARATOR_CHAR. Every directory will be processed as a separate task.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DIRECTORIES_SIMPLE_LIST="/home/dir1;/var/log;/etc"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Double quoted recursive directory list separated by the specified PATH_SEPARATOR_CHAR. Every first level subdirectory of any directory in the list will be processed as a separated task.
+</div>
+<div class="Indented">
+Example: &ldquo;/home;/var&rdquo; will create tasks &ldquo;/home/dir1&rdquo;, &ldquo;/home/dir2&rdquo;, ... &ldquo;/home/dirN&rdquo;, &ldquo;/var/log&rdquo;, &ldquo;/var/lib&rdquo; ... &ldquo;/var/whatever&rdquo;
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DIRECTORIES_RECURSE_LIST="/home;/var"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Double quoted directory exclude list separated by the specified PATH_SEPARATOR_CHAR. Every directory in this list will be skipped from the recursive list. In the above example you could skip &ldquo;/home/dir3&rdquo;
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DIRECTORIES_RECURSE_EXCLUDE_LIST="/home/backupuser;/home/lost+found;/var/tmp"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Rsync style exclude patterns. Exclusions happen from the root of the backed-up folder. Be aware that every recurse list task will have it’s own root.
+</div>
+<div class="Indented">
+Example: if recuse list contains /home and you want to exclude the tmp directories in any task’s root you may set RSYNC_EXCLUDE_PATTERN to &ldquo;*/tmp&rdquo;.
+</div>
+<div class="Indented">
+Example 2: If you want to skip any file with extension .lck anywhere in your backup, you may set RSYNC_EXCLUDE_PATERN to &ldquo;**/*.lck&rdquo;
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">RSYNC_EXCLUDE_PATTERN="*/tmp;*/sessions;**/*.lck"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Preserve ACLs. Please check that your filesystem supports ACLs and is mounted with it’s support or rsync will get you loads of errors.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">PRESERVE_ACL=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Preserve Xattr. The same applies as for ACLs
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">PRESERVE_XATTR=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Use rsync compression for file transfers. Leave this disabled unless your’re not using SSH compression.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">RSYNC_COMPRESS=yes|no
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Maximum backup execution time per file task. Soft value generates a warning only. Hard value generates a warning, stops current task and processes next one in list. Time is specified in seconds.
+</div>
+<div class="Indented">
+Can be set to 0 if you don’t want a task to be stopped.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SOFT_MAX_EXEC_TIME_FILE_TASK=3600
+HARD_MAX_EXEC_TIME_FILE_TASK=7200
+</pre>
+</div>
+
+</div>
+<ul>
+<li>
+General options
+</li>
+
+</ul>
+<div class="Unindented">
+Alert email adresses separated by a space character. Alert emails will be sent to the following addresses at the and of the backup script.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">DESTINATION_MAILS="your@mail.address"
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Maximum backup execution time for the whole backup process. Soft value generates a warning only. Hard value generates a warning and stops the whole backup process.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">SOFT_MAX_EXEC_TIME_TOTAL=30000
+HARD_MAX_EXEC_TIME_TOTAL=36000
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Backup rotation. In case you don’t use snapshots on your backup server, you may use backup rotation instead. If you set ROTATE_BACKUPS=yes, obackup will keep ROTATE_COPIES number of copies.
+</div>
+<div class="Indented">
+The newest one will be called like the task name. The older ones will have a suffix &ldquo;.obackup.N&rdquo; where N is the number of the backup. The higher N is, the older the backup is.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">ROTATE_BACKUPS=yes|no
+ROTATE_COPIES=N
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Commands that can be run before and / or after backup execution. Remote execution will only happen if REMOTE_BACKUP=yes
+</div>
+<div class="Indented">
+This can be handy to initiate a snapshot script or run any service stops before backing up.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">LOCAL_RUN_BEFORE_CMD=""
+LOCAL_RUN_AFTER_CMD=""
+REMOTE_RUN_BEFORE_CMD=""
+REMOTE_RUN_AFTER_CMD=""
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Maximum command execution time. Soft value generates a warning only. Hard value generates a warning and stops the whole backup process.
+</div>
+<div class="Indented">
+Can be set to 0 if you don’t want a command to be stopped.
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">MAX_EXEC_TIME_PER_CMD_BEFORE=3600
+MAX_EXEC_TIME_PER_CMD_AFTER=0
+</pre>
+</div>
+
+</div>
+<h1 class="Section">
+<a class="toc" name="toc-Section-5">5</a> Troubleshooting
+</h1>
+<div class="Unindented">
+Obackup has been tested successfully on multiple systems for a wide variety of backup plans. Please check the following steps before requesting help.
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-5.1">5.1</a> Local backups
+</h2>
+<div class="Unindented">
+Obackup logs every of it’s actions to /var/log/obackup-version-your_backup_id.log
+</div>
+<div class="Indented">
+Please check the log file if something went wrong.
+</div>
+<div class="Indented">
+You might try running obackup as root to check if your problem is user permission related.
+</div>
+<h2 class="Subsection">
+<a class="toc" name="toc-Subsection-5.2">5.2</a> Remote backups
+</h2>
+<div class="Unindented">
+Remote backups are more tricky.
+</div>
+<div class="Indented">
+You might check that you can log in remotely with the command
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ ssh -p 22 remotebackupuser@remotehost.tld
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+Also, you might check that you can use mysql and mysql dump commands remotely
+</div>
+<div class="Indented">
+<div class="listing">
+<pre class="listing">$ ssh -p 22 remotebackupuser@remotehost.tld mysql -u sqlbackupuser ’SHOW DATABASES’;
+$ ssh -p 22 remotebackupuser@remotehost.tld mysqldump -u sqlbackupuser mysql
+</pre>
+</div>
+
+</div>
+<div class="Indented">
+You can temporarily disable ssh security by removing lines you added in chapter <a class="Reference" href="#sub:Enhancing-remote-backup">2.7↑</a>.
+</div>
+<div class="Indented">
+Additionnaly, you can check obackup_ssh_filter log in ~/.ssh/obackup_ssh_filter.log
+</div>
+<div class="Indented">
+You might try running obackup with SUDO_EXEC to check if your problem is user permission related.
+</div>
+<div class="Indented">
+<hr class="line" />
+</div>
+
+<hr class="footer"/>
+<div class="footer" id="generated-by">
+Document generated by <a href="http://elyxer.nongnu.org/">eLyXer 1.2.5 (2013-03-10)</a> on <span class="create-date">2013-06-24T21:15:08.176000</span>
+</div>
+</div>
+</body>
+</html>

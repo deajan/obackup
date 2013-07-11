@@ -1,5 +1,7 @@
 ## Latest changelog
 
+- Uploaded first documentation
+- Fixed an issue with RotateBackups
 - Updated obackup to log failed ssh command results
 - Updated ssh command filter to log failed commands
 - Updated ssh command filter to accept personalized commands
