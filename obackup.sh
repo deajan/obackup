@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
 OBACKUP_VERSION=1.84
-OBACKUP_BUILD=2306201301
+OBACKUP_BUILD=1107201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -413,6 +413,7 @@ function CheckSpaceRequirements
 				LogError "Local disk space may be insufficient to backup files (available space is lower than non compressed databases)."
 			fi
 		else
+			LOCAL_SQL_SPACE=0
 			LogError "SQL storage path [$LOCAL_SQL_STORAGE] doesn't exist."
 		fi
 	fi
@@ -438,6 +439,7 @@ function CheckSpaceRequirements
 				LogError "Local disk space may be insufficient to backup files (available space is lower than full backup)."
 			fi
                 else
+                	LOCAL_FILE_SPACE=0
                         LogError "File storage path [$LOCAL_FILE_STORAGE] doesn't exist."
                 fi
         fi
@@ -479,7 +481,7 @@ function CheckTotalExecutionTime
 
 function CheckConnectivityRemoteHost
 {
-	if [ "$REMOTE_HOST_PING" != "no" ]
+	if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_BACKUP" != "no" ]
 	then
 		ping $REMOTE_HOST -c 2 > /dev/null 2>&1
 		if [ $? != 0 ]
