@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###### Remote (or local) backup script for files & databases
-###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
+###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84
 OBACKUP_BUILD=1107201301
 
@@ -1028,7 +1028,6 @@ silent=0
 if [ $# -eq 0 ]
 then
 	Usage
-	exit
 fi
 
 for i in "$@"
@@ -1042,7 +1041,6 @@ do
 		;;
 		--help|-h)
 		Usage
-		exit
 		;;
 	esac
 done
