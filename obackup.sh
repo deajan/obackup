@@ -1069,12 +1069,6 @@ then
 				RunAfterHook
 			fi
 			CleanUp
-			if [ $error_alert -ne 0 ]
-			then
-				exit 1
-			else
-				exit 0
-			fi
 		else
 			LogError "Configuration file could not be loaded."
 			exit 1
@@ -1089,6 +1083,8 @@ if [ $error_alert -ne 0 ]
 then
 	SendAlert
 	LogError "Backup script finished with errors."
+	exit 1
 else
 	Log "Backup script finshed."
+	exit 0
 fi
