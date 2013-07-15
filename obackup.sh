@@ -36,10 +36,6 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 # /dev/shm/obackup_run_local_$SCRIPT_PID		Output of command to be run localy
 # /dev/shm/obackup_run_remote_$SCRIPT_PID		Output of command to be run remotely
 
-# Alert flags
-soft_alert_total=0
-error_alert=0
-
 function Log
 {
 	echo "TIME: $SECONDS - $1" >> "$LOG_FILE"
@@ -1024,6 +1020,9 @@ function Usage
 # Command line argument flags
 dryrun=0
 silent=0
+# Alert flags
+soft_alert_total=0
+error_alert=0
 
 if [ $# -eq 0 ]
 then
@@ -1077,6 +1076,8 @@ then
 		LogError "No configuration file provided."
 		exit 1
 	fi
+else
+	LogError "Environment not suitable to run obackup."
 fi
 
 if [ $error_alert -ne 0 ]
