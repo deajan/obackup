@@ -1,9 +1,9 @@
 #!/bin/bash
 
 ###### Remote (or local) backup script for files & databases
-###### (L) 2013 by Ozy de Jong (www.badministrateur.com)
-OBACKUP_VERSION=1.84
-OBACKUP_BUILD=1107201301
+###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
+OBACKUP_VERSION=1.84RC1
+OBACKUP_BUILD=1607201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -36,10 +36,6 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 # /dev/shm/obackup_run_local_$SCRIPT_PID		Output of command to be run localy
 # /dev/shm/obackup_run_remote_$SCRIPT_PID		Output of command to be run remotely
 
-# Alert flags
-soft_alert_total=0
-error_alert=0
-
 function Log
 {
 	echo "TIME: $SECONDS - $1" >> "$LOG_FILE"
@@ -68,7 +64,7 @@ function TrapError
 
 function TrapStop
 {
-	LogError " /!\ WARNING: Manual extit of backup script. Backups may be in inconsistent state."
+	LogError " /!\ WARNING: Manual exit of backup script. Backups may be in inconsistent state."
 	if [ "$DEBUG" == "no" ]
 	then
 		CleanUp
@@ -632,8 +628,6 @@ function BackupDatabases
 		WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
       	 	wait $child_pid
       	 	retval=$?
-		SECONDS_END=$SECONDS
-		EXEC_TIME=$(($SECONDS_END - $SECONDS_BEGIN))
 		if [ $retval -ne 0 ]
 		then
 			LogError "Backup failed."
@@ -852,8 +846,6 @@ function FilesBackup
 		WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
         	wait $child_pid
         	retval=$?
-        	SECONDS_END=$SECONDS
-        	EXEC_TIME=$(($SECONDS_END-$SECONDS_BEGIN))
 		if [ $retval -ne 0 ]
 		then
 			LogError "Backup failed on remote files."
@@ -877,8 +869,6 @@ function FilesBackup
                 WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
                 wait $child_pid
                 retval=$?
-                SECONDS_END=$SECONDS
-                EXEC_TIME=$(($SECONDS_END-$SECONDS_BEGIN))
                 if [ $retval -ne 0 ]
                 then
                         LogError "Backup failed on remote files."
@@ -1024,11 +1014,13 @@ function Usage
 # Command line argument flags
 dryrun=0
 silent=0
+# Alert flags
+soft_alert_total=0
+error_alert=0
 
 if [ $# -eq 0 ]
 then
 	Usage
-	exit
 fi
 
 for i in "$@"
@@ -1042,7 +1034,6 @@ do
 		;;
 		--help|-h)
 		Usage
-		exit
 		;;
 	esac
 done
@@ -1071,12 +1062,6 @@ then
 				RunAfterHook
 			fi
 			CleanUp
-			if [ $error_alert -ne 0 ]
-			then
-				exit 1
-			else
-				exit 0
-			fi
 		else
 			LogError "Configuration file could not be loaded."
 			exit 1
@@ -1085,12 +1070,16 @@ then
 		LogError "No configuration file provided."
 		exit 1
 	fi
+else
+	LogError "Environment not suitable to run obackup."
 fi
 
 if [ $error_alert -ne 0 ]
 then
 	SendAlert
 	LogError "Backup script finished with errors."
+	exit 1
 else
 	Log "Backup script finshed."
+	exit 0
 fi

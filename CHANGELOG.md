@@ -1,5 +1,7 @@
 ## Latest changelog
 
+- Feature freeze, version tagged as v1.84 RC1
+- Code cleanup
 - Uploaded first documentation
 - Fixed an issue with RotateBackups
 - Updated obackup to log failed ssh command results
