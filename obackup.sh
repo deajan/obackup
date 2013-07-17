@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC1
-OBACKUP_BUILD=1607201301
+OBACKUP_BUILD=1707201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -65,11 +65,21 @@ function TrapError
 function TrapStop
 {
 	LogError " /!\ WARNING: Manual exit of backup script. Backups may be in inconsistent state."
-	if [ "$DEBUG" == "no" ]
-	then
-		CleanUp
-	fi
+	CleanUp
 	exit 1
+}
+
+function TrapQuit
+{
+	if [ $error_alert -ne 0 ]
+	then
+	        SendAlert
+	        LogError "Backup script finished with errors."
+	        exit 1
+	else
+	        Log "Backup script finshed."
+	        exit 0
+	fi
 }
 
 function Spinner
@@ -124,15 +134,18 @@ function EscapeSpaces
 
 function CleanUp
 {
-        rm -f /dev/shm/obackup_dblist_$SCRIPT_PID
-        rm -f /dev/shm/obackup_local_sql_storage_$SCRIPT_PID
-        rm -f /dev/shm/obackup_local_file_storage_$SCRIPT_PID
-        rm -f /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID
-        rm -f /dev/shm/obackup_fsize_$SCRIPT_PID
-        rm -f /dev/shm/obackup_rsync_output_$SCRIPT_PID
-	rm -f /dev/shm/obackup_config_$SCRIPT_PID
-	rm -f /dev/shm/obackup_run_local_$SCRIPT_PID
-	rm -f /dev/shm/obackup_run_remote_$SCRIPT_PID
+	if [ "$DEBUG" != "yes" ]
+	then
+        	rm -f /dev/shm/obackup_dblist_$SCRIPT_PID
+        	rm -f /dev/shm/obackup_local_sql_storage_$SCRIPT_PID
+        	rm -f /dev/shm/obackup_local_file_storage_$SCRIPT_PID
+        	rm -f /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID
+        	rm -f /dev/shm/obackup_fsize_$SCRIPT_PID
+        	rm -f /dev/shm/obackup_rsync_output_$SCRIPT_PID
+		rm -f /dev/shm/obackup_config_$SCRIPT_PID
+		rm -f /dev/shm/obackup_run_local_$SCRIPT_PID
+		rm -f /dev/shm/obackup_run_remote_$SCRIPT_PID
+	fi
 }
 
 function SendAlert
@@ -923,7 +936,8 @@ function Init
 	set -o pipefail
 	set -o errtrace
 
-        trap TrapStop SIGINT SIGQUIT
+        trap TrapStop SIGINT SIGQUIT SIGKILL SIGTERM SIGHUP
+	trap TrapQuit EXIT
 	if [ "$DEBUG" == "yes" ]
 	then
 		trap 'TrapError ${LINENO} $?' ERR
@@ -1072,14 +1086,4 @@ then
 	fi
 else
 	LogError "Environment not suitable to run obackup."
-fi
-
-if [ $error_alert -ne 0 ]
-then
-	SendAlert
-	LogError "Backup script finished with errors."
-	exit 1
-else
-	Log "Backup script finshed."
-	exit 0
 fi
