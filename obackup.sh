@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC1
-OBACKUP_BUILD=1707201301
+OBACKUP_BUILD=1807201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -71,15 +71,15 @@ function TrapStop
 
 function TrapQuit
 {
-	if [ $error_alert -ne 0 ]
-	then
-	        SendAlert
-	        LogError "Backup script finished with errors."
-	        exit 1
-	else
-	        Log "Backup script finshed."
-	        exit 0
-	fi
+        if [ $error_alert -ne 0 ]
+        then
+                SendAlert
+                LogError "Backup script finished with errors."
+                exit 1
+        else
+                Log "Backup script finshed."
+                exit 0
+        fi
 }
 
 function Spinner
@@ -136,8 +136,8 @@ function CleanUp
 {
 	if [ "$DEBUG" != "yes" ]
 	then
-        	rm -f /dev/shm/obackup_dblist_$SCRIPT_PID
-        	rm -f /dev/shm/obackup_local_sql_storage_$SCRIPT_PID
+	        rm -f /dev/shm/obackup_dblist_$SCRIPT_PID
+	        rm -f /dev/shm/obackup_local_sql_storage_$SCRIPT_PID
         	rm -f /dev/shm/obackup_local_file_storage_$SCRIPT_PID
         	rm -f /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID
         	rm -f /dev/shm/obackup_fsize_$SCRIPT_PID
@@ -238,7 +238,7 @@ function CheckEnvironment
 }
 
 # Waits for pid $1 to complete. Will log an alert if $2 seconds exec time exceeded unless $2 equals 0. Will stop task and log alert if $3 seconds exec time exceeded.
-function WaitForTaskCompletition
+function WaitForTaskCompletion
 {
         soft_alert=0
         SECONDS_BEGIN=$SECONDS
@@ -261,6 +261,13 @@ function WaitForTaskCompletition
                         if [ $EXEC_TIME -gt $3 ] && [ $3 != 0 ]
                         then
                                 LogError "Max hard execution time exceeded for task. Stopping task execution."
+				kill -9 $1
+                                if [ $? == 0 ]
+                                then
+                                        LogError "Task stopped succesfully"
+                                else
+                                        LogError "Could not stop task."
+                                fi
                                 return 1
                         fi
                 fi
@@ -274,8 +281,7 @@ function RunLocalCommand
 	CheckConnectivity3rdPartyHosts
 	$1 > /dev/shm/obackup_run_local_$SCRIPT_PID &
 	child_pid=$!
-	WaitForTaskCompletition $child_pid 0 $2
-	wait $child_pid
+	WaitForTaskCompletion $child_pid 0 $2
 	retval=$?
 	if [ $retval -eq 0 ]
 	then
@@ -303,8 +309,7 @@ function RunRemoteCommand
 			$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$1" > /dev/shm/obackup_run_remote_$SCRIPT_PID &
 		fi
 		child_pid=$!
-		WaitForTaskCompletition $child_pid 0 $2
-		wait $child_pid
+		WaitForTaskCompletion $child_pid 0 $2
 		retval=$?
 		if [ $retval -eq 0 ]
 		then
@@ -546,8 +551,7 @@ function ListDatabases
 		mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > /dev/shm/obackup_dblist_$SCRIPT_PID &
 	fi
 	child_pid=$!
-	WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
-	wait $child_pid
+	WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
 	retval=$?
 	if [ $retval -eq 0 ]
 	then
@@ -638,8 +642,7 @@ function BackupDatabases
 		SECONDS_BEGIN=$SECONDS
 		BackupDatabase $BACKUP_TASK &
 		child_pid=$!
-		WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
-      	 	wait $child_pid
+		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
       	 	retval=$?
 		if [ $retval -ne 0 ]
 		then
@@ -676,8 +679,7 @@ function ListDirectories
 			$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &
 		fi
 		child_pid=$!
-		WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
-		wait $child_pid
+		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
 		retval=$?
 		if  [ $retval != 0 ]
 		then
@@ -750,8 +752,7 @@ function GetDirectoriesSize
 		echo $dir_list | xargs $COMMAND_SUDO du -cs | tail -n1 | cut -f1 > /dev/shm/obackup_fsize_$SCRIPT_PID &
 	fi
 	child_pid=$!
-	WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
-	wait $child_pid
+	WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
 	retval=$?
 	if  [ $retval != 0 ]
 	then
@@ -856,8 +857,7 @@ function FilesBackup
 		SECONDS_BEGIN=$SECONDS
 		Rsync $BACKUP_TASK &
 		child_pid=$!
-		WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
-        	wait $child_pid
+		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
         	retval=$?
 		if [ $retval -ne 0 ]
 		then
@@ -879,8 +879,7 @@ function FilesBackup
                 SECONDS_BEGIN=$SECONDS
                 Rsync $BACKUP_TASK "recurse" &
                 child_pid=$!
-                WaitForTaskCompletition $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
-                wait $child_pid
+                WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
                 retval=$?
                 if [ $retval -ne 0 ]
                 then
