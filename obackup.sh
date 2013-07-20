@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC1
-OBACKUP_BUILD=1807201301
+OBACKUP_BUILD=2007201302
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -261,17 +261,24 @@ function WaitForTaskCompletion
                         if [ $EXEC_TIME -gt $3 ] && [ $3 != 0 ]
                         then
                                 LogError "Max hard execution time exceeded for task. Stopping task execution."
-				kill -9 $1
+				kill -s SIGTERM $1
                                 if [ $? == 0 ]
                                 then
                                         LogError "Task stopped succesfully"
                                 else
-                                        LogError "Could not stop task."
+                                        LogError "Sending SIGTERM to process failed. Trying the hard way."
+					kill -9 $1
+					if [ $? != 0 ]
+					then
+						LogError "Could not stop task."
+					fi
                                 fi
                                 return 1
                         fi
                 fi
         done
+	wait $child_pid
+	return $?
 }
 
 
@@ -279,7 +286,7 @@ function WaitForTaskCompletion
 function RunLocalCommand
 {
 	CheckConnectivity3rdPartyHosts
-	$1 > /dev/shm/obackup_run_local_$SCRIPT_PID &
+	$1 > /dev/shm/obackup_run_local_$SCRIPT_PID 2>&1 &
 	child_pid=$!
 	WaitForTaskCompletion $child_pid 0 $2
 	retval=$?
@@ -289,9 +296,11 @@ function RunLocalCommand
 	else
 		Log "Running command [$1] on local host failed."
 	fi
-
-	Log "Command output:"
-	Log "$(cat /dev/shm/obackup_run_local_$SCRIPT_PID)"
+	
+	if [ $verbose -eq 1 ]
+	then
+		Log "Command output:\n$(cat /dev/shm/obackup_run_local_$SCRIPT_PID)"
+	fi
 }
 
 ## Runs remote command $1 and waits for completition in $2 seconds
@@ -306,7 +315,7 @@ function RunRemoteCommand
 			LogError "Connectivity test failed. Cannot run remote command."
 			return 1
 		else
-			$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$1" > /dev/shm/obackup_run_remote_$SCRIPT_PID &
+			eval "$SSH_CMD \"$1\" > /dev/shm/obackup_run_remote_$SCRIPT_PID 2>&1 &"
 		fi
 		child_pid=$!
 		WaitForTaskCompletion $child_pid 0 $2
@@ -318,9 +327,9 @@ function RunRemoteCommand
 			LogError "Running command [$1] failed."
 		fi
 		
-		if [ -f /dev/shm/obackup_run_remote_$SCRIPT_PID ]
+		if [ -f /dev/shm/obackup_run_remote_$SCRIPT_PID ] && [ $verbose -eq 1 ]
 		then
-			Log "Command output: $(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
+			Log "Command output:\n$(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
 		fi
 	fi
 }
@@ -348,48 +357,6 @@ function RunAfterHook
 	if [ "$REMOTE_RUN_AFTER_CMD" != "" ]
 	then
 		RunRemoteCommand "$REMOTE_RUN_AFTER_CMD" $MAX_EXEC_TIME_PER_CMD_AFTER
-	fi
-}
-
-function SetCompressionOptions
-{
-	if [ "$COMPRESSION_PROGRAM" == "xz" ] && type -p xz > /dev/null 2>&1
-	then
-		COMPRESSION_EXTENSION=.xz
-	elif [ "$COMPRESSION_PROGRAM" == "lzma" ] && type -p lzma > /dev/null 2>&1
-	then
-		COMPRESSION_EXTENSION=.lzma
-	elif [ "$COMPRESSION_PROGRAM" == "gzip" ] && type -p gzip > /dev/null 2>&1
-	then	
-		COMPRESSION_EXTENSION=.gz
-		COMPRESSION_OPTIONS=--rsyncable
-	else
-		COMPRESSION_EXTENSION=
-	fi
-
-	if [ "$SSH_COMPRESSION" == "yes" ]
-	then
-        	SSH_COMP=-C
-	else
-        	SSH_COMP=
-	fi
-}
-
-function SetSudoOptions
-{
-	## Add this to support prior config files without RSYNC_EXECUTABLE option
-	if [ "$RSYNC_EXECUTABLE" == "" ]
-	then
-		RSYNC_EXECUTABLE=rsync
-	fi
-
-	if [ "$SUDO_EXEC" == "yes" ]
-	then
-		RSYNC_PATH="sudo $(which $RSYNC_EXECUTABLE)"
-		COMMAND_SUDO="sudo"
-	else
-		RSYNC_PATH="$(which $RSYNC_EXECUTABLE)"
-		COMMAND_SUDO=""
 	fi
 }
 
@@ -545,7 +512,7 @@ function ListDatabases
 			LogError "Connectivity test failed. Stopping current task."
 			Dummy &
 		else
-			$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'" > /dev/shm/obackup_dblist_$SCRIPT_PID &
+			eval "$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > /dev/shm/obackup_dblist_$SCRIPT_PID &"
 		fi
 	else
 		mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > /dev/shm/obackup_dblist_$SCRIPT_PID &
@@ -618,7 +585,7 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION
+		eval "$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	elif [ "$REMOTE_BACKUP" == "yes" ] && [ "$COMPRESSION_REMOTE" == "yes" ]
 	then
 		CheckConnectivityRemoteHost
@@ -627,7 +594,7 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION
+		eval "$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS\" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	else
 		mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION
 	fi
@@ -673,10 +640,10 @@ function ListDirectories
 				LogError "Connectivity test failed. Stopping current task."
 				Dummy &
                 	else
-				$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d" > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &
+				eval "$SSH_CMD \"$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d\" > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &"
 			fi
 		else
-			$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &
+c			$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &
 		fi
 		child_pid=$!
 		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
@@ -746,7 +713,7 @@ function GetDirectoriesSize
 			LogError "Connectivity test failed. Stopping current task."
 			Dummy &
 		else
-			$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT "echo $dir_list | xargs $COMMAND_SUDO du -cs | tail -n1 | cut -f1" > /dev/shm/obackup_fsize_$SCRIPT_PID &
+			eval "$SSH_CMD \"echo $dir_list | xargs $COMMAND_SUDO du -cs | tail -n1 | cut -f1\" > /dev/shm/obackup_fsize_$SCRIPT_PID &"
 		fi
 	else
 		echo $dir_list | xargs $COMMAND_SUDO du -cs | tail -n1 | cut -f1 > /dev/shm/obackup_fsize_$SCRIPT_PID &
@@ -832,12 +799,12 @@ function Rsync
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	else
 		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	fi
 	#### Eval is used so the full command is processed without bash adding single quotes round variables
-	if [ "$DEBUG" == "yes" ]
+	if [ $verbose -eq 1 ]
 	then
 		Log $rsync_cmd
 	fi
@@ -945,14 +912,51 @@ function Init
 	LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
 	MAIL_ALERT_MSG="Warning: Execution of obackup instance $BACKUP_ID (pid $SCRIPT_PID) as $LOCAL_USER@$LOCAL_HOST produced errors."
 
+	## Set SSH command
+        if [ "$SSH_COMPRESSION" == "yes" ]
+        then
+                SSH_COMP=-C
+        else
+                SSH_COMP=
+        fi
+	SSH_CMD="$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
+	RSYNC_SSH_CMD="$(which ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT"
+
+        ## Support for older config files without RSYNC_EXECUTABLE option
+        if [ "$RSYNC_EXECUTABLE" == "" ]
+        then
+                RSYNC_EXECUTABLE=rsync
+        fi
+
+	## Sudo execution option
+        if [ "$SUDO_EXEC" == "yes" ]
+        then
+                RSYNC_PATH="sudo $(which $RSYNC_EXECUTABLE)"
+                COMMAND_SUDO="sudo"
+        else
+                RSYNC_PATH="$(which $RSYNC_EXECUTABLE)"
+                COMMAND_SUDO=""
+        fi
+
+	## Set compression executable and extension
+        if [ "$COMPRESSION_PROGRAM" == "xz" ] && type -p xz > /dev/null 2>&1
+        then
+                COMPRESSION_EXTENSION=.xz
+        elif [ "$COMPRESSION_PROGRAM" == "lzma" ] && type -p lzma > /dev/null 2>&1
+        then
+                COMPRESSION_EXTENSION=.lzma
+        elif [ "$COMPRESSION_PROGRAM" == "gzip" ] && type -p gzip > /dev/null 2>&1
+        then
+                COMPRESSION_EXTENSION=.gz
+                COMPRESSION_OPTIONS=--rsyncable
+        else
+                COMPRESSION_EXTENSION=
+        fi
 }
 
 function DryRun
 {
         Log "/!\ DRY RUN as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)"
-
-        SetCompressionOptions
-	SetSudoOptions
 
         if [ "$BACKUP_SQL" != "no" ]
         then
@@ -976,9 +980,6 @@ function Main
 {
 	Log "Backup launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)"
 	
-	SetCompressionOptions
-	SetSudoOptions
-
 	if [ "$BACKUP_SQL" != "no" ]
 	then
 		ListDatabases
@@ -1017,7 +1018,7 @@ function Usage
 {
 	echo "Obackup $OBACKUP_VERSION $OBACKUP_BUILD"
 	echo ""
-	echo "usage: obackup backup_name [--dry] [--silent]"
+	echo "usage: obackup backup_name [--dry] [--silent] [--verbose]"
 	echo ""
 	echo "--dry: will run obackup without actually doing anything, just testing"
 	echo "--silent: will run obackup without any output to stdout, usefull for cron backups"
@@ -1027,6 +1028,7 @@ function Usage
 # Command line argument flags
 dryrun=0
 silent=0
+verbose=0
 # Alert flags
 soft_alert_total=0
 error_alert=0
@@ -1045,7 +1047,10 @@ do
 		--silent)
 		silent=1
 		;;
-		--help|-h)
+		--verbose)
+		verbose=1
+		;;
+		--help|-h|--version|-v)
 		Usage
 		;;
 	esac
