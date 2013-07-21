@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC1
-OBACKUP_BUILD=2007201302
+OBACKUP_BUILD=2007201303
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -804,7 +804,7 @@ function Rsync
 		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	fi
 	#### Eval is used so the full command is processed without bash adding single quotes round variables
-	if [ $verbose -eq 1 ]
+	if [ "$DEBUG" == "yes" ]
 	then
 		Log $rsync_cmd
 	fi
@@ -1022,6 +1022,7 @@ function Usage
 	echo ""
 	echo "--dry: will run obackup without actually doing anything, just testing"
 	echo "--silent: will run obackup without any output to stdout, usefull for cron backups"
+	echo "--verbose: adds command outputs"
 	exit 128
 }
 
