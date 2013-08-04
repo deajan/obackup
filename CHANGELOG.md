@@ -1,5 +1,8 @@
 ## Latest changelog
 
+- Fixed LoadConfigFile function will not warn on wrong config file
+- More code cleanup
+- Added --verbose parameter (yeah... Feature freeze i said ? Well this is not a feature)
 - Improved task execution checks and more code cleanup
 - Fixed CleanUp even if DEBUG=yes
 - 16 Jul. 2013 Feature freeze, version tagged as v1.84 RC1

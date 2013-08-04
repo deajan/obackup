@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC1
-OBACKUP_BUILD=2007201303
+OBACKUP_BUILD=0408201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -190,9 +190,10 @@ function LoadConfigFile
 	then
 		LogError "Cannot load backup configuration file [$1]. Backup cannot start."
 		return 1
-	elif [[ $1 != *.conf ]]
+	elif [[ "$1" != *".conf" ]]
 	then
 		LogError "Wrong configuration file supplied [$1]. Backup cannot start."
+		return 1
 	else 
 		egrep '^#|^[^ ]*=[^;&]*'  "$1" > "/dev/shm/obackup_config_$SCRIPT_PID"
 		source "/dev/shm/obackup_config_$SCRIPT_PID"
