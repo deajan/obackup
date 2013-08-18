@@ -2,8 +2,8 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
-OBACKUP_VERSION=1.84RC1
-OBACKUP_BUILD=0408201301
+OBACKUP_VERSION=1.84RC2
+OBACKUP_BUILD=1808201302
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -65,7 +65,6 @@ function TrapError
 function TrapStop
 {
 	LogError " /!\ WARNING: Manual exit of backup script. Backups may be in inconsistent state."
-	CleanUp
 	exit 1
 }
 
@@ -74,9 +73,11 @@ function TrapQuit
         if [ $error_alert -ne 0 ]
         then
                 SendAlert
+		CleanUp
                 LogError "Backup script finished with errors."
                 exit 1
         else
+		CleanUp
                 Log "Backup script finshed."
                 exit 0
         fi
@@ -752,25 +753,6 @@ function RsyncExcludePattern
 	IFS=$OLD_IFS
 }
 
-function RsyncArgs
-{
-	RSYNC_ARGS=-rlptgoDE
-	if [ "$PRESERVE_ACLS" == "yes" ]
-	then
-		RSYNC_ARGS=$RSYNC_ARGS"A"
-	fi
-
-	if [ "$PRESERVE_XATTR" == "yes" ]
-	then
-		RSYNC_ARGS=$RSYNC_ARGS"X"
-	fi
-
-	if [ "$RSYNC_COMPRESS" == "yes" ]
-	then
-		RSYNC_ARGS=$RSYNC_ARGS"z"
-	fi
-}
-
 function Rsync
 {
 	i="$(StripQuotes $1)"
@@ -800,14 +782,14 @@ function Rsync
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --stats --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	else
-		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(which $RSYNC_EXECUTABLE) $RSYNC_ARGS --stats --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > /dev/shm/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	fi
 	#### Eval is used so the full command is processed without bash adding single quotes round variables
-	if [ "$DEBUG" == "yes" ]
+	if [ $verbose -eq 1 ]
 	then
-		Log $rsync_cmd
+		Log "RSYNC_CMD: $rsync_cmd"
 	fi
 	eval $rsync_cmd
 	exit $?
@@ -827,6 +809,11 @@ function FilesBackup
 		child_pid=$!
 		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
         	retval=$?
+		if [ $verbose -eq 1 ]
+		then
+			Log "List:\n$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
+		fi
+
 		if [ $retval -ne 0 ]
 		then
 			LogError "Backup failed on remote files."
@@ -910,7 +897,13 @@ function Init
 		trap 'TrapError ${LINENO} $?' ERR
 	fi
 
-	LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
+	if [ "$LOGFILE" == "" ]
+	then
+		LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
+	else
+		LOG_FILE="$LOGFILE"
+	fi
+
 	MAIL_ALERT_MSG="Warning: Execution of obackup instance $BACKUP_ID (pid $SCRIPT_PID) as $LOCAL_USER@$LOCAL_HOST produced errors."
 
 	## Set SSH command
@@ -937,6 +930,34 @@ function Init
         else
                 RSYNC_PATH="$(which $RSYNC_EXECUTABLE)"
                 COMMAND_SUDO=""
+        fi
+
+	## Set Rsync arguments
+        RSYNC_ARGS=-rlptgoDE
+        if [ "$PRESERVE_ACLS" == "yes" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS"A"
+        fi
+        if [ "$PRESERVE_XATTR" == "yes" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS"X"
+        fi
+        if [ "$RSYNC_COMPRESS" == "yes" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS"z"
+        fi
+	if [ $verbose -eq 1 ]
+	then
+		RSYNC_ARGS=$RSYNC_ARGS"i"
+	fi
+        if [ $dryrun -eq 1 ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS"n"
+                DRY_WARNING="/!\ DRY RUN"
+        fi
+        if [ "$BANDWIDTH" != "0" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
         fi
 
 	## Set compression executable and extension
@@ -979,8 +1000,6 @@ function DryRun
 
 function Main
 {
-	Log "Backup launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)"
-	
 	if [ "$BACKUP_SQL" != "no" ]
 	then
 		ListDatabases
@@ -990,26 +1009,37 @@ function Main
 		ListDirectories
 		GetDirectoriesSize
 	fi
-	CreateLocalStorageDirectories
+	if [ $dryrun -ne 1 ]
+	then
+		CreateLocalStorageDirectories
+	fi
 	CheckSpaceRequirements
 
-	# Make Backup
+	# Actual backup process
 	if [ "$BACKUP_SQL" != "no" ]
 	then
-		if [ "$ROTATE_BACKUPS" == "yes" ]
+		if [ $dryrun -ne 1 ]
 		then
-			RotateBackups $LOCAL_SQL_STORAGE
+			if [ "$ROTATE_BACKUPS" == "yes" ]
+			then
+				RotateBackups $LOCAL_SQL_STORAGE
+			fi
+			BackupDatabases
+		else
+			Log "DRYRUN: databases not backed up."
 		fi
-		BackupDatabases
 	fi
+
 	if [ "$BACKUP_FILES" != "no" ]
 	then
-		if [ "$ROTATE_BACKUPS" == "yes" ]
+		if [ $dryrun -ne 1 ]
 		then
-			RotateBackups $LOCAL_FILE_STORAGE
+			if [ "$ROTATE_BACKUPS" == "yes" ]
+			then
+				RotateBackups $LOCAL_FILE_STORAGE
+			fi
 		fi
 		RsyncExcludePattern
-		RsyncArgs
 		FilesBackup
 	fi
 	# Be a happy sysadmin (and drink a coffee ? Nahh... it's past midnight.)
@@ -1019,18 +1049,25 @@ function Usage
 {
 	echo "Obackup $OBACKUP_VERSION $OBACKUP_BUILD"
 	echo ""
-	echo "usage: obackup backup_name [--dry] [--silent] [--verbose]"
+	echo "usage: obackup backup_name [--dry] [--silent] [--verbose] [--no-maxtime]"
 	echo ""
 	echo "--dry: will run obackup without actually doing anything, just testing"
 	echo "--silent: will run obackup without any output to stdout, usefull for cron backups"
 	echo "--verbose: adds command outputs"
+	echo "--no-maxtime: disables any soft and hard execution time checks"
 	exit 128
 }
 
 # Command line argument flags
 dryrun=0
 silent=0
-verbose=0
+no_maxtime=0
+if [ "$DEBUG" == "yes" ]
+then
+	verbose=1
+else
+	verbose=0
+fi
 # Alert flags
 soft_alert_total=0
 error_alert=0
@@ -1052,6 +1089,9 @@ do
 		--verbose)
 		verbose=1
 		;;
+		--no-maxtime)
+		no_maxtime=1
+		;;
 		--help|-h|--version|-v)
 		Usage
 		;;
@@ -1069,18 +1109,19 @@ then
 			Init
 			DATE=$(date)
 			Log "--------------------------------------------------------------------"
-			Log "$DATE - Obackup v$OBACKUP_VERSION script begin."
+			Log "$DRY_WARNING $DATE - Obackup v$OBACKUP_VERSION script begin."
 			Log "--------------------------------------------------------------------"
-			if [ $dryrun -eq 1 ]
-			then
-				DryRun
-			else
-				OLD_IFS=$IFS
-				RunBeforeHook
-				Main
-				IFS=$OLD_IFS
-				RunAfterHook
-			fi
+			Log "Backup task [$BACKUP_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)"
+			if [ $no_maxtime -eq 1 ]
+                        then
+                                SOFT_MAX_EXEC_TIME=0
+                                HARD_MAX_EXEC_TIME=0
+                        fi
+			OLD_IFS=$IFS
+			RunBeforeHook
+			Main
+			IFS=$OLD_IFS
+			RunAfterHook
 			CleanUp
 		else
 			LogError "Configuration file could not be loaded."

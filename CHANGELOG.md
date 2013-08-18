@@ -1,11 +1,26 @@
+## FUTURE IMPROVEMENTS
+
+- Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
+
+## Known issues
+
+- Backup size check counts excluded patterns
+
 ## Latest changelog
 
+- 18 Aug. 2013: Now v1.84 RC2
+- Added personalized log file option
+- Simplified dryrun (removed dryrun function and merged it with main function)
+- Simplified Init function
+- Added --stat switch to rsync execution
+- Added bandwidth limit
+- Added --no-maxtime switch
 - Fixed LoadConfigFile function will not warn on wrong config file
 - More code cleanup
-- Added --verbose parameter (yeah... Feature freeze i said ? Well this is not a feature)
+- Added --verbose switch (will add databases list,  rsync commands, and file backup list)
 - Improved task execution checks and more code cleanup
-- Fixed CleanUp even if DEBUG=yes
-- 16 Jul. 2013 Feature freeze, version tagged as v1.84 RC1
+- Fixed CleanUp function if DEBUG=yes, also function is now launched from TrapQuit
+- 16 Jul. 2013: version tagged as v1.84 RC1
 - Code cleanup
 - Uploaded first documentation
 - Fixed an issue with RotateBackups
