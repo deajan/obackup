@@ -2,8 +2,8 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
-OBACKUP_VERSION=1.84RC2
-OBACKUP_BUILD=1808201302
+OBACKUP_VERSION=1.84preRC3
+OBACKUP_BUILD=2408201302
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -151,8 +151,6 @@ function CleanUp
 
 function SendAlert
 {
-	CheckConnectivityRemoteHost
-	CheckConnectivity3rdPartyHosts
 	cat "$LOG_FILE" | gzip -9 > /tmp/obackup_lastlog.gz
         if type -p mutt > /dev/null 2>&1
         then
@@ -287,7 +285,6 @@ function WaitForTaskCompletion
 ## Runs local command $1 and waits for completition in $2 seconds
 function RunLocalCommand
 {
-	CheckConnectivity3rdPartyHosts
 	$1 > /dev/shm/obackup_run_local_$SCRIPT_PID 2>&1 &
 	child_pid=$!
 	WaitForTaskCompletion $child_pid 0 $2
@@ -309,30 +306,27 @@ function RunLocalCommand
 function RunRemoteCommand
 {
 	CheckConnectivity3rdPartyHosts
-	if [ "$REMOTE_BACKUP" == "yes" ]
+	CheckConnectivityRemoteHost
+	if [ $? != 0 ]
 	then
-		CheckConnectivityRemoteHost
-		if [ $? != 0 ]
-		then
-			LogError "Connectivity test failed. Cannot run remote command."
-			return 1
-		else
-			eval "$SSH_CMD \"$1\" > /dev/shm/obackup_run_remote_$SCRIPT_PID 2>&1 &"
-		fi
-		child_pid=$!
-		WaitForTaskCompletion $child_pid 0 $2
-		retval=$?
-		if [ $retval -eq 0 ]
-		then
-			Log "Running command [$1] succeded."
-		else
-			LogError "Running command [$1] failed."
-		fi
-		
-		if [ -f /dev/shm/obackup_run_remote_$SCRIPT_PID ] && [ $verbose -eq 1 ]
-		then
-			Log "Command output:\n$(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
-		fi
+		LogError "Connectivity test failed. Cannot run remote command."
+		return 1
+	else
+		eval "$SSH_CMD \"$1\" > /dev/shm/obackup_run_remote_$SCRIPT_PID 2>&1 &"
+	fi
+	child_pid=$!
+	WaitForTaskCompletion $child_pid 0 $2
+	retval=$?
+	if [ $retval -eq 0 ]
+	then
+		Log "Running command [$1] succeded."
+	else
+		LogError "Running command [$1] failed."
+	fi
+	
+	if [ -f /dev/shm/obackup_run_remote_$SCRIPT_PID ] && [ $verbose -eq 1 ]
+	then
+		Log "Command output:\n$(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
 	fi
 }
 
@@ -449,7 +443,7 @@ function CheckSpaceRequirements
       
 function CheckTotalExecutionTime
 {
-	 #### Check if max execution time of whole script as been reached
+	#### Check if max execution time of whole script as been reached
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]
         then
 		if [ $soft_alert_total -eq 0 ]
@@ -483,7 +477,7 @@ function CheckConnectivity3rdPartyHosts
 	if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]
 	then
 		remote_3rd_party_success=0
-		for $i in $REMOTE_3RD_PARTY_HOSTS
+		for i in $REMOTE_3RD_PARTY_HOSTS
 		do
 			ping $i -c 2 > /dev/null 2>&1
 			if [ $? != 0 ]
@@ -506,16 +500,10 @@ function ListDatabases
 	SECONDS_BEGIN=$SECONDS
 	Log "Listing databases."
 	CheckConnectivity3rdPartyHosts
-	if [ "$REMOTE_BACKUP" == "yes" ]
+	CheckConnectivityRemoteHost
+	if [ "$REMOTE_BACKUP" != "no" ]
 	then
-		CheckConnectivityRemoteHost
-		if [ $? != 0 ]
-		then
-			LogError "Connectivity test failed. Stopping current task."
-			Dummy &
-		else
-			eval "$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > /dev/shm/obackup_dblist_$SCRIPT_PID &"
-		fi
+		eval "$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > /dev/shm/obackup_dblist_$SCRIPT_PID &"
 	else
 		mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > /dev/shm/obackup_dblist_$SCRIPT_PID &
 	fi
@@ -631,7 +619,7 @@ function ListDirectories
 	Log "Listing directories to backup."
 	OLD_IFS=$IFS
 	IFS=$PATH_SEPARATOR_CHAR
-	for i in $DIRECTORIES_RECURSE_LIST
+	for dir in $DIRECTORIES_RECURSE_LIST
 	do
 		CheckConnectivity3rdPartyHosts
 		if [ "$REMOTE_BACKUP" == "yes" ]
@@ -642,24 +630,24 @@ function ListDirectories
 				LogError "Connectivity test failed. Stopping current task."
 				Dummy &
                 	else
-				eval "$SSH_CMD \"$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d\" > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &"
+				eval "$SSH_CMD \"$COMMAND_SUDO find $dir/ -mindepth 1 -maxdepth 1 -type d\" > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &"
 			fi
 		else
-c			$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &
+			$COMMAND_SUDO find $dir/ -mindepth 1 -maxdepth 1 -type d > /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID &
 		fi
 		child_pid=$!
 		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
 		retval=$?
 		if  [ $retval != 0 ]
 		then
-			LogError "Could not enumerate recursive directories in $i."
+			LogError "Could not enumerate recursive directories in $dir."
 			if [ -f /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID ]
 			then
 				LogError "Command output: $(cat /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID)"
 			fi
 			return 1
 		else
-			Log "Listing of recursive directories succeeded for $i."
+			Log "Listing of recursive directories succeeded for $dir."
 		fi
 
 		while read line
@@ -688,13 +676,13 @@ c			$COMMAND_SUDO find $i/ -mindepth 1 -maxdepth 1 -type d > /dev/shm/obackup_di
 	done
 	DIRECTORIES_TO_BACKUP_RECURSE=$DIRECTORIES_TO_BACKUP
 	
-	for i in $DIRECTORIES_SIMPLE_LIST
+	for dir in $DIRECTORIES_SIMPLE_LIST
 	do
 		if [ "$DIRECTORIES_TO_BACKUP" == "" ]
 		then
-			DIRECTORIES_TO_BACKUP="'$i'"
+			DIRECTORIES_TO_BACKUP="'$dir'"
 		else
-			DIRECTORIES_TO_BACKUP="$DIRECTORIES_TO_BACKUP$PATH_SEPARATOR_CHAR'$i'"
+			DIRECTORIES_TO_BACKUP="$DIRECTORIES_TO_BACKUP$PATH_SEPARATOR_CHAR'$dir'"
 		fi
 	done
 
@@ -976,28 +964,6 @@ function Init
         fi
 }
 
-function DryRun
-{
-        Log "/!\ DRY RUN as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)"
-
-        if [ "$BACKUP_SQL" != "no" ]
-        then
-                ListDatabases
-        fi
-        if [ "$BACKUP_FILES" != "no" ]
-        then
-                ListDirectories
-		GetDirectoriesSize
-        fi
-
-	Log "DB backup list: $DATABASES_TO_BACKUP"
-	Log "DB exclude list: $DATABASES_EXCLUDED_LIST"
-	Log "Dirs backup list: $DIRECTORIES_TO_BACKUP"
-	Log "Dirs exclude list: $DIRECTORIES_EXCLUDED_LIST"
-	
-	CheckSpaceRequirements
-}
-
 function Main
 {
 	if [ "$BACKUP_SQL" != "no" ]
@@ -1012,7 +978,13 @@ function Main
 	if [ $dryrun -ne 1 ]
 	then
 		CreateLocalStorageDirectories
+	else
+		Log "DB backup list: $DATABASES_TO_BACKUP"
+	        Log "DB exclude list: $DATABASES_EXCLUDED_LIST"
+        	Log "Dirs backup list: $DIRECTORIES_TO_BACKUP"
+        	Log "Dirs exclude list: $DIRECTORIES_EXCLUDED_LIST"
 	fi
+
 	CheckSpaceRequirements
 
 	# Actual backup process
