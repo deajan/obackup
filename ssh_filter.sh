@@ -1,7 +1,7 @@
 #!/bin/bash
 
-##### Obackup ssh command filter build 2306201301
-##### This script should be located in /usr/local/bin in the remote system that will be backed up
+##### Obackup / Osync ssh command filter build 2306201301
+##### This script should be located in /usr/local/bin in the remote system that will be backed up / synced
 ##### It will filter the commands that can be run remotely via ssh.
 ##### Please chmod 755 and chown root:root this file
 
@@ -14,7 +14,7 @@ CMD1=
 CMD2=
 CMD3=
 
-LOG_FILE=~/.ssh/obackup_ssh_filter.log
+LOG_FILE=~/.ssh/ssh_filter.log
 
 function Log
 {

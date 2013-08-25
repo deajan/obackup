@@ -1,6 +1,8 @@
 ## FUTURE IMPROVEMENTS
 
+- Exit trap function must also stop child processes
 - Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
+- Obackup should run on Cygwin
 
 ## Known issues
 
@@ -8,8 +10,12 @@
 
 ## Latest changelog
 
+- Improved verbose output
+- Improved dryrun output
+- Improved remote connecivity detection 
+- Fixed a typo in configuration file
 - 18 Aug. 2013: Now v1.84 RC2
-- Added personalized log file option
+- Added possibility to change default logfile
 - Simplified dryrun (removed dryrun function and merged it with main function)
 - Simplified Init function
 - Added --stat switch to rsync execution

@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84preRC3
-OBACKUP_BUILD=2408201302
+OBACKUP_BUILD=2508201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -797,7 +797,7 @@ function FilesBackup
 		child_pid=$!
 		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
         	retval=$?
-		if [ $verbose -eq 1 ]
+		if [ $verbose -eq 1 ] && [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
 		then
 			Log "List:\n$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
 		fi
@@ -805,10 +805,10 @@ function FilesBackup
 		if [ $retval -ne 0 ]
 		then
 			LogError "Backup failed on remote files."
-			if [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
-			then
-				LogError "$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
-			fi
+                        if [ $verbose -eq 0 ] && [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
+                        then
+                                LogError "$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
+                        fi
 		else
 			Log "Backup succeeded."
 		fi
@@ -824,10 +824,15 @@ function FilesBackup
                 child_pid=$!
                 WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
                 retval=$?
+                if [ $verbose -eq 1 ] && [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
+                then
+                        Log "List:\n$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
+                fi
+
                 if [ $retval -ne 0 ]
                 then
                         LogError "Backup failed on remote files."
-			if [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
+			if [ $verbose -eq 0 ] && [ -f /dev/shm/obackup_rsync_output_$SCRIPT_PID ]
 			then
                         	LogError "$(cat /dev/shm/obackup_rsync_output_$SCRIPT_PID)"
 			fi
