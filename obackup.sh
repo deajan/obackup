@@ -41,7 +41,7 @@ function Log
 	echo "TIME: $SECONDS - $1" >> "$LOG_FILE"
 	if [ $silent -eq 0 ]
 	then
-		echo "TIME: $SECONDS - $1"
+		echo -e "TIME: $SECONDS - $1"
 	fi
 }
 
@@ -70,6 +70,9 @@ function TrapStop
 
 function TrapQuit
 {
+	# Kill all child processes
+	pkill -TERM -P $$
+
         if [ $error_alert -ne 0 ]
         then
                 SendAlert
@@ -285,6 +288,11 @@ function WaitForTaskCompletion
 ## Runs local command $1 and waits for completition in $2 seconds
 function RunLocalCommand
 {
+	if [ $dryrun -ne 0 ]
+	then
+		Log "Dryrun: Local command [$1] not run."
+		return 1
+	fi
 	$1 > /dev/shm/obackup_run_local_$SCRIPT_PID 2>&1 &
 	child_pid=$!
 	WaitForTaskCompletion $child_pid 0 $2
@@ -307,13 +315,12 @@ function RunRemoteCommand
 {
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
-	if [ $? != 0 ]
-	then
-		LogError "Connectivity test failed. Cannot run remote command."
-		return 1
-	else
-		eval "$SSH_CMD \"$1\" > /dev/shm/obackup_run_remote_$SCRIPT_PID 2>&1 &"
-	fi
+        if [ $dryrun -ne 0 ]
+        then
+                Log "Dryrun: Remote command [$1] not run."
+                return 1
+        fi
+	eval "$SSH_CMD \"$1\" > /dev/shm/obackup_run_remote_$SCRIPT_PID 2>&1 &"
 	child_pid=$!
 	WaitForTaskCompletion $child_pid 0 $2
 	retval=$?
@@ -517,7 +524,7 @@ function ListDatabases
 		LogError "Listing databases failed."
 		if [ -f /dev/shm/obackup_dblist_$SCRIPT_PID ]
 		then
-			LogError "Command output: $(cat /dev/shm/obackup_dblist_$SCRIPT_PID)"
+			LogError "Command output:\n$(cat /dev/shm/obackup_dblist_$SCRIPT_PID)"
 		fi
 		return $retval
 	fi
@@ -643,7 +650,7 @@ function ListDirectories
 			LogError "Could not enumerate recursive directories in $dir."
 			if [ -f /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID ]
 			then
-				LogError "Command output: $(cat /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID)"
+				LogError "Command output:\n$(cat /dev/shm/obackup_dirs_recurse_list_$SCRIPT_PID)"
 			fi
 			return 1
 		else
@@ -716,7 +723,7 @@ function GetDirectoriesSize
 		LogError "Could not get files size."
 		if [ -f /dev/shm/obackup_fsize_$SCRIPT_PID ]
 		then
-			LogError "Command output: $(cat /dev/shm/obackup_fsize_$SCRIPT_PID)"
+			LogError "Command output:\n$(cat /dev/shm/obackup_fsize_$SCRIPT_PID)"
 		fi
 		return 1
 	else
@@ -1026,7 +1033,7 @@ function Usage
 {
 	echo "Obackup $OBACKUP_VERSION $OBACKUP_BUILD"
 	echo ""
-	echo "usage: obackup backup_name [--dry] [--silent] [--verbose] [--no-maxtime]"
+	echo "usage: obackup /path/to/backup.conf [--dry] [--silent] [--verbose] [--no-maxtime]"
 	echo ""
 	echo "--dry: will run obackup without actually doing anything, just testing"
 	echo "--silent: will run obackup without any output to stdout, usefull for cron backups"

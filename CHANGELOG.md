@@ -7,9 +7,12 @@
 ## Known issues
 
 - Backup size check counts excluded patterns
+- Recursive task creation from directories does only include subdirectories, but no files in root directory
 
 ## Latest changelog
 
+- Improved forced quit command by killing all child processes
+- Before / After commands are now ignored on dryruns
 - Improved verbose output
 - Improved dryrun output
 - Improved remote connecivity detection 
