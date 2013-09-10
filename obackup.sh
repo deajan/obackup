@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84preRC3
-OBACKUP_BUILD=2508201301
+OBACKUP_BUILD=1009201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -934,7 +934,7 @@ function Init
 
 	## Set Rsync arguments
         RSYNC_ARGS=-rlptgoDE
-        if [ "$PRESERVE_ACLS" == "yes" ]
+        if [ "$PRESERVE_ACL" == "yes" ]
         then
                 RSYNC_ARGS=$RSYNC_ARGS"A"
         fi
