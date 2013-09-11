@@ -11,6 +11,7 @@
 
 ## Latest changelog
 
+- Added option to stop execution on failed command execution
 - Improved forced quit command by killing all child processes
 - Before / After commands are now ignored on dryruns
 - Improved verbose output
