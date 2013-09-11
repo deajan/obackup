@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84preRC3
-OBACKUP_BUILD=1009201301
+OBACKUP_BUILD=1109201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -301,13 +301,19 @@ function RunLocalCommand
 	then
 		Log "Running command [$1] on local host succeded."
 	else
-		Log "Running command [$1] on local host failed."
+		LogError "Running command [$1] on local host failed."
 	fi
 	
 	if [ $verbose -eq 1 ]
 	then
 		Log "Command output:\n$(cat /dev/shm/obackup_run_local_$SCRIPT_PID)"
 	fi
+	
+	if [ "$STOP_ON_CMD_ERROR" == "yes" ]
+        then
+                exit 1
+        fi
+
 }
 
 ## Runs remote command $1 and waits for completition in $2 seconds
@@ -335,6 +341,11 @@ function RunRemoteCommand
 	then
 		Log "Command output:\n$(cat /dev/shm/obackup_run_remote_$SCRIPT_PID)"
 	fi
+
+        if [ "$STOP_ON_CMD_ERROR" == "yes" ]
+        then
+                exit 1
+        fi
 }
 
 function RunBeforeHook
