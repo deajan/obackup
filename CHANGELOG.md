@@ -11,6 +11,7 @@
 
 ## Latest changelog
 
+- Fixed an error in CheckSpaceRequirements not setting required space to zero if file / sql backup is disabled
 - Fixed an issue with CheckConnectivity3rdPartyHosts
 - Added option to stop execution on failed command execution
 - Improved forced quit command by killing all child processes
