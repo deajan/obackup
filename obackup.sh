@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84preRC3
-OBACKUP_BUILD=1109201301
+OBACKUP_BUILD=1309201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -495,6 +495,8 @@ function CheckConnectivity3rdPartyHosts
 	if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]
 	then
 		remote_3rd_party_success=0
+		OLD_IFS=$IFS
+                IFS=$' \t\n'
 		for i in $REMOTE_3RD_PARTY_HOSTS
 		do
 			ping $i -c 2 > /dev/null 2>&1
@@ -505,6 +507,7 @@ function CheckConnectivity3rdPartyHosts
 				remote_3rd_party_success=1
 			fi
 		done
+		IFS=$OLD_IFS
 		if [ $remote_3rd_party_success -ne 1 ]
 		then
 			LogError "No remote 3rd party host responded to ping. No internet ?"
