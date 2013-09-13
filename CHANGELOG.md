@@ -8,6 +8,7 @@
 
 - Backup size check counts excluded patterns
 - Recursive task creation from directories does only include subdirectories, but no files in root directory
+- Bandwidth parameter is ignored by SQL backups.
 
 ## Latest changelog
 
