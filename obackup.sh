@@ -414,6 +414,8 @@ function CheckSpaceRequirements
 			LOCAL_SQL_SPACE=0
 			LogError "SQL storage path [$LOCAL_SQL_STORAGE] doesn't exist."
 		fi
+	else
+		LOCAL_SQL_SPACE=0
 	fi
 
         if [ "$BACKUP_FILES" != "no" ]
@@ -440,6 +442,8 @@ function CheckSpaceRequirements
 			LOCAL_FILE_SPACE=0
                         LogError "File storage path [$LOCAL_FILE_STORAGE] doesn't exist."
                 fi
+        else
+        	LOCAL_FILE_SPACE=0
         fi
 
 	if [ "$LOCAL_SQL_DRIVE" == "$LOCAL_FILE_DRIVE" ]
