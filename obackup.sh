@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84preRC3
-OBACKUP_BUILD=1309201301
+OBACKUP_BUILD=1309201302
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -618,6 +618,8 @@ function BackupDatabase
 
 function BackupDatabases
 {
+	OLD_IFS=$IFS
+        IFS=$' \t\n'
 	for BACKUP_TASK in $DATABASES_TO_BACKUP
 	do
 		Log "Backing up database $BACKUP_TASK"
@@ -635,6 +637,7 @@ function BackupDatabases
 	
 		CheckTotalExecutionTime
 	done
+	IFS=$OLD_IFS
 }
 
 # Fetches single quoted directory listing including recursive ones separated by commas (eg '/dir1';'/dir2';'/dir3') 
@@ -872,6 +875,8 @@ function FilesBackup
 # Will rotate everything in $1
 function RotateBackups
 {
+	OLD_IFS=$IFS
+        IFS=$' \t\n'
 	for backup in $(ls -I "*.obackup.*" $1)
 	do
 		copy=$ROTATE_COPIES
@@ -900,6 +905,7 @@ function RotateBackups
 			mv "$1/$backup" "$1/$backup.obackup.1"
 		fi
 	done
+	IFS=$OLD_IFS
 }
 
 function Init
