@@ -2,16 +2,26 @@
 
 - Exit trap function must also stop child processes
 - Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
-- Obackup should run on Cygwin
 
 ## Known issues
 
 - Backup size check counts excluded patterns
 - Recursive task creation from directories does only include subdirectories, but no files in root directory
 - Bandwidth parameter is ignored by SQL backups.
+- Missing symlink support under MSYS
 
 ## Latest changelog
 
+- Added MSYS (MinGW minimal system) bash compatibility under Windows
+	- Added check for /var/log directory
+	- Added check for shared memory directory
+	- Added alternative way to kill child processes for other OSes and especially for MSYS (which is a very odd way)
+	- Added Sendemail.exe support for windows Alerting
+	- Replaced which commend by type -p, as it is more portable
+	- Added support for ping.exe from windows
+	- Forced usage of MSYS find instead of Windows' find.exe
+	- Added an optionnal remote rsync executable path parameter
+	- Made ListDatabases and ListDirectories Msys friendly
 - Fixed loop problems in RotateBackups and ListDatabases (depending on IFS environment)
 - Fixed an error in CheckSpaceRequirements not setting required space to zero if file / sql backup is disabled
 - Fixed an issue with CheckConnectivity3rdPartyHosts
