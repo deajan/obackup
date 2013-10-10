@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84preRC3-MSYS-compatible
-OBACKUP_BUILD=2209201303
+OBACKUP_BUILD=1010201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -1231,4 +1231,5 @@ then
 	fi
 else
 	LogError "Environment not suitable to run obackup."
+	exit 1
 fi
