@@ -1033,7 +1033,7 @@ function Init
 		then
 			RSYNC_PATH="sudo $(type -p $RSYNC_REMOTE_PATH)/$RSYNC_EXECUTABLE)"
 		else
-			RSYNC_PATH="sudo $(type -p $RSYNC_EXECUTABLE)"
+			RSYNC_PATH="sudo $RSYNC_EXECUTABLE"
                 fi
 		COMMAND_SUDO="sudo"
         else
@@ -1041,7 +1041,7 @@ function Init
                         then
                                 RSYNC_PATH="$(type -p $RSYNC_REMOTE_PATH)/$RSYNC_EXECUTABLE)"
                         else
-                                RSYNC_PATH="$(type -p $RSYNC_EXECUTABLE)"
+                                RSYNC_PATH="$RSYNC_EXECUTABLE"
                         fi
                 COMMAND_SUDO=""
         fi
