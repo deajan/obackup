@@ -25,10 +25,8 @@ In case you don't work with one of these, it may also rotate backups for you.
 
 Obackup can execute local and remote commands before and after backup execution, thus providing possibilites to handle snapshots (see https://github.com/deajan/zsnap for a zfs snapshot management script).
 
-As of today, obackup has been tested successfully on RHEL / CentOS 5, CentOS 6, Debian 6.0.7 and Linux Mint 14
-but should basically run on your favorite linux flavor. It relies on well known programs like rsync, ssh, mysqldump along with other great GNU coreutils.
-
-Project is customizable, and one can easily modify its code as it weights only 1 KLOC. Obackup is distributed under BSD Licence which gives most freedom to include it in your own code.
+As of today, obackup has been tested successfully on RHEL / CentOS 5, CentOS 6, Debian 6.0.7 and Linux Mint 14.
+Currently, Obackup also runs on FreeBSD and Windows MSYS environment, altough it is not fully tested yet.
 
 Feel free to drop me a mail for limited support in my free time.
 
@@ -39,7 +37,8 @@ You may also clone this git which will maybe have some more recent build.
 
     $ git clone git://github.com/deajan/obackup.git
     $ chmod +x ./obackup.sh
-  
+
+Obackup needs to run with bash shell, using any other shell will most probably fail.  
 Once you have grabbed a copy of Obackup, just edit the config file with your favorite text editor to setup your environment and you're ready to run. A detailled documentation can be found in the DOCUMENTATION.md file.
 You can run multiple instances of obackup scripts with different backup environments. Just create another configuration file, edit it's environment and you're ready to run concurrently.
 

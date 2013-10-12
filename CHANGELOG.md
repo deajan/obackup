@@ -12,6 +12,8 @@
 
 ## Latest changelog
 
+- Added local and remote OS detection
+- Fixed ping arguments for FreeBSD compatibility
 - Added MSYS (MinGW minimal system) bash compatibility under Windows
 	- Added check for /var/log directory
 	- Added check for shared memory directory
