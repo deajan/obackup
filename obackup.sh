@@ -405,7 +405,7 @@ function RunLocalCommand
 		return 1
 	fi
 	Log "Running command [$1] on local host."
-	$1 > $RUN_DIR/obackup_run_local_$SCRIPT_PID 2>&1 &
+	eval "$1" > $RUN_DIR/obackup_run_local_$SCRIPT_PID 2>&1 &
 	child_pid=$!
 	WaitForTaskCompletion $child_pid 0 $2
 	retval=$?
