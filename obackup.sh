@@ -2,8 +2,8 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
-OBACKUP_VERSION=1.84preRC3-MSYS-compatible
-OBACKUP_BUILD=1110201301
+OBACKUP_VERSION=1.84RC3
+OBACKUP_BUILD=0211201302
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -12,7 +12,7 @@ LOCAL_USER=$(whoami)
 LOCAL_HOST=$(hostname)
 
 ## Default log file until config file is loaded
-if [ -d /var/log ]
+if [ -w /var/log ]
 then
 	LOG_FILE=/var/log/obackup.log
 else
@@ -20,13 +20,13 @@ else
 fi
 
 ## Default directory where to store run files
-if [ -d /dev/shm ]
+if [ -w /dev/shm ]
 then
 	RUN_DIR=/dev/shm
-elif [ -d /tmp ]
+elif [ -w /tmp ]
 then
 	RUN_DIR=/tmp
-elif [ -d /var/tmp ]
+elif [ -w /var/tmp ]
 then
 	RUN_DIR=/var/tmp
 else
@@ -45,6 +45,7 @@ DIRECTORIES_EXCLUDED_LIST=""				# Processed list of recursive directorires that 
 DIRECTORIES_TO_BACKUP=""				# Processed list of all directories to backup
 TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 
+# $RUN_DIR/obackup_remote_os_$SCRIPT_PID		Result of remote OS detection
 # $RUN_DIR/obackup_dblist_$SCRIPT_PID                   Databases list and sizes
 # $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID	Recursive directories list
 # $RUN_DIR/obackup_local_sql_storage_$SCRIPT_PID	Local free space for sql backup
@@ -57,7 +58,7 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 
 function Log
 {
-	echo "TIME: $SECONDS - $1" >> "$LOG_FILE"
+	echo -e "TIME: $SECONDS - $1" >> "$LOG_FILE"
 	if [ $silent -eq 0 ]
 	then
 		echo -e "TIME: $SECONDS - $1"
@@ -93,7 +94,7 @@ function TrapQuit
 	if type -p pkill > /dev/null 2>&1
 	then
 		pkill -TERM -P $$
-	elif [ "$LOCAL_OS" == "msys" ]
+	elif [ "$LOCAL_OS" == "msys" ] || [ "$OSTYPE" == "msys" ]
 	then
 		## This is not really a clean way to get child process pids, especially the tail -n +2 which resolves a strange char apparition in msys bash
 		for pid in $(ps -a | awk '{$1=$1}$1' | awk '{print $1" "$2}' | grep " $$$" | awk '{print $1}' | tail -n +2)
@@ -189,10 +190,10 @@ function CleanUp
 
 function SendAlert
 {
-	cat "$LOG_FILE" | gzip -9 > /tmp/obackup_lastlog.gz
+	cat "$LOG_FILE" | gzip -9 > $RUN_DIR/obackup_lastlog.gz
         if type -p mutt > /dev/null 2>&1
         then
-            echo $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a /tmp/obackup_lastlog.gz
+            echo $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a $RUN_DIR/obackup_lastlog.gz
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mutt) !!!"
@@ -201,7 +202,7 @@ function SendAlert
             fi
         elif type -p mail > /dev/null 2>&1
 		then
-			echo $MAIL_ALERT_MSG | $(type -p mail) -a /tmp/obackup_lastlog.gz -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
+			echo $MAIL_ALERT_MSG | $(type -p mail) -a $RUN_DIR/obackup_lastlog.gz -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mail) with attachments !!!"
@@ -226,7 +227,9 @@ function SendAlert
 			fi 
 		else
 		Log "WARNING: Cannot send alert email (no mutt / mail present) !!!"
+		rm -f $RUN_DIR/obackup_lastlog.gz
 		return 1
+		rm -f $RUN_DIR/obackup_lastlog.gz
 	fi
 }
 
@@ -287,11 +290,17 @@ function CheckEnvironment
 function GetOperatingSystem
 {
         LOCAL_OS_VAR=$(uname -spio)
-        if [ "$REMOTE_SYNC" == "yes" ]
+
+        if [ "$REMOTE_BACKUP" == "yes" ]
         then
-                eval "$SSH_CMD uname -spio > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1 &"
-                REMOTE_OS_VAR=$(cat $RUN_DIR/obackup_remote_os_$SCRIPT_PID)
-        fi
+                eval "$SSH_CMD \"uname -spio\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+		if [ $? != 0 ]
+		then
+			LogError "Cannot Get remote OS type."
+		else
+                	REMOTE_OS_VAR=$(cat $RUN_DIR/obackup_remote_os_$SCRIPT_PID)
+		fi
+	fi
 
         case $LOCAL_OS_VAR in
                 "Linux"*)
@@ -325,6 +334,15 @@ function GetOperatingSystem
                 LogError "Running on remote >> $REMOTE_OS_VAR << not supported. Please report to the author."
                 exit 1
         esac
+
+	if [ "$DEBUG" == "yes" ]
+	then
+		Log "Local OS: [$LOCAL_OS_VAR]."
+		if [ "$REMOTE_BACKUP" == "yes" ]
+		then
+			Log "Remote OS: [$REMOTE_OS_VAR]."
+		fi
+	fi
 }
 
 # Waits for pid $1 to complete. Will log an alert if $2 seconds exec time exceeded unless $2 equals 0. Will stop task and log alert if $3 seconds exec time exceeded.
@@ -386,15 +404,16 @@ function RunLocalCommand
 		Log "Dryrun: Local command [$1] not run."
 		return 1
 	fi
+	Log "Running command [$1] on local host."
 	$1 > $RUN_DIR/obackup_run_local_$SCRIPT_PID 2>&1 &
 	child_pid=$!
 	WaitForTaskCompletion $child_pid 0 $2
 	retval=$?
 	if [ $retval -eq 0 ]
 	then
-		Log "Running command [$1] on local host succeded."
+		Log "Command succeded."
 	else
-		LogError "Running command [$1] on local host failed."
+		LogError "Command failed."
 	fi
 	
 	if [ $verbose -eq 1 ]
@@ -402,7 +421,7 @@ function RunLocalCommand
 		Log "Command output:\n$(cat $RUN_DIR/obackup_run_local_$SCRIPT_PID)"
 	fi
 	
-	if [ "$STOP_ON_CMD_ERROR" == "yes" ]
+	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]
         then
                 exit 1
         fi
@@ -419,15 +438,16 @@ function RunRemoteCommand
                 Log "Dryrun: Remote command [$1] not run."
                 return 1
         fi
+	Log "Running command [$1] on remote host."
 	eval "$SSH_CMD \"$1\" > $RUN_DIR/obackup_run_remote_$SCRIPT_PID 2>&1 &"
 	child_pid=$!
 	WaitForTaskCompletion $child_pid 0 $2
 	retval=$?
 	if [ $retval -eq 0 ]
 	then
-		Log "Running command [$1] succeded."
+		Log "Command succeded."
 	else
-		LogError "Running command [$1] failed."
+		LogError "Command failed."
 	fi
 	
 	if [ -f $RUN_DIR/obackup_run_remote_$SCRIPT_PID ] && [ $verbose -eq 1 ]
@@ -435,9 +455,9 @@ function RunRemoteCommand
 		Log "Command output:\n$(cat $RUN_DIR/obackup_run_remote_$SCRIPT_PID)"
 	fi
 
-        if [ "$STOP_ON_CMD_ERROR" == "yes" ]
+        if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]
         then
-                exit 1
+		exit 1
         fi
 }
 
@@ -484,7 +504,7 @@ function CheckSpaceRequirements
 {
 	if [ "$BACKUP_SQL" != "no" ]
 	then
-		if [ -d $LOCAL_SQL_STORAGE ]
+		if [ -w $LOCAL_SQL_STORAGE ]
 		then
 			# Not elegant solution to make df silent on errors
 			df -P $LOCAL_SQL_STORAGE > $RUN_DIR/obackup_local_sql_storage_$SCRIPT_PID 2>&1
@@ -505,7 +525,7 @@ function CheckSpaceRequirements
 			fi
 		else
 			LOCAL_SQL_SPACE=0
-			LogError "SQL storage path [$LOCAL_SQL_STORAGE] doesn't exist."
+			LogError "SQL storage path [$LOCAL_SQL_STORAGE] doesn't exist or cannot write to it."
 		fi
 	else
 		LOCAL_SQL_SPACE=0
@@ -513,7 +533,7 @@ function CheckSpaceRequirements
 
         if [ "$BACKUP_FILES" != "no" ]
         then
-                if [ -d $LOCAL_FILE_STORAGE ]
+                if [ -w $LOCAL_FILE_STORAGE ]
                 then
                         df -P $LOCAL_FILE_STORAGE > $RUN_DIR/obackup_local_file_storage_$SCRIPT_PID 2>&1
                         if [ $? != 0 ]
@@ -533,7 +553,7 @@ function CheckSpaceRequirements
 			fi
                 else
 			LOCAL_FILE_SPACE=0
-                        LogError "File storage path [$LOCAL_FILE_STORAGE] doesn't exist."
+                        LogError "File storage path [$LOCAL_FILE_STORAGE] doesn't exist or cannot write to it."
                 fi
         else
         	LOCAL_FILE_SPACE=0
@@ -692,7 +712,12 @@ function ListDatabases
 		fi
 	done
 	IFS=$OLD_IFS
-	return 0
+
+	if [ $verbose -eq 1 ]
+	then
+		Log "Database backup list: $DATABASES_TO_BACKUP"
+		Log "Database exclude list: $DATABASES_EXCLUDED_LIST"
+	fi
 }
 
 function BackupDatabase
@@ -706,7 +731,7 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		eval "$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
+		sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	elif [ "$REMOTE_BACKUP" == "yes" ] && [ "$COMPRESSION_REMOTE" == "yes" ]
 	then
 		CheckConnectivityRemoteHost
@@ -715,10 +740,16 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		eval "$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS\" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
+		sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS\" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	else
-		mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION
+		sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	fi
+
+	if [ $verbose -eq 1 ]
+        then
+                Log "SQL_CMD: $sql_cmd"
+        fi
+	eval $sql_cmd
 	exit $?
 }
 
@@ -780,14 +811,11 @@ function ListDirectories
 				LogError "Command output:\n$(cat $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID)"
 			fi
 			return 1
-		else
-			Log "Listing of recursive directories succeeded for $dir."
 		fi
 
 		OLD_IFS=$IFS
 		IFS=$' \n'
 		for line in $(cat $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID)
-#		while read line
 		do
 			file_exclude=0
 			for k in $DIRECTORIES_RECURSE_EXCLUDE_LIST
@@ -809,8 +837,12 @@ function ListDirectories
 			else
 				DIRECTORIES_EXCLUDED_LIST="$DIRECTORIES_EXCLUDED_LIST$PATH_SEPARATOR_CHAR'$line'"
 			fi
-#		done < <(cat $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID)
 		done
+		Log "Listing of recursive directories succeeded for $dir"
+		if [ $verbose -eq 1 ]
+		then
+			Log "\n$(cat $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID)"
+		fi
 		IFS=$OLD_IFS
 	done
 	DIRECTORIES_TO_BACKUP_RECURSE=$DIRECTORIES_TO_BACKUP
@@ -887,14 +919,15 @@ function Rsync
 	then
 		local_file_storage_path="$(dirname $LOCAL_FILE_STORAGE$i)"
 	else
-	#### Leave the last directory path if recursive task when absolute paths not set so paths won't be mixed up
-		if [ "$2" == "recurse" ]
-		then
-			local_file_storage_path="$LOCAL_FILE_STORAGE/$(basename $(dirname $i))"
-		else
-			local_file_storage_path="$LOCAL_FILE_STORAGE"
-		fi
+		local_file_storage_path=$LOCAL_FILE_STORAGE
 	fi
+
+	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
+        if [ "$2" == "no-recurse" ]
+        then
+		RSYNC_EXCLUDE=$RSYNC_EXCLUDE" --exclude=*/*/"
+        fi
+
 	if [ ! -d $local_file_storage_path ]
 	then
 		mkdir -p "$local_file_storage_path"
@@ -909,9 +942,9 @@ function Rsync
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS --stats --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > $RUN_DIR/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$1\" \"$local_file_storage_path\" > $RUN_DIR/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	else
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS --stats --delete $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > $RUN_DIR/obackup_rsync_output_$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > $RUN_DIR/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	fi
 	#### Eval is used so the full command is processed without bash adding single quotes round variables
 	if [ $verbose -eq 1 ]
@@ -930,7 +963,7 @@ function FilesBackup
 	for BACKUP_TASK in $DIRECTORIES_SIMPLE_LIST
 	do
 		BACKUP_TASK=$(StripQuotes $BACKUP_TASK)
-		Log "Beginning file backup $BACKUP_TASK"
+		Log "Beginning recursive file backup on $BACKUP_TASK"
 		SECONDS_BEGIN=$SECONDS
 		Rsync $BACKUP_TASK &
 		child_pid=$!
@@ -954,10 +987,38 @@ function FilesBackup
 		CheckTotalExecutionTime
 	done
 
+        ## Also backup files at root of DIRECTORIES_RECURSE_LIST directories
+        for BACKUP_TASK in $DIRECTORIES_RECURSE_LIST
+        do
+                BACKUP_TASK="$(StripQuotes $BACKUP_TASK)"
+                Log "Beginning non recursive file backup on $BACKUP_TASK"
+                SECONDS_BEGIN=$SECONDS
+                Rsync $BACKUP_TASK "no-recurse" &
+		child_pid=$!
+                WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
+                retval=$?
+                if [ $verbose -eq 1 ] && [ -f $RUN_DIR/obackup_rsync_output_$SCRIPT_PID ]
+                then
+                        Log "List:\n$(cat $RUN_DIR/obackup_rsync_output_$SCRIPT_PID)"
+                fi
+
+                if [ $retval -ne 0 ]
+                then
+                        LogError "Backup failed on remote files."
+                        if [ $verbose -eq 0 ] && [ -f $RUN_DIR/obackup_rsync_output_$SCRIPT_PID ]
+                        then
+                                LogError "$(cat $RUN_DIR/obackup_rsync_output_$SCRIPT_PID)"
+                        fi
+                else
+                        Log "Backup succeeded."
+                fi
+                CheckTotalExecutionTime
+        done
+
         for BACKUP_TASK in $DIRECTORIES_TO_BACKUP_RECURSE
         do
                 BACKUP_TASK=$(StripQuotes $BACKUP_TASK)
-                Log "Beginning file backup $BACKUP_TASK"
+                Log "Beginning recursive file backup on $BACKUP_TASK"
                 SECONDS_BEGIN=$SECONDS
                 Rsync $BACKUP_TASK "recurse" &
                 child_pid=$!
@@ -980,6 +1041,7 @@ function FilesBackup
                 fi
                 CheckTotalExecutionTime
         done
+		
 	IFS=$OLD_IFS
 }
 
@@ -1034,7 +1096,7 @@ function Init
 
 	if [ "$LOGFILE" == "" ]
 	then
-		if [ -d /var/log ]
+		if [ -w /var/log ]
 		then
 			LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
 		else
@@ -1113,7 +1175,7 @@ function Init
                 RSYNC_ARGS=$RSYNC_ARGS"n"
                 DRY_WARNING="/!\ DRY RUN"
         fi
-        if [ "$BANDWIDTH" != "0" ]
+        if [ "$BANDWIDTH" != "" ] && [ "$BANDWIDTH" != "0" ]
         then
                 RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
         fi
@@ -1148,11 +1210,6 @@ function Main
 	if [ $dryrun -ne 1 ]
 	then
 		CreateLocalStorageDirectories
-	else
-		Log "DB backup list: $DATABASES_TO_BACKUP"
-	        Log "DB exclude list: $DATABASES_EXCLUDED_LIST"
-        	Log "Dirs backup list: $DIRECTORIES_TO_BACKUP"
-        	Log "Dirs exclude list: $DIRECTORIES_EXCLUDED_LIST"
 	fi
 
 	CheckSpaceRequirements
@@ -1249,6 +1306,7 @@ then
 		if [ $? == 0 ]
 		then
 			Init
+			GetOperatingSystem
 			DATE=$(date)
 			Log "--------------------------------------------------------------------"
 			Log "$DRY_WARNING $DATE - Obackup v$OBACKUP_VERSION script begin."

@@ -1,17 +1,29 @@
-## FUTURE IMPROVEMENTS
+SHORT FUTURE IMPROVEMENTS
+-------------------------
 
-- Exit trap function must also stop child processes
 - Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
+- Clean most of recursive task creation code
 
-## Known issues
+FAR FUTURE IMPROVEMENTS
+-----------------------
 
-- Backup size check counts excluded patterns
-- Recursive task creation from directories does only include subdirectories, but no files in root directory
-- Bandwidth parameter is ignored by SQL backups.
-- Missing symlink support under MSYS
+- (Secret world domination... Still need to get bald and get a cat)
 
-## Latest changelog
+KNOWN ISSUES
+------------
 
+- Backup size check does not honor rsync exclude patterns
+- Bandwidth parameter is ignored for SQL backups
+- Missing symlink support when run from MSYS environment
+
+CHANGELOG
+---------
+
+- 02 Nov. 2013: v1.84 RC3
+- Updated documentation
+- Minor rewrites in recursive backup code
+- Added base directory files backup for recursive directories backup
+- Minor improvements on permission checks
 - Added local and remote OS detection
 - Fixed ping arguments for FreeBSD compatibility
 - Added MSYS (MinGW minimal system) bash compatibility under Windows
@@ -63,8 +75,5 @@
 - Updated command line argument --silent processing
 - Added remote before and after command execution hook
 - Added local before and after command execution hook
-
-14 Jun 2013
------------
-
+- 14 Jun 2013
 - Initial public release, fully functionnal
