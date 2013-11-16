@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC3
-OBACKUP_BUILD=0211201302
+OBACKUP_BUILD=1611201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -289,18 +289,42 @@ function CheckEnvironment
 
 function GetOperatingSystem
 {
-        LOCAL_OS_VAR=$(uname -spio)
+	LOCAL_OS_VAR=$(uname -spio 2>&1)
+        if [ $? != 0 ]
+        then
+                LOCAL_OS_VAR=$(uname -v 2>&1)
+                if [ $! != 0 ]
+                then
+                        LOCAL_OS_VAR=($uname)
+                fi
+        fi
 
         if [ "$REMOTE_BACKUP" == "yes" ]
         then
                 eval "$SSH_CMD \"uname -spio\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
-		if [ $? != 0 ]
-		then
-			LogError "Cannot Get remote OS type."
-		else
-                	REMOTE_OS_VAR=$(cat $RUN_DIR/obackup_remote_os_$SCRIPT_PID)
-		fi
-	fi
+                child_pid=$!
+                WaitForTaskCompletion $child_pid 120 240
+                retval=$?
+                if [ $retval != 0 ]
+                then
+                        eval "$SSH_CMD \"uname -v\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+                        child_pid=$!
+                        WaitForTaskCompletion $child_pid 120 240
+                        retval=$?
+                        if [ $retval != 0 ]
+                        then
+                                eval "$SSH_CMD \"uname\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+                                child_pid=$!
+                                WaitForTaskCompletion $child_pid 120 240
+                                retval=$?
+                                if [ $retval != 0 ]
+                                then
+                                        LogError "Cannot Get remote OS type."
+                                fi
+                        fi
+                fi
+        REMOTE_OS_VAR=$(cat $RUN_DIR/obackup_remote_os_$SCRIPT_PID)
+        fi
 
         case $LOCAL_OS_VAR in
                 "Linux"*)
@@ -312,6 +336,9 @@ function GetOperatingSystem
                 "MINGW32"*)
                 LOCAL_OS="msys"
                 ;;
+		"Darwin"*)
+		LOCAL_OS="MacOSX"
+		;;
                 *)
                 LogError "Running on >> $LOCAL_OS_VAR << not supported. Please report to the author."
                 exit 1
@@ -328,7 +355,8 @@ function GetOperatingSystem
                 "MINGW32"*)
                 REMOTE_OS="msys"
                 ;;
-                "")
+                "Darwin"*)
+		REMOTE_OS="MacOSX"
                 ;;
                 *)
                 LogError "Running on remote >> $REMOTE_OS_VAR << not supported. Please report to the author."
@@ -416,7 +444,7 @@ function RunLocalCommand
 		LogError "Command failed."
 	fi
 	
-	if [ $verbose -eq 1 ]
+	if [ $verbose -eq 1 ] || [ $retval -ne 0 ]
 	then
 		Log "Command output:\n$(cat $RUN_DIR/obackup_run_local_$SCRIPT_PID)"
 	fi
@@ -450,7 +478,7 @@ function RunRemoteCommand
 		LogError "Command failed."
 	fi
 	
-	if [ -f $RUN_DIR/obackup_run_remote_$SCRIPT_PID ] && [ $verbose -eq 1 ]
+	if [ -f $RUN_DIR/obackup_run_remote_$SCRIPT_PID ] && ([ $verbose -eq 1 ] || $retval -ne 0 ]) 
 	then
 		Log "Command output:\n$(cat $RUN_DIR/obackup_run_remote_$SCRIPT_PID)"
 	fi
@@ -1306,12 +1334,12 @@ then
 		if [ $? == 0 ]
 		then
 			Init
-			GetOperatingSystem
 			DATE=$(date)
 			Log "--------------------------------------------------------------------"
 			Log "$DRY_WARNING $DATE - Obackup v$OBACKUP_VERSION script begin."
 			Log "--------------------------------------------------------------------"
 			Log "Backup task [$BACKUP_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)"
+			GetOperatingSystem
 			if [ $no_maxtime -eq 1 ]
                         then
                                 SOFT_MAX_EXEC_TIME=0

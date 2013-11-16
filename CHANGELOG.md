@@ -19,6 +19,9 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+- Improved OS detection and added prelimnary MacOS X support
+- Improved execution hook logs
+- Improved RunLocalCommand execution hook
 - 02 Nov. 2013: v1.84 RC3
 - Updated documentation
 - Minor rewrites in recursive backup code
