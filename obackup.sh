@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC3
-OBACKUP_BUILD=1611201301
+OBACKUP_BUILD=1911201301
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -345,23 +345,26 @@ function GetOperatingSystem
                 ;;
         esac
 
-        case $REMOTE_OS_VAR in
-                "Linux"*)
-                REMOTE_OS="Linux"
-                ;;
-                "FreeBSD"*)
-                REMOTE_OS="FreeBSD"
-                ;;
-                "MINGW32"*)
-                REMOTE_OS="msys"
-                ;;
-                "Darwin"*)
-		REMOTE_OS="MacOSX"
-                ;;
-                *)
-                LogError "Running on remote >> $REMOTE_OS_VAR << not supported. Please report to the author."
-                exit 1
-        esac
+	if [ "$REMOTE_BACKUP" == "yes" ]
+	then
+        	case $REMOTE_OS_VAR in
+                	"Linux"*)
+                	REMOTE_OS="Linux"
+                	;;
+                	"FreeBSD"*)
+                	REMOTE_OS="FreeBSD"
+                	;;
+                	"MINGW32"*)
+                	REMOTE_OS="msys"
+                	;;
+                	"Darwin"*)
+			REMOTE_OS="MacOSX"
+                	;;
+                	*)
+                	LogError "Running on remote >> $REMOTE_OS_VAR << not supported. Please report to the author."
+                	exit 1
+        	esac
+        fi
 
 	if [ "$DEBUG" == "yes" ]
 	then
@@ -846,6 +849,7 @@ function ListDirectories
 		for line in $(cat $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID)
 		do
 			file_exclude=0
+			IFS=$PATH_SEPARATOR_CHAR
 			for k in $DIRECTORIES_RECURSE_EXCLUDE_LIST
 			do
 				if [ "$k" == "$line" ]
@@ -853,7 +857,8 @@ function ListDirectories
 					file_exclude=1
 				fi
 			done
-
+			IFS=$' \n'
+			
 			if [ $file_exclude -eq 0 ]
 			then
 				if [ "$DIRECTORIES_TO_BACKUP" == "" ]
