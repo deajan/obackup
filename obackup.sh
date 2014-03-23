@@ -3,7 +3,7 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 OBACKUP_VERSION=1.84RC3
-OBACKUP_BUILD=1911201301
+OBACKUP_BUILD=2303201401
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -227,9 +227,11 @@ function SendAlert
 			fi 
 		else
 		Log "WARNING: Cannot send alert email (no mutt / mail present) !!!"
-		rm -f $RUN_DIR/obackup_lastlog.gz
-		return 1
-		rm -f $RUN_DIR/obackup_lastlog.gz
+	fi
+
+	if -f $RUN_DIR/obackup_lastlog.gz
+	then
+		rm $RUN_DIR/obackup_lastlog.gz
 	fi
 }
 
@@ -1170,7 +1172,7 @@ function Init
         then
 		if [ "$RSYNC_REMOTE_PATH" != "" ]
 		then
-			RSYNC_PATH="sudo $(type -p $RSYNC_REMOTE_PATH)/$RSYNC_EXECUTABLE)"
+			RSYNC_PATH="sudo $RSYNC_REMOTE_PATH/$RSYNC_EXECUTABLE"
 		else
 			RSYNC_PATH="sudo $RSYNC_EXECUTABLE"
                 fi
@@ -1178,7 +1180,7 @@ function Init
         else
 		if [ "$RSYNC_REMOTE_PATH" != "" ]
                         then
-                                RSYNC_PATH="$(type -p $RSYNC_REMOTE_PATH)/$RSYNC_EXECUTABLE)"
+                                RSYNC_PATH="$RSYNC_REMOTE_PATH/$RSYNC_EXECUTABLE"
                         else
                                 RSYNC_PATH="$RSYNC_EXECUTABLE"
                         fi
