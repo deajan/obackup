@@ -15,10 +15,14 @@ KNOWN ISSUES
 - Backup size check does not honor rsync exclude patterns
 - Bandwidth parameter is ignored for SQL backups
 - Missing symlink support when run from MSYS environment
+- Dry mode creates dirs
+- Dry mode does not try mysqldump
 
 CHANGELOG
 ---------
 
+- Gzipped logs are now deleted once sent
+- Fixed some typos (thanks to Pavel Kiryukhin)
 - Improved OS detection and added prelimnary MacOS X support
 - Improved execution hook logs
 - Improved RunLocalCommand execution hook
