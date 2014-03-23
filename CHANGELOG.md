@@ -21,6 +21,7 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+- More correct error message on remote connection failure
 - Gzipped logs are now deleted once sent
 - Fixed some typos (thanks to Pavel Kiryukhin)
 - Improved OS detection and added prelimnary MacOS X support

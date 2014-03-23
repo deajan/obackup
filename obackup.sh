@@ -2,8 +2,8 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
-OBACKUP_VERSION=1.84RC3
-OBACKUP_BUILD=2303201401
+OBACKUP_VERSION=1.84preRC4
+OBACKUP_BUILD=2303201402
 
 DEBUG=no
 SCRIPT_PID=$$
@@ -55,6 +55,8 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 # $RUN_DIR/obackup_config_$SCRIPT_PID			Parsed configuration file
 # $RUN_DIR/obackup_run_local_$SCRIPT_PID		Output of command to be run localy
 # $RUN_DIR/obackup_run_remote_$SCRIPT_PID		Output of command to be run remotely
+
+GZ_LOG_PATH=$RUN_DIR/obackup_lastlog.gz		# This is the path where to store a temporary log file to send by mail
 
 function Log
 {
@@ -190,10 +192,10 @@ function CleanUp
 
 function SendAlert
 {
-	cat "$LOG_FILE" | gzip -9 > $RUN_DIR/obackup_lastlog.gz
+	cat "$LOG_FILE" | gzip -9 > "$GZ_LOG_PATH"
         if type -p mutt > /dev/null 2>&1
         then
-            echo $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a $RUN_DIR/obackup_lastlog.gz
+            echo $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a "$GZ_LOG_PATH"
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mutt) !!!"
@@ -202,7 +204,7 @@ function SendAlert
             fi
         elif type -p mail > /dev/null 2>&1
 		then
-			echo $MAIL_ALERT_MSG | $(type -p mail) -a $RUN_DIR/obackup_lastlog.gz -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
+			echo $MAIL_ALERT_MSG | $(type -p mail) -a "$GZ_LOG_PATH" -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mail) with attachments !!!"
@@ -229,9 +231,9 @@ function SendAlert
 		Log "WARNING: Cannot send alert email (no mutt / mail present) !!!"
 	fi
 
-	if -f $RUN_DIR/obackup_lastlog.gz
+	if [ -f "$GZ_LOG_PATH" ]
 	then
-		rm $RUN_DIR/obackup_lastlog.gz
+		rm "$GZ_LOG_PATH"
 	fi
 }
 
@@ -362,6 +364,10 @@ function GetOperatingSystem
                 	"Darwin"*)
 			REMOTE_OS="MacOSX"
                 	;;
+			"ssh"*)
+			LogError "Cannot connect to remote system."
+			exit 1
+			;;
                 	*)
                 	LogError "Running on remote >> $REMOTE_OS_VAR << not supported. Please report to the author."
                 	exit 1
