@@ -2,10 +2,27 @@
 
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
-OBACKUP_VERSION=1.84preRC4
-OBACKUP_BUILD=2303201402
+AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
+CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
+PROGRAM_VERSION=1.84preRC4
+PROGRAM_BUILD=2209201402
 
-DEBUG=no
+## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
+if ! type -p "$BASH" > /dev/null
+then
+        echo "Please run this script only with bash shell. Tested on bash >= 3.2"
+        exit 127
+fi
+
+## allow debugging from command line with preceding ocsync with DEBUG=yes
+if [ ! "$DEBUG" == "yes" ]
+then
+        DEBUG=no
+        SLEEP_TIME=1
+else
+        SLEEP_TIME=10
+fi
+
 SCRIPT_PID=$$
 
 LOCAL_USER=$(whoami)
@@ -36,6 +53,9 @@ fi
 ## Log a state message every $KEEP_LOGGING seconds. Should generally not be equal to soft or hard execution time so your log won't be unnecessary big.
 KEEP_LOGGING=1801
 
+## Correct output of all system commands (language agnostic)
+export LC_ALL=C
+
 ## Global variables and forked command results
 DATABASES_TO_BACKUP=""					# Processed list of DBs that will be backed up
 DATABASES_EXCLUDED_LIST=""				# Processed list of DBs that won't be backed up
@@ -56,7 +76,7 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 # $RUN_DIR/obackup_run_local_$SCRIPT_PID		Output of command to be run localy
 # $RUN_DIR/obackup_run_remote_$SCRIPT_PID		Output of command to be run remotely
 
-GZ_LOG_PATH=$RUN_DIR/obackup_lastlog.gz		# This is the path where to store a temporary log file to send by mail
+ALERT_LOG_FILE=$RUN_DIR/obackup_lastlog		# This is the path where to store a temporary log file to send by mail
 
 function Log
 {
@@ -71,6 +91,14 @@ function LogError
 {
 	Log "$1"
 	error_alert=1
+}
+
+function LogDebug
+{
+        if [ "$DEBUG" == "yes" ]
+        then
+                Log "$1"
+        fi
 }
 
 function TrapError
@@ -192,10 +220,11 @@ function CleanUp
 
 function SendAlert
 {
-	cat "$LOG_FILE" | gzip -9 > "$GZ_LOG_PATH"
+	eval "cat $LOG_FILE $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
+	MAIL_ALERT_MSG=$MAIL_ALERT_MSG$'\n\n'$(tail -n 25 "$LOG_FILE")
         if type -p mutt > /dev/null 2>&1
         then
-            echo $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a "$GZ_LOG_PATH"
+            echo $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a "$ALERT_LOG_FILE"
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mutt) !!!"
@@ -204,7 +233,7 @@ function SendAlert
             fi
         elif type -p mail > /dev/null 2>&1
 		then
-			echo $MAIL_ALERT_MSG | $(type -p mail) -a "$GZ_LOG_PATH" -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
+			echo $MAIL_ALERT_MSG | $(type -p mail) -a "$ALERT_LOG_FILE" -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mail) with attachments !!!"
@@ -231,9 +260,9 @@ function SendAlert
 		Log "WARNING: Cannot send alert email (no mutt / mail present) !!!"
 	fi
 
-	if [ -f "$GZ_LOG_PATH" ]
+	if [ -f "$ALERT_LOG_FILE" ]
 	then
-		rm "$GZ_LOG_PATH"
+		rm "$ALERT_LOG_FILE"
 	fi
 }
 
@@ -247,11 +276,11 @@ function LoadConfigFile
 	then
 		LogError "Wrong configuration file supplied [$1]. Backup cannot start."
 		return 1
-	else 
+	else
 		egrep '^#|^[^ ]*=[^;&]*'  "$1" > "$RUN_DIR/obackup_config_$SCRIPT_PID"
 		source "$RUN_DIR/obackup_config_$SCRIPT_PID"
 	fi
-} 
+}
 
 function CheckEnvironment
 {
@@ -261,7 +290,7 @@ function CheckEnvironment
                 LogError "GNU coreutils not found (tested for sed --version). Backup cannot start."
         	return 1
 	fi
-	
+
 
 	if [ "$REMOTE_BACKUP" == "yes" ]
 	then
@@ -291,33 +320,58 @@ function CheckEnvironment
 	fi
 }
 
-function GetOperatingSystem
+function GetLocalOS
 {
-	LOCAL_OS_VAR=$(uname -spio 2>&1)
+        LOCAL_OS_VAR=$(uname -spio 2>&1)
         if [ $? != 0 ]
         then
                 LOCAL_OS_VAR=$(uname -v 2>&1)
-                if [ $! != 0 ]
+                if [ $? != 0 ]
                 then
                         LOCAL_OS_VAR=($uname)
                 fi
         fi
 
-        if [ "$REMOTE_BACKUP" == "yes" ]
+        case $LOCAL_OS_VAR in
+                *"Linux"*)
+                LOCAL_OS="Linux"
+                ;;
+                *"BSD"*)
+                LOCAL_OS="BSD"
+                ;;
+                *"MINGW32"*)
+                LOCAL_OS="msys"
+                ;;
+                *"Darwin"*)
+                LOCAL_OS="MacOSX"
+                ;;
+                *)
+                LogError "Running on >> $LOCAL_OS_VAR << not supported. Please report to the author."
+                exit 1
+                ;;
+        esac
+        LogDebug "Local OS: [$LOCAL_OS_VAR]."
+}
+
+function GetRemoteOS
+{
+        if [ "$REMOTE_SYNC" == "yes" ]
         then
-                eval "$SSH_CMD \"uname -spio\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+                CheckConnectivity3rdPartyHosts
+                CheckConnectivityRemoteHost
+                eval "$SSH_CMD \"uname -spio\" > $RUN_DIR/osync_remote_os_$SCRIPT_PID 2>&1"
                 child_pid=$!
                 WaitForTaskCompletion $child_pid 120 240
                 retval=$?
                 if [ $retval != 0 ]
                 then
-                        eval "$SSH_CMD \"uname -v\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+                        eval "$SSH_CMD \"uname -v\" > $RUN_DIR/osync_remote_os_$SCRIPT_PID 2>&1"
                         child_pid=$!
                         WaitForTaskCompletion $child_pid 120 240
                         retval=$?
                         if [ $retval != 0 ]
                         then
-                                eval "$SSH_CMD \"uname\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+                                eval "$SSH_CMD \"uname\" > $RUN_DIR/osync_remote_os_$SCRIPT_PID 2>&1"
                                 child_pid=$!
                                 WaitForTaskCompletion $child_pid 120 240
                                 retval=$?
@@ -327,80 +381,53 @@ function GetOperatingSystem
                                 fi
                         fi
                 fi
-        REMOTE_OS_VAR=$(cat $RUN_DIR/obackup_remote_os_$SCRIPT_PID)
+
+                REMOTE_OS_VAR=$(cat $RUN_DIR/osync_remote_os_$SCRIPT_PID)
+
+                case $REMOTE_OS_VAR in
+                        *"Linux"*)
+                        REMOTE_OS="Linux"
+                        ;;
+                        *"BSD"*)
+                        REMOTE_OS="BSD"
+                        ;;
+                        *"MINGW32"*)
+                        REMOTE_OS="msys"
+                        ;;
+                        *"Darwin"*)
+                        REMOTE_OS="MacOSX"
+                        ;;
+                        *"ssh"*|*"SSH"*)
+                        LogError "Cannot connect to remote system."
+                        exit 1
+                        ;;
+                        *)
+                        LogError "Running on remote OS failed. Please report to the author if the OS is not supported."
+                        LogError "Remote OS said:\n$REMOTE_OS_VAR"
+                        exit 1
+                esac
+
+                LogDebug "Remote OS: [$REMOTE_OS_VAR]."
         fi
-
-        case $LOCAL_OS_VAR in
-                "Linux"*)
-                LOCAL_OS="Linux"
-                ;;
-                "FreeBSD"*)
-                LOCAL_OS="FreeBSD"
-                ;;
-                "MINGW32"*)
-                LOCAL_OS="msys"
-                ;;
-		"Darwin"*)
-		LOCAL_OS="MacOSX"
-		;;
-                *)
-                LogError "Running on >> $LOCAL_OS_VAR << not supported. Please report to the author."
-                exit 1
-                ;;
-        esac
-
-	if [ "$REMOTE_BACKUP" == "yes" ]
-	then
-        	case $REMOTE_OS_VAR in
-                	"Linux"*)
-                	REMOTE_OS="Linux"
-                	;;
-                	"FreeBSD"*)
-                	REMOTE_OS="FreeBSD"
-                	;;
-                	"MINGW32"*)
-                	REMOTE_OS="msys"
-                	;;
-                	"Darwin"*)
-			REMOTE_OS="MacOSX"
-                	;;
-			"ssh"*)
-			LogError "Cannot connect to remote system."
-			exit 1
-			;;
-                	*)
-                	LogError "Running on remote >> $REMOTE_OS_VAR << not supported. Please report to the author."
-                	exit 1
-        	esac
-        fi
-
-	if [ "$DEBUG" == "yes" ]
-	then
-		Log "Local OS: [$LOCAL_OS_VAR]."
-		if [ "$REMOTE_BACKUP" == "yes" ]
-		then
-			Log "Remote OS: [$REMOTE_OS_VAR]."
-		fi
-	fi
 }
 
-# Waits for pid $1 to complete. Will log an alert if $2 seconds exec time exceeded unless $2 equals 0. Will stop task and log alert if $3 seconds exec time exceeded.
+# Waits for pid $1 to complete. Will log an alert if $2 seconds passed since current task execution unless $2 equals 0.
+# Will stop task and log alert if $3 seconds passed since current task execution unless $3 equals 0.
 function WaitForTaskCompletion
 {
         soft_alert=0
         SECONDS_BEGIN=$SECONDS
-                if [ "$LOCAL_OS" == "msys" ]
+        if [ "$LOCAL_OS" == "msys" ]
         then
-        	PROCESS_TEST="ps -a | awk '{\$1=\$1}\$1' | awk '{print \$1}' | grep $1"
+                PROCESS_TEST_CMD="ps -a | awk '{\$1=\$1}\$1' | awk '{print \$1}' | grep $1"
         else
-        	PROCESS_TEST="ps -p$1"
+                PROCESS_TEST_CMD="ps -p$1"
         fi
-        while eval $PROCESS_TEST > /dev/null
+        while eval $PROCESS_TEST_CMD > /dev/null
         do
                 Spinner
-                sleep 1
                 EXEC_TIME=$(($SECONDS - $SECONDS_BEGIN))
-                if [ $(($EXEC_TIME % $KEEP_LOGGING)) -eq 0 ]
+                if [ $((($EXEC_TIME + 1) % $KEEP_LOGGING)) -eq 0 ]
                 then
                         Log "Current task still running."
                 fi
@@ -414,24 +441,25 @@ function WaitForTaskCompletion
                         if [ $EXEC_TIME -gt $3 ] && [ $3 != 0 ]
                         then
                                 LogError "Max hard execution time exceeded for task. Stopping task execution."
-				kill -s SIGTERM $1
+                                kill -s SIGTERM $1
                                 if [ $? == 0 ]
                                 then
                                         LogError "Task stopped succesfully"
                                 else
-                                        LogError "Sending SIGTERM to process failed. Trying the hard way."
-					kill -9 $1
-					if [ $? != 0 ]
-					then
-						LogError "Could not stop task."
-					fi
+                                        LogError "Sending SIGTERM to proces failed. Trying the hard way."
+                                        kill -9 $1
+                                        if [ $? != 0 ]
+                                        then
+                                                LogError "Could not stop task."
+                                        fi
                                 fi
                                 return 1
                         fi
                 fi
+                sleep $SLEEP_TIME
         done
-	wait $child_pid
-	return $?
+        wait $child_pid
+        return $?
 }
 
 
@@ -454,12 +482,12 @@ function RunLocalCommand
 	else
 		LogError "Command failed."
 	fi
-	
+
 	if [ $verbose -eq 1 ] || [ $retval -ne 0 ]
 	then
 		Log "Command output:\n$(cat $RUN_DIR/obackup_run_local_$SCRIPT_PID)"
 	fi
-	
+
 	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]
         then
                 exit 1
@@ -488,7 +516,7 @@ function RunRemoteCommand
 	else
 		LogError "Command failed."
 	fi
-	
+
 	if [ -f $RUN_DIR/obackup_run_remote_$SCRIPT_PID ] && ([ $verbose -eq 1 ] || $retval -ne 0 ]) 
 	then
 		Log "Command output:\n$(cat $RUN_DIR/obackup_run_remote_$SCRIPT_PID)"
@@ -510,7 +538,7 @@ function RunBeforeHook
 	if [ "$REMOTE_RUN_BEFORE_CMD" != "" ]
 	then
 		RunRemoteCommand "$REMOTE_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE
-	fi	
+	fi
 }
 
 function RunAfterHook
@@ -614,7 +642,7 @@ function CheckSpaceRequirements
 	fi
 	Log "Local Space: $LOCAL_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko - Files size: $TOTAL_FILES_SIZE Ko"
 }
-      
+
 function CheckTotalExecutionTime
 {
 	#### Check if max execution time of whole script as been reached
@@ -635,53 +663,45 @@ function CheckTotalExecutionTime
 
 function CheckConnectivityRemoteHost
 {
-	if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_BACKUP" != "no" ]
-	then
-		if [ "$LOCAL_OS" == "msys" ]
-		then
-			ping -n 2 $REMOTE_HOST > /dev/null 2>&1
-		else
-			ping -c 2 $REMOTE_HOST > /dev/null 2>&1
-		fi
-		if [ $? != 0 ]
-		then
-			LogError "Cannot ping $REMOTE_HOST"
-			return 1
-		fi
-	fi
+        if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_SYNC" != "no" ]
+        then
+                eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1"
+                if [ $? != 0 ]
+                then
+                        LogError "Cannot ping $REMOTE_HOST"
+                        exit 1
+                fi
+        fi
 }
+
 
 function CheckConnectivity3rdPartyHosts
 {
-	if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]
-	then
-		remote_3rd_party_success=0
-		OLD_IFS=$IFS
+        if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]
+        then
+                remote_3rd_party_success=0
+                OLD_IFS=$IFS
                 IFS=$' \t\n'
-		for i in $REMOTE_3RD_PARTY_HOSTS
-		do
-			if [ "$LOCAL_OS" == "msys" ]
-			then
-				ping -n 2 $i > /dev/null 2>&1
-			else
-				ping -c 2 $i > /dev/null 2>&1
-			fi
-			if [ $? != 0 ]
-			then
-				LogError "Cannot ping 3rd party host $i"
-			else
-				remote_3rd_party_success=1
-			fi
-		done
-		IFS=$OLD_IFS
-		if [ $remote_3rd_party_success -ne 1 ]
-		then
-			LogError "No remote 3rd party host responded to ping. No internet ?"
-			return 1
-		fi
-	fi
+                for i in $REMOTE_3RD_PARTY_HOSTS
+                do
+                        eval "$PING_CMD $i > /dev/null 2>&1"
+                        if [ $? != 0 ]
+                        then
+                                Log "Cannot ping 3rd party host $i"
+                        else
+                                remote_3rd_party_success=1
+                        fi
+                done
+                IFS=$OLD_IFS
+                if [ $remote_3rd_party_success -ne 1 ]
+                then
+                        LogError "No remote 3rd party host responded to ping. No internet ?"
+                        exit 1
+                fi
+        fi
 }
-	
+
+
 function ListDatabases
 {
 	SECONDS_BEGIN=$SECONDS
@@ -711,7 +731,7 @@ function ListDatabases
 
 	OLD_IFS=$IFS
 	IFS=$' \n'
-	for line in $(cat $RUN_DIR/obackup_dblist_$SCRIPT_PID)	
+	for line in $(cat $RUN_DIR/obackup_dblist_$SCRIPT_PID)
 	do
 		db_name=$(echo $line | cut -f1)
 		db_size=$(echo $line | cut -f2)
@@ -770,7 +790,7 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
+		sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	elif [ "$REMOTE_BACKUP" == "yes" ] && [ "$COMPRESSION_REMOTE" == "yes" ]
 	then
 		CheckConnectivityRemoteHost
@@ -779,16 +799,16 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS\" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
+		sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS\" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	else
-		sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 | $COMPRESSION_PROGRAM -$COMPRESSION_LEVEL $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
+		sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	fi
 
 	if [ $verbose -eq 1 ]
         then
                 Log "SQL_CMD: $sql_cmd"
         fi
-	eval $sql_cmd
+	eval "$sql_cmd 2>&1"
 	exit $?
 }
 
@@ -810,7 +830,7 @@ function BackupDatabases
 		else
 			Log "Backup succeeded."
 		fi
-	
+
 		CheckTotalExecutionTime
 	done
 	IFS=$OLD_IFS
@@ -866,7 +886,7 @@ function ListDirectories
 				fi
 			done
 			IFS=$' \n'
-			
+
 			if [ $file_exclude -eq 0 ]
 			then
 				if [ "$DIRECTORIES_TO_BACKUP" == "" ]
@@ -887,7 +907,7 @@ function ListDirectories
 		IFS=$OLD_IFS
 	done
 	DIRECTORIES_TO_BACKUP_RECURSE=$DIRECTORIES_TO_BACKUP
-	
+
 	for dir in $DIRECTORIES_SIMPLE_LIST
 	do
 		if [ "$DIRECTORIES_TO_BACKUP" == "" ]
@@ -902,7 +922,7 @@ function ListDirectories
 }
 
 function GetDirectoriesSize
-{	
+{
  	# remove the path separator char from the dir list with sed 's/;/ /g'
 	dir_list=$(echo $DIRECTORIES_TO_BACKUP | sed 's/'"$PATH_SEPARATOR_CHAR"'/ /g' )
 	Log "Getting files size"
@@ -1082,7 +1102,7 @@ function FilesBackup
                 fi
                 CheckTotalExecutionTime
         done
-		
+
 	IFS=$OLD_IFS
 }
 
@@ -1098,12 +1118,17 @@ function RotateBackups
 		do
 			if [ $copy -eq $ROTATE_COPIES ]
 			then
-				rm -rf "$1/$backup.obackup.$copy"
+				rm -rf "$1/$backup.obackup.$copy" &
+				child_pid=$!
+		                WaitForTaskCompletion $child_pid 0 0
 			fi
 			path="$1/$backup.obackup.$(($copy-1))"
 			if [[ -f $path || -d $path ]]
 			then
-				mv $path "$1/$backup.obackup.$copy"
+				mv $path "$1/$backup.obackup.$copy" &
+				child_pid=$!
+                                WaitForTaskCompletion $child_pid 0 0
+
 			fi
 			copy=$(($copy-1))
 		done
@@ -1111,12 +1136,21 @@ function RotateBackups
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]
 		then
-			mv "$1/$backup" "$1/$backup.obackup.1"
+			mv "$1/$backup" "$1/$backup.obackup.1" &
+			child_pid=$!
+                        WaitForTaskCompletion $child_pid 0 0
+
 		elif [ "$REMOTE_BACKUP" == "yes" ]
 		then
-			cp -R "$1/$backup" "$1/$backup.obackup.1"
+			cp -R "$1/$backup" "$1/$backup.obackup.1" &
+			child_pid=$!
+                        WaitForTaskCompletion $child_pid 0 0
+
 		else
-			mv "$1/$backup" "$1/$backup.obackup.1"
+			mv "$1/$backup" "$1/$backup.obackup.1" &
+			child_pid=$!
+                        WaitForTaskCompletion $child_pid 0 0
+
 		fi
 	done
 	IFS=$OLD_IFS
@@ -1139,23 +1173,15 @@ function Init
 	then
 		if [ -w /var/log ]
 		then
-			LOG_FILE=/var/log/obackup_$OBACKUP_VERSION-$BACKUP_ID.log
+			LOG_FILE=/var/log/obackup_$BACKUP_ID.log
 		else
-			LOG_FILE=./obackup_$OBACKUP_VERSION_$BACKUP_ID.log
+			LOG_FILE=./obackup_$BACKUP_ID.log
 		fi
 	else
 		LOG_FILE="$LOGFILE"
 	fi
 
-	MAIL_ALERT_MSG="Warning: Execution of obackup instance $BACKUP_ID (pid $SCRIPT_PID) as $LOCAL_USER@$LOCAL_HOST produced errors."
-
-	## If running Msys, find command of windows is used instead of msys one
-	if [ "$LOCAL_OS" == "msys" ]
-	then
-		FIND_CMD=$(dirname $BASH)/find
-	else
-		FIND_CMD=find
-	fi
+	MAIL_ALERT_MSG="Warning: Execution of obackup instance $BACKUP_ID (pid $SCRIPT_PID) as $LOCAL_USER@$LOCAL_HOST produced errors on $(date)."
 
 	## Set SSH command
         if [ "$SSH_COMPRESSION" == "yes" ]
@@ -1221,19 +1247,73 @@ function Init
                 RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
         fi
 
-	## Set compression executable and extension
-        if [ "$COMPRESSION_PROGRAM" == "xz" ] && type -p xz > /dev/null 2>&1
+        ## Set compression executable and extension
+        COMPRESSION_LEVEL=9
+        if type -p xz > /dev/null 2>&1
         then
+                COMPRESSION_PROGRAM="| xz -$COMPRESSION_LEVEL"
                 COMPRESSION_EXTENSION=.xz
-        elif [ "$COMPRESSION_PROGRAM" == "lzma" ] && type -p lzma > /dev/null 2>&1
+        elif type -p lzma > /dev/null 2>&1
         then
+                COMPRESSION_PROGRAM="| lzma -$COMPRESSION_LEVEL"
                 COMPRESSION_EXTENSION=.lzma
-        elif [ "$COMPRESSION_PROGRAM" == "gzip" ] && type -p gzip > /dev/null 2>&1
+        elif type -p pigz > /dev/null 2>&1
         then
+                COMPRESSION_PROGRAM="| pigz -$COMPRESSION_LEVEL"
+                COMPRESSION_EXTENSION=.gz
+                COMPRESSION_OPTIONS=--rsyncable
+        elif type -p gzip > /dev/null 2>&1
+        then
+                COMPRESSION_PROGRAM="| gzip -$COMPRESSION_LEVEL"
                 COMPRESSION_EXTENSION=.gz
                 COMPRESSION_OPTIONS=--rsyncable
         else
+                COMPRESSION_PROGRAM=
                 COMPRESSION_EXTENSION=
+        fi
+	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
+}
+
+function InitLocalOSSettings
+{
+        ## If running Msys, find command of windows is used instead of msys one
+        if [ "$LOCAL_OS" == "msys" ]
+        then
+                FIND_CMD=$(dirname $BASH)/find
+        else
+                FIND_CMD=find
+        fi
+
+        ## Stat command has different syntax on Linux and FreeBSD/MacOSX
+        if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]
+        then
+                STAT_CMD="stat -f \"%Sm\""
+        else
+                STAT_CMD="stat --format %y"
+        fi
+
+        ## Ping command has different syntax on Msys and others
+        if [ "$LOCAL_OS" == "msys" ]
+        then
+                PING_CMD="ping -n 2"
+        else
+                PING_CMD="ping -c 2 -i .2"
+        fi
+}
+
+function InitRemoteOSSettings
+{
+        ## MacOSX does not use the -E parameter like Linux or BSD does (-E is mapped to extended attrs instead of preserve executability
+        if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS" -E"
+        fi
+
+        if [ "$REMOTE_OS" == "msys" ]
+        then
+                REMOTE_FIND_CMD=$(dirname $BASH)/find
+        else
+                REMOTE_FIND_CMD=find
         fi
 }
 
@@ -1287,7 +1367,9 @@ function Main
 
 function Usage
 {
-	echo "Obackup $OBACKUP_VERSION $OBACKUP_BUILD"
+        echo "$PROGRAM $PROGRAM_VERSION $PROGRAM_BUILD"
+	echo "$AUTHOR"
+	echo "$CONTACT"
 	echo ""
 	echo "usage: obackup /path/to/backup.conf [--dry] [--silent] [--verbose] [--no-maxtime]"
 	echo ""
@@ -1338,21 +1420,25 @@ do
 	esac
 done
 
+GetLocalOS
+InitLocalOSSettings
 CheckEnvironment
 if [ $? == 0 ]
 then
-	if [ "$1" != "" ]	
+	if [ "$1" != "" ]
 	then
 		LoadConfigFile $1
 		if [ $? == 0 ]
 		then
 			Init
+			GetRemoteOS
+			InitRemoteOSSettings
 			DATE=$(date)
 			Log "--------------------------------------------------------------------"
-			Log "$DRY_WARNING $DATE - Obackup v$OBACKUP_VERSION script begin."
+			Log "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION script begin."
 			Log "--------------------------------------------------------------------"
 			Log "Backup task [$BACKUP_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)"
-			GetOperatingSystem
+
 			if [ $no_maxtime -eq 1 ]
                         then
                                 SOFT_MAX_EXEC_TIME=0
