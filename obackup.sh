@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84preRC4
-PROGRAM_BUILD=2209201402
+PROGRAM_BUILD=1811201401
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1246,6 +1246,9 @@ function Init
         then
                 RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
         fi
+
+	## Fix for symlink to directories on target can't get updated
+	RSYNC_ARGS=$RSYNC_ARGS" --force"
 
         ## Set compression executable and extension
         COMPRESSION_LEVEL=9

@@ -3,6 +3,8 @@ SHORT FUTURE IMPROVEMENTS
 
 - Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
 - Clean most of recursive task creation code
+- dry option shoudln't create local dirs
+- Add symlink support (-L) and edit find -xtype d instead of -type d
 
 FAR FUTURE IMPROVEMENTS
 -----------------------
@@ -21,6 +23,20 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+- Fixed an issue with existing symlinks to directories on target
+- Prevent changed IFS to make ping commands fail
+- Added RotateCopies execution time (spinner support)
+- redirect stderr for mysqldump to catch problems
+	!-and other commands (cp ?) + verify is not telling success if table damaged
+!- Moved msys specific code to Init(Local|Remote)OSSettings (halfway done, still need the WaitForTaskCompletion code to moove)
+- Added support for multithreaded gzip (if pigz is installed)
+- Merged back changes from osync codebase
+	- Enhanced debugging
+	- Added language agnostic system command output
+	- Enhanced log sending
+	- Better handling of OS specific commands
+	- Improved WaitForTaskCompletion when DEBUG enabled or SILENT enabled
+	- Enhanced OS detection
 - More correct error message on remote connection failure
 - Gzipped logs are now deleted once sent
 - Fixed some typos (thanks to Pavel Kiryukhin)
