@@ -23,6 +23,7 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+- Fixed another issue with existing symlinks to directories on target on non recursive backups
 - Fixed remaining rsync -E option preventing obackup to work correctly on MacOS X
 - Fixed an issue with existing symlinks to directories on target
 - Prevent changed IFS to make ping commands fail
