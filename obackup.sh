@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84preRC4
-PROGRAM_BUILD=1811201401
+PROGRAM_BUILD=1911201401
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1220,7 +1220,7 @@ function Init
         fi
 
 	## Set Rsync arguments
-        RSYNC_ARGS=-rlptgoDE
+        RSYNC_ARGS=-rlptgoD
         if [ "$PRESERVE_ACL" == "yes" ]
         then
                 RSYNC_ARGS=$RSYNC_ARGS"A"

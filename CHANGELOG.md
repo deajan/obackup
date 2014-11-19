@@ -23,6 +23,7 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+- Fixed remaining rsync -E option preventing obackup to work correctly on MacOS X
 - Fixed an issue with existing symlinks to directories on target
 - Prevent changed IFS to make ping commands fail
 - Added RotateCopies execution time (spinner support)
