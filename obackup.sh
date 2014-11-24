@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84preRC4
-PROGRAM_BUILD=1911201402
+PROGRAM_BUILD=2411201401
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -417,12 +417,6 @@ function WaitForTaskCompletion
 {
         soft_alert=0
         SECONDS_BEGIN=$SECONDS
-        if [ "$LOCAL_OS" == "msys" ]
-        then
-                PROCESS_TEST_CMD="ps -a | awk '{\$1=\$1}\$1' | awk '{print \$1}' | grep $1"
-        else
-                PROCESS_TEST_CMD="ps -p$1"
-        fi
         while eval $PROCESS_TEST_CMD > /dev/null
         do
                 Spinner
@@ -973,6 +967,23 @@ function RsyncExcludePattern
 	IFS=$OLD_IFS
 }
 
+function RsyncExcludeFrom
+{
+        if [ ! $RSYNC_EXCLUDE_FROM == "" ]
+        then
+                ## Check if the exclude list has a full path, and if not, add the config file path if there is one
+                if [ "$(basename $RSYNC_EXCLUDE_FROM)" == "$RSYNC_EXCLUDE_FROM" ]
+                then
+                        RSYNC_EXCLUDE_FROM=$(dirname $ConfigFile)/$RSYNC_EXCLUDE_FROM
+                fi
+
+                if [ -e $RSYNC_EXCLUDE_FROM ]
+                then
+                        RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude-from=\"$RSYNC_EXCLUDE_FROM\""
+                fi
+        fi
+}
+
 function Rsync
 {
 	i="$(StripQuotes $1)"
@@ -1283,12 +1294,19 @@ function Init
 
 function InitLocalOSSettings
 {
-        ## If running Msys, find command of windows is used instead of msys one
+	## If running under Msys, some commands don't run the same way
+        ## Using mingw version of find instead of windows one
+        ## Getting running processes is quite different
+        ## Ping command isn't the same
         if [ "$LOCAL_OS" == "msys" ]
         then
                 FIND_CMD=$(dirname $BASH)/find
+                PROCESS_TEST_CMD="ps -a | awk '{\$1=\$1}\$1' | awk '{print \$1}' | grep $1"
+                PING_CMD="ping -n 2"
         else
                 FIND_CMD=find
+                PROCESS_TEST_CMD="ps -p$1"
+                PING_CMD="ping -c 2 -i .2"
         fi
 
         ## Stat command has different syntax on Linux and FreeBSD/MacOSX
@@ -1297,14 +1315,6 @@ function InitLocalOSSettings
                 STAT_CMD="stat -f \"%Sm\""
         else
                 STAT_CMD="stat --format %y"
-        fi
-
-        ## Ping command has different syntax on Msys and others
-        if [ "$LOCAL_OS" == "msys" ]
-        then
-                PING_CMD="ping -n 2"
-        else
-                PING_CMD="ping -c 2 -i .2"
         fi
 }
 
@@ -1366,7 +1376,11 @@ function Main
 				RotateBackups $LOCAL_FILE_STORAGE
 			fi
 		fi
-		RsyncExcludePattern
+		## Add Rsync exclude patterns
+	        RsyncExcludePattern
+        	## Add Rsync exclude from file
+        	RsyncExcludeFrom
+
 		FilesBackup
 	fi
 	# Be a happy sysadmin (and drink a coffee ? Nahh... it's past midnight.)

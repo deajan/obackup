@@ -20,17 +20,24 @@ KNOWN ISSUES
 - Dry mode creates dirs
 - Dry mode does not try mysqldump
 
+UNDER WORK
+----------
+
+- Commands like cp should have their stderr redirected to log file
+- Mysqldump must be checked for not telling success if a table is damaged
+
+
 CHANGELOG
 ---------
 
+- Added Rsync exclude files suppport from osync
 - Fixed another issue with existing symlinks to directories on target on non recursive backups
 - Fixed remaining rsync -E option preventing obackup to work correctly on MacOS X
 - Fixed an issue with existing symlinks to directories on target
 - Prevent changed IFS to make ping commands fail
 - Added RotateCopies execution time (spinner support)
 - redirect stderr for mysqldump to catch problems
-	!-and other commands (cp ?) + verify is not telling success if table damaged
-!- Moved msys specific code to Init(Local|Remote)OSSettings (halfway done, still need the WaitForTaskCompletion code to moove)
+- Moved msys specific code to Init(Local|Remote)OSSettings except in TrapQuit that needs to work at any moment
 - Added support for multithreaded gzip (if pigz is installed)
 - Merged back changes from osync codebase
 	- Enhanced debugging
