@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84preRC4
-PROGRAM_BUILD=2411201401
+PROGRAM_BUILD=2411201402
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -417,7 +417,7 @@ function WaitForTaskCompletion
 {
         soft_alert=0
         SECONDS_BEGIN=$SECONDS
-        while eval $PROCESS_TEST_CMD > /dev/null
+        while eval "$PROCESS_TEST_CMD" > /dev/null
         do
                 Spinner
                 EXEC_TIME=$(($SECONDS - $SECONDS_BEGIN))
@@ -1301,11 +1301,12 @@ function InitLocalOSSettings
         if [ "$LOCAL_OS" == "msys" ]
         then
                 FIND_CMD=$(dirname $BASH)/find
-                PROCESS_TEST_CMD="ps -a | awk '{\$1=\$1}\$1' | awk '{print \$1}' | grep $1"
+                ## TODO: The following command needs to be checked on msys. Does the $1 variable substitution work ?
+		PROCESS_TEST_CMD='ps -a | awk "{\$1=\$1}\$1" | awk "{print \$1}" | grep $1'
                 PING_CMD="ping -n 2"
         else
                 FIND_CMD=find
-                PROCESS_TEST_CMD="ps -p$1"
+                PROCESS_TEST_CMD='ps -p$1'
                 PING_CMD="ping -c 2 -i .2"
         fi
 
