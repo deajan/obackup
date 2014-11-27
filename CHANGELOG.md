@@ -3,7 +3,6 @@ SHORT FUTURE IMPROVEMENTS
 
 - Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
 - Clean most of recursive task creation code
-- Add symlink support (-L) and edit find -xtype d instead of -type d (xtype won't work with FreeBSD)
 
 KNOWN ISSUES
 ------------
@@ -16,12 +15,14 @@ UNDER WORK
 ----------
 
 - Commands like cp should have their stderr redirected to log file
-- Mysqldump must be checked for not telling success if a table is damaged
+- Mysqldump must be checked for not telling success if a table is damaged (also check for event table error)
 
 
 CHANGELOG
 ---------
 
+- WARNING: Default behavior is now to copy the referrent files and directories from symlinks (this can reach files outside the backup root)
+- Recursive directory search now includes symlinks (find -L option. -type d cannot be replaced by -xtype d because of portability issues with BSD)
 - Dry mode does not create target directories anymore
 - Dry mode also tries mysqldumps now (check for error messages being logged)
 - Added experimental partial download support

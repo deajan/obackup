@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84preRC4
-PROGRAM_BUILD=2711201402
+PROGRAM_BUILD=2711201404
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -860,10 +860,10 @@ function ListDirectories
 				LogError "Connectivity test failed. Stopping current task."
 				Dummy &
                 	else
-				eval "$SSH_CMD \"$COMMAND_SUDO $FIND_CMD $dir/ -mindepth 1 -maxdepth 1 -type d\" > $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID &"
+				eval "$SSH_CMD \"$COMMAND_SUDO $FIND_CMD -L $dir/ -mindepth 1 -maxdepth 1 -type d\" > $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID &"
 			fi
 		else
-			eval "$COMMAND_SUDO $FIND_CMD $dir/ -mindepth 1 -maxdepth 1 -type d > $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID &"
+			eval "$COMMAND_SUDO $FIND_CMD -L $dir/ -mindepth 1 -maxdepth 1 -type d > $RUN_DIR/obackup_dirs_recurse_list_$SCRIPT_PID &"
 		fi
 		child_pid=$!
 		WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK
@@ -1260,6 +1260,18 @@ function Init
         if [ "$RSYNC_COMPRESS" == "yes" ]
         then
                 RSYNC_ARGS=$RSYNC_ARGS"z"
+        fi
+	if [ "$COPY_SYMLINKS" != "no" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS" -L"
+        fi
+        if [ "$KEEP_DIRLINKS" != "no" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS" -K"
+        fi
+        if [ "$PRESERVE_HARDLINKS" == "yes" ]
+        then
+                RSYNC_ARGS=$RSYNC_ARGS" -H"
         fi
 	if [ $verbose -eq 1 ]
 	then
