@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84preRC4
-PROGRAM_BUILD=2411201402
+PROGRAM_BUILD=2711201402
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -49,6 +49,9 @@ then
 else
 	RUN_DIR=.
 fi
+
+## Working directory for partial downloads
+PARTIAL_DIR=".obackup_workdir_partial"
 
 ## Log a state message every $KEEP_LOGGING seconds. Should generally not be equal to soft or hard execution time so your log won't be unnecessary big.
 KEEP_LOGGING=1801
@@ -220,7 +223,7 @@ function CleanUp
 
 function SendAlert
 {
-	eval "cat $LOG_FILE $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
+	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
 	MAIL_ALERT_MSG=$MAIL_ALERT_MSG$'\n\n'$(tail -n 25 "$LOG_FILE")
         if type -p mutt > /dev/null 2>&1
         then
@@ -784,6 +787,7 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
+		dry_sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 > /dev/null 2>&1"
 		sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	elif [ "$REMOTE_BACKUP" == "yes" ] && [ "$COMPRESSION_REMOTE" == "yes" ]
 	then
@@ -793,8 +797,10 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
+		dry_sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS\" > /dev/null 2>&1"
 		sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS\" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	else
+		dry_sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2>&1"
 		sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	fi
 
@@ -802,7 +808,13 @@ function BackupDatabase
         then
                 Log "SQL_CMD: $sql_cmd"
         fi
-	eval "$sql_cmd 2>&1"
+
+	if [ $dryrun -ne 1 ]
+	then
+		eval "$sql_cmd 2>&1"
+	else
+		eval "$dry_sql_cmd"
+	fi
 	exit $?
 }
 
@@ -1004,10 +1016,11 @@ function Rsync
 		RSYNC_NO_RECURSE_ARGS=""
         fi
 
-	if [ ! -d $local_file_storage_path ]
-	then
-		mkdir -p "$local_file_storage_path"
-	fi
+	# Directories should not be created here
+	#if [ ! -d $local_file_storage_path ]
+	#then
+	#	mkdir -p "$local_file_storage_path"
+	#fi
 
 	CheckConnectivity3rdPartyHosts
 	if [ "$REMOTE_BACKUP" == "yes" ]
@@ -1262,6 +1275,17 @@ function Init
                 RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
         fi
 
+        if [ "$PARTIAL" == "yes" ]
+        then
+                SYNC_OPTS=$SYNC_OPTS" --partial --partial-dir=\"$PARTIAL_DIR\""
+                RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$PARTIAL_DIR\""
+        fi
+
+        if [ $stats -eq 1 ]
+        then
+                SYNC_OPTS=$SYNC_OPTS" --stats"
+        fi
+
 	## Fix for symlink to directories on target can't get updated
 	RSYNC_ARGS=$RSYNC_ARGS" --force"
 
@@ -1362,10 +1386,8 @@ function Main
 			then
 				RotateBackups $LOCAL_SQL_STORAGE
 			fi
-			BackupDatabases
-		else
-			Log "DRYRUN: databases not backed up."
 		fi
+		BackupDatabases
 	fi
 
 	if [ "$BACKUP_FILES" != "no" ]
@@ -1398,6 +1420,8 @@ function Usage
 	echo "--dry: will run obackup without actually doing anything, just testing"
 	echo "--silent: will run obackup without any output to stdout, usefull for cron backups"
 	echo "--verbose: adds command outputs"
+        echo "--stats           Adds rsync transfer statistics to verbose output"
+        echo "--partial         Allows rsync to keep partial downloads that can be resumed later (experimental)"
 	echo "--no-maxtime: disables any soft and hard execution time checks"
 	exit 128
 }
@@ -1412,6 +1436,8 @@ then
 else
 	verbose=0
 fi
+stats=0
+PARTIAL=0
 # Alert flags
 soft_alert_total=0
 error_alert=0
@@ -1432,6 +1458,12 @@ do
 		;;
 		--verbose)
 		verbose=1
+		;;
+		--stats)
+		stats=1
+		;;
+		--partial)
+		PARTIAL="yes"
 		;;
 		--no-maxtime)
 		no_maxtime=1

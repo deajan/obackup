@@ -3,13 +3,7 @@ SHORT FUTURE IMPROVEMENTS
 
 - Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
 - Clean most of recursive task creation code
-- dry option shoudln't create local dirs
-- Add symlink support (-L) and edit find -xtype d instead of -type d
-
-FAR FUTURE IMPROVEMENTS
------------------------
-
-- (Secret world domination... Still need to get bald and get a cat)
+- Add symlink support (-L) and edit find -xtype d instead of -type d (xtype won't work with FreeBSD)
 
 KNOWN ISSUES
 ------------
@@ -17,8 +11,6 @@ KNOWN ISSUES
 - Backup size check does not honor rsync exclude patterns
 - Bandwidth parameter is ignored for SQL backups
 - Missing symlink support when run from MSYS environment
-- Dry mode creates dirs
-- Dry mode does not try mysqldump
 
 UNDER WORK
 ----------
@@ -30,6 +22,9 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Dry mode does not create target directories anymore
+- Dry mode also tries mysqldumps now (check for error messages being logged)
+- Added experimental partial download support
 - Added Rsync exclude files suppport from osync
 - Fixed another issue with existing symlinks to directories on target on non recursive backups
 - Fixed remaining rsync -E option preventing obackup to work correctly on MacOS X
