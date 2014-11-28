@@ -70,6 +70,8 @@ that's actually launched and it's result.
 One you're happy with a test run, you may run obackup as a cron task with the "--silent" parameter so output will not be written to stdout.
 All backup activity is logged to "/var/log/obackup_backupname.log" or current directory if /var/log is not writable.
 
+You may mix "--silent" and "--verbose" parameters to output verbose input only in the log files.
+
 ## Final words
 
 Backup tasks aren't always reliable, connectivity loss, insufficient disk space, hacked servers with tons of unusefull stuff to backup... Anything can happen.
