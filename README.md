@@ -27,6 +27,12 @@ Currently, Obackup also runs on FreeBSD and Windows MSYS environment, altough it
 
 Feel free to drop me a mail for limited support in my free time.
 
+## Warning
+
+Starting with Obackup 1.84RC4, the default behavior is modified.
+Obackup now follows symlinks and treats them as the referent files / dirs, following symlinks even outside the backup root, which IMHO is more secure in terms of backups.
+You may disable this behavior in the config file.
+
 ## Installation
 
 You can download the latest obackup script from authors website.

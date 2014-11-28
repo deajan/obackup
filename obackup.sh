@@ -4,8 +4,8 @@
 ###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
-PROGRAM_VERSION=1.84preRC4
-PROGRAM_BUILD=2711201404
+PROGRAM_VERSION=1.84RC4
+PROGRAM_BUILD=2811201401
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1197,18 +1197,6 @@ function Init
 		trap 'TrapError ${LINENO} $?' ERR
 	fi
 
-	if [ "$LOGFILE" == "" ]
-	then
-		if [ -w /var/log ]
-		then
-			LOG_FILE=/var/log/obackup_$BACKUP_ID.log
-		else
-			LOG_FILE=./obackup_$BACKUP_ID.log
-		fi
-	else
-		LOG_FILE="$LOGFILE"
-	fi
-
 	MAIL_ALERT_MSG="Warning: Execution of obackup instance $BACKUP_ID (pid $SCRIPT_PID) as $LOCAL_USER@$LOCAL_HOST produced errors on $(date)."
 
 	## Set SSH command
@@ -1486,8 +1474,6 @@ do
 	esac
 done
 
-GetLocalOS
-InitLocalOSSettings
 CheckEnvironment
 if [ $? == 0 ]
 then
@@ -1496,6 +1482,21 @@ then
 		LoadConfigFile $1
 		if [ $? == 0 ]
 		then
+			if [ "$LOGFILE" == "" ]
+			then
+				if [ -w /var/log ]
+				then
+					LOG_FILE=/var/log/obackup_$BACKUP_ID.log
+				else
+					LOG_FILE=./obackup_$BACKUP_ID.log
+				fi
+			else
+				LOG_FILE="$LOGFILE"
+			fi
+
+			GetLocalOS
+			InitLocalOSSettings
+
 			Init
 			GetRemoteOS
 			InitRemoteOSSettings

@@ -21,6 +21,7 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Prevent creation of backup-id less log file when DEBUG is set
 - WARNING: Default behavior is now to copy the referrent files and directories from symlinks (this can reach files outside the backup root)
 - Recursive directory search now includes symlinks (find -L option. -type d cannot be replaced by -xtype d because of portability issues with BSD)
 - Dry mode does not create target directories anymore
