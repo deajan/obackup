@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84RC4
-PROGRAM_BUILD=2811201401
+PROGRAM_BUILD=2811201403
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -126,7 +126,8 @@ function TrapQuit
 	# Kill all child processes
 	if type -p pkill > /dev/null 2>&1
 	then
-		pkill -TERM -P $$
+		## Added || : to return success even if there is no child process to kill
+                pkill -TERM -P $$ || :
 	elif [ "$LOCAL_OS" == "msys" ] || [ "$OSTYPE" == "msys" ]
 	then
 		## This is not really a clean way to get child process pids, especially the tail -n +2 which resolves a strange char apparition in msys bash
@@ -707,10 +708,13 @@ function ListDatabases
 	CheckConnectivityRemoteHost
 	if [ "$REMOTE_BACKUP" != "no" ]
 	then
-		eval "$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > $RUN_DIR/obackup_dblist_$SCRIPT_PID &"
+		sql_cmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > $RUN_DIR/obackup_dblist_$SCRIPT_PID &"
 	else
-		mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/obackup_dblist_$SCRIPT_PID &
+		sql_cmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/obackup_dblist_$SCRIPT_PID &"
 	fi
+
+	LogDebug "$sql_cmd"
+	eval "$sql_cmd 2>&1"
 	child_pid=$!
 	WaitForTaskCompletion $child_pid $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK
 	retval=$?
@@ -804,10 +808,7 @@ function BackupDatabase
 		sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	fi
 
-	if [ $verbose -eq 1 ]
-        then
-                Log "SQL_CMD: $sql_cmd"
-        fi
+        LogDebug "SQL_CMD: $sql_cmd"
 
 	if [ $dryrun -ne 1 ]
 	then
@@ -1036,10 +1037,8 @@ function Rsync
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$1\" \"$local_file_storage_path\" > $RUN_DIR/obackup_rsync_output_$SCRIPT_PID 2>&1"
 	fi
 	#### Eval is used so the full command is processed without bash adding single quotes round variables
-	if [ $verbose -eq 1 ]
-	then
-		Log "RSYNC_CMD: $rsync_cmd"
-	fi
+	LogDebug "RSYNC_CMD: $rsync_cmd"
+
 	eval $rsync_cmd
 	exit $?
 }
