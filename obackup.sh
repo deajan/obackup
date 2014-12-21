@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84RC4
-PROGRAM_BUILD=2112201401
+PROGRAM_BUILD=2811201403
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -791,7 +791,7 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		dry_sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1"
+		dry_sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 > /dev/null 2>&1"
 		sql_cmd="$SSH_CMD mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	elif [ "$REMOTE_BACKUP" == "yes" ] && [ "$COMPRESSION_REMOTE" == "yes" ]
 	then
@@ -801,19 +801,19 @@ function BackupDatabase
 			LogError "Connectivity test failed. Stopping current task."
 			exit 1
 		fi
-		dry_sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS\""
+		dry_sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS\" > /dev/null 2>&1"
 		sql_cmd="$SSH_CMD \"mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS\" > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	else
-		dry_sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS"
+		dry_sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2>&1"
 		sql_cmd="mysqldump -u $SQL_USER --skip-lock-tables --single-transaction --database $1 $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $LOCAL_SQL_STORAGE/$1.sql$COMPRESSION_EXTENSION"
 	fi
 
+        LogDebug "SQL_CMD: $sql_cmd"
+
 	if [ $dryrun -ne 1 ]
 	then
-        	LogDebug "SQL_CMD: $sql_cmd"
 		eval "$sql_cmd 2>&1"
 	else
-        	LogDebug "SQL_CMD: $dry_sql_cmd"
 		eval "$dry_sql_cmd"
 	fi
 	exit $?
@@ -1289,10 +1289,7 @@ function Init
 	RSYNC_ARGS=$RSYNC_ARGS" --force"
 
         ## Set compression executable and extension
-        if [ "$COMPRESSION_LEVEL" == "" ]
-	then
-		COMPRESSION_LEVEL=9
-	fi
+        COMPRESSION_LEVEL=9
         if type -p xz > /dev/null 2>&1
         then
                 COMPRESSION_PROGRAM="| xz -$COMPRESSION_LEVEL"
