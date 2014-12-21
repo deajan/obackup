@@ -16,11 +16,14 @@ UNDER WORK
 
 - Commands like cp should have their stderr redirected to log file
 - Mysqldump must be checked for not telling success if a table is damaged (also check for event table error)
+- Mysqldump commands error msg must be logged
 
 
 CHANGELOG
 ---------
 
+- Fixed ignoring compression level in conf file
+- Fixed dry mode sql backup output
 - Prevented triggering TrapError if there are no child processes to terminate on TrapQuit
 - Improved mysql debug logs
 - Prevent creation of backup-id less log file when DEBUG is set
