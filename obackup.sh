@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84RC4
-PROGRAM_BUILD=2112201402
+PROGRAM_BUILD=0801201501
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1280,6 +1280,11 @@ function Init
                 RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$PARTIAL_DIR\""
         fi
 
+	if [ "DELETE_VANSIHED_FILES" == "yes" ]
+	then
+		SYNC_OPTS=$SYNC_OPTS" --delete"
+	fi
+
         if [ $stats -eq 1 ]
         then
                 SYNC_OPTS=$SYNC_OPTS" --stats"
@@ -1424,7 +1429,8 @@ function Usage
 	echo "--verbose: adds command outputs"
         echo "--stats           Adds rsync transfer statistics to verbose output"
         echo "--partial         Allows rsync to keep partial downloads that can be resumed later (experimental)"
-	echo "--no-maxtime: disables any soft and hard execution time checks"
+	echo "--no-maxtime      disables any soft and hard execution time checks"
+	echo "--delete          Deletes files on destination that vanished on source"
 	exit 128
 }
 
@@ -1469,6 +1475,9 @@ do
 		;;
 		--no-maxtime)
 		no_maxtime=1
+		;;
+		--delete)
+		DELETE_VANSIHED_FILES="yes"
 		;;
 		--help|-h|--version|-v)
 		Usage

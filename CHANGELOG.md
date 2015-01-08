@@ -22,6 +22,7 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Added delete on destination option for files that vanished from source
 - Fixed ignoring compression level in conf file
 - Fixed dry mode sql backup output
 - Prevented triggering TrapError if there are no child processes to terminate on TrapQuit
