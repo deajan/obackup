@@ -1,11 +1,11 @@
 #!/bin/bash
 
 ###### Remote (or local) backup script for files & databases
-###### (L) 2013 by Orsiris "Ozy" de Jong (www.netpower.fr)
-AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
+###### (L) 2013-2015 by Orsiris "Ozy" de Jong (www.netpower.fr)
+AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
 PROGRAM_VERSION=1.84RC4
-PROGRAM_BUILD=0801201501
+PROGRAM_BUILD=0801201502
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1280,7 +1280,7 @@ function Init
                 RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$PARTIAL_DIR\""
         fi
 
-	if [ "DELETE_VANSIHED_FILES" == "yes" ]
+	if [ "DELETE_VANISHED_FILES" == "yes" ]
 	then
 		SYNC_OPTS=$SYNC_OPTS" --delete"
 	fi
@@ -1477,7 +1477,7 @@ do
 		no_maxtime=1
 		;;
 		--delete)
-		DELETE_VANSIHED_FILES="yes"
+		DELETE_VANISHED_FILES="yes"
 		;;
 		--help|-h|--version|-v)
 		Usage
