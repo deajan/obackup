@@ -1280,7 +1280,7 @@ function Init
                 RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$PARTIAL_DIR\""
         fi
 
-	if [ "DELETE_VANISHED_FILES" == "yes" ]
+	if [ "$DELETE_VANISHED_FILES" == "yes" ]
 	then
 		SYNC_OPTS=$SYNC_OPTS" --delete"
 	fi
