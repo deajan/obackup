@@ -3,9 +3,9 @@
 ###### Remote (or local) backup script for files & databases
 ###### (L) 2013-2015 by Orsiris "Ozy" de Jong (www.netpower.fr)
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
-CONTACT="http://www.netpower.fr/osync - ozy@netpower.fr"
+CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.84RC4
-PROGRAM_BUILD=0801201502
+PROGRAM_BUILD=0801201504
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -363,19 +363,19 @@ function GetRemoteOS
         then
                 CheckConnectivity3rdPartyHosts
                 CheckConnectivityRemoteHost
-                eval "$SSH_CMD \"uname -spio\" > $RUN_DIR/osync_remote_os_$SCRIPT_PID 2>&1"
+                eval "$SSH_CMD \"uname -spio\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
                 child_pid=$!
                 WaitForTaskCompletion $child_pid 120 240
                 retval=$?
                 if [ $retval != 0 ]
                 then
-                        eval "$SSH_CMD \"uname -v\" > $RUN_DIR/osync_remote_os_$SCRIPT_PID 2>&1"
+                        eval "$SSH_CMD \"uname -v\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
                         child_pid=$!
                         WaitForTaskCompletion $child_pid 120 240
                         retval=$?
                         if [ $retval != 0 ]
                         then
-                                eval "$SSH_CMD \"uname\" > $RUN_DIR/osync_remote_os_$SCRIPT_PID 2>&1"
+                                eval "$SSH_CMD \"uname\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
                                 child_pid=$!
                                 WaitForTaskCompletion $child_pid 120 240
                                 retval=$?
@@ -386,7 +386,7 @@ function GetRemoteOS
                         fi
                 fi
 
-                REMOTE_OS_VAR=$(cat $RUN_DIR/osync_remote_os_$SCRIPT_PID)
+                REMOTE_OS_VAR=$(cat $RUN_DIR/obackup_remote_os_$SCRIPT_PID)
 
                 case $REMOTE_OS_VAR in
                         *"Linux"*)
@@ -467,7 +467,7 @@ function RunLocalCommand
 	if [ $dryrun -ne 0 ]
 	then
 		Log "Dryrun: Local command [$1] not run."
-		return 1
+		return 0
 	fi
 	Log "Running command [$1] on local host."
 	eval "$1" > $RUN_DIR/obackup_run_local_$SCRIPT_PID 2>&1 &
@@ -501,7 +501,7 @@ function RunRemoteCommand
         if [ $dryrun -ne 0 ]
         then
                 Log "Dryrun: Remote command [$1] not run."
-                return 1
+                return 0
         fi
 	Log "Running command [$1] on remote host."
 	eval "$SSH_CMD \"$1\" > $RUN_DIR/obackup_run_remote_$SCRIPT_PID 2>&1 &"
@@ -1276,18 +1276,18 @@ function Init
 
         if [ "$PARTIAL" == "yes" ]
         then
-                SYNC_OPTS=$SYNC_OPTS" --partial --partial-dir=\"$PARTIAL_DIR\""
+                RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
                 RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$PARTIAL_DIR\""
         fi
 
 	if [ "$DELETE_VANISHED_FILES" == "yes" ]
 	then
-		SYNC_OPTS=$SYNC_OPTS" --delete"
+		RSYNC_ARGS=$RSYNC_ARGS" --delete"
 	fi
 
         if [ $stats -eq 1 ]
         then
-                SYNC_OPTS=$SYNC_OPTS" --stats"
+                RSYNC_ARGS=$RSYNC_ARGS" --stats"
         fi
 
 	## Fix for symlink to directories on target can't get updated

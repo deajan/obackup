@@ -22,8 +22,10 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Fixed some typos with ported code from osync rendering stats and partial downloads unusable
 - Added delete on destination option for files that vanished from source
 - Fixed ignoring compression level in conf file
+- Added experimental partial downloads support for rsync so big files can be resumed on slow links
 - Fixed dry mode sql backup output
 - Prevented triggering TrapError if there are no child processes to terminate on TrapQuit
 - Improved mysql debug logs
