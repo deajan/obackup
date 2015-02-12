@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.84RC4
-PROGRAM_BUILD=0801201504
+PROGRAM_BUILD=1202201501
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -966,6 +966,8 @@ function GetDirectoriesSize
 
 function RsyncExcludePattern
 {
+	# Disable globbing so wildcards from exclusions don't get expanded 
+	set -f
 	OLD_IFS=$IFS
 	IFS=$PATH_SEPARATOR_CHAR
 	for excludedir in $RSYNC_EXCLUDE_PATTERN
@@ -978,6 +980,7 @@ function RsyncExcludePattern
 		fi
 	done
 	IFS=$OLD_IFS
+	set +f
 }
 
 function RsyncExcludeFrom

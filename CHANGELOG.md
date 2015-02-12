@@ -22,6 +22,7 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Prevent exclude pattern globbing before the pattern reaches the rsync cmd
 - Fixed some typos with ported code from osync rendering stats and partial downloads unusable
 - Added delete on destination option for files that vanished from source
 - Fixed ignoring compression level in conf file
