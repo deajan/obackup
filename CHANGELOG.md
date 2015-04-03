@@ -22,6 +22,12 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Create local subdirectories if not exist before running rsync (rsync doesn't handle mkdir -p)
+- Backported some fixes from Osync
+	- Lowered sleep time between commands
+	- Lowered debug sleep times
+	- Fixed a bug with exclude pattern globbing preventing multiple exludes
+	- Lowered default compression level for email alerts (for low end systems)
 - Prevent exclude pattern globbing before the pattern reaches the rsync cmd
 - Fixed some typos with ported code from osync rendering stats and partial downloads unusable
 - Added delete on destination option for files that vanished from source

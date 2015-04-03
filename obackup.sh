@@ -4,8 +4,8 @@
 ###### (L) 2013-2015 by Orsiris "Ozy" de Jong (www.netpower.fr)
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=1.84RC4
-PROGRAM_BUILD=1202201501
+PROGRAM_VERSION=1.9pre
+PROGRAM_BUILD=0304201501
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -18,9 +18,9 @@ fi
 if [ ! "$DEBUG" == "yes" ]
 then
         DEBUG=no
-        SLEEP_TIME=1
+        SLEEP_TIME=.1
 else
-        SLEEP_TIME=10
+        SLEEP_TIME=3
 fi
 
 SCRIPT_PID=$$
@@ -37,10 +37,7 @@ else
 fi
 
 ## Default directory where to store run files
-if [ -w /dev/shm ]
-then
-	RUN_DIR=/dev/shm
-elif [ -w /tmp ]
+if [ -w /tmp ]
 then
 	RUN_DIR=/tmp
 elif [ -w /var/tmp ]
@@ -202,7 +199,7 @@ function StripQuotes
 
 function EscapeSpaces
 {
-	echo $(echo $1 | sed 's/ /\\ /g')
+	echo $(echo "$1" | sed 's/ /\\ /g')
 }
 
 function CleanUp
@@ -429,14 +426,14 @@ function WaitForTaskCompletion
                 then
                         Log "Current task still running."
                 fi
-                if [ $EXEC_TIME -gt $2 ]
+                if [ $EXEC_TIME -gt "$2" ]
                 then
-                        if [ $soft_alert -eq 0 ] && [ $2 != 0 ]
+                        if [ $soft_alert -eq 0 ] && [ "$2" != 0 ]
                         then
                                 LogError "Max soft execution time exceeded for task."
                                 soft_alert=1
                         fi
-                        if [ $EXEC_TIME -gt $3 ] && [ $3 != 0 ]
+                        if [ $EXEC_TIME -gt "$3" ] && [ "$3" != 0 ]
                         then
                                 LogError "Max hard execution time exceeded for task. Stopping task execution."
                                 kill -s SIGTERM $1
@@ -968,18 +965,27 @@ function RsyncExcludePattern
 {
 	# Disable globbing so wildcards from exclusions don't get expanded 
 	set -f
-	OLD_IFS=$IFS
-	IFS=$PATH_SEPARATOR_CHAR
-	for excludedir in $RSYNC_EXCLUDE_PATTERN
-	do
-		if [ "$RSYNC_EXCLUDE" == "" ]
-		then
-			RSYNC_EXCLUDE="--exclude=$(EscapeSpaces $excludedir)"
-		else
-			RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=$(EscapeSpaces $excludedir)"
-		fi
-	done
-	IFS=$OLD_IFS
+        rest="$RSYNC_EXCLUDE_PATTERN"
+        while [ -n "$rest" ]
+        do
+                # Take the string until first occurence until $PATH_SEPARATOR_CHAR
+                str=${rest%%;*}
+                # Handle the last case
+                if [ "$rest" = "${rest/$PATH_SEPARATOR_CHAR/}" ]
+                then
+                        rest=
+                else
+                        # Cut everything before the first occurence of $PATH_SEPARATOR_CHAR
+                        rest=${rest#*$PATH_SEPARATOR_CHAR}
+                fi
+
+                if [ "$RSYNC_EXCLUDE" == "" ]
+                then
+                        RSYNC_EXCLUDE="--exclude=\"$str\""
+                else
+                        RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$str\""
+                fi
+        done	
 	set +f
 }
 
@@ -1020,11 +1026,11 @@ function Rsync
 		RSYNC_NO_RECURSE_ARGS=""
         fi
 
-	# Directories should not be created here
-	#if [ ! -d $local_file_storage_path ]
-	#then
-	#	mkdir -p "$local_file_storage_path"
-	#fi
+	# Creating subdirectories because rsync cannot handle mkdir -p
+	if [ ! -d $local_file_storage_path/$1 ]
+	then
+		mkdir -p "$local_file_storage_path/$1"
+	fi
 
 	CheckConnectivity3rdPartyHosts
 	if [ "$REMOTE_BACKUP" == "yes" ]
@@ -1299,7 +1305,7 @@ function Init
         ## Set compression executable and extension
         if [ "$COMPRESSION_LEVEL" == "" ]
 	then
-		COMPRESSION_LEVEL=9
+		COMPRESSION_LEVEL=3
 	fi
         if type -p xz > /dev/null 2>&1
         then
