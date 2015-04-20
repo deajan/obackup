@@ -51,7 +51,7 @@ fi
 PARTIAL_DIR=".obackup_workdir_partial"
 
 ## Log a state message every $KEEP_LOGGING seconds. Should generally not be equal to soft or hard execution time so your log won't be unnecessary big.
-KEEP_LOGGING=6
+KEEP_LOGGING=1801
 
 ## Correct output of all system commands (language agnostic)
 export LC_ALL=C
