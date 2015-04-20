@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=0304201501
+PROGRAM_BUILD=2004201501
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -51,7 +51,7 @@ fi
 PARTIAL_DIR=".obackup_workdir_partial"
 
 ## Log a state message every $KEEP_LOGGING seconds. Should generally not be equal to soft or hard execution time so your log won't be unnecessary big.
-KEEP_LOGGING=1801
+KEEP_LOGGING=6
 
 ## Correct output of all system commands (language agnostic)
 export LC_ALL=C
@@ -417,6 +417,7 @@ function GetRemoteOS
 function WaitForTaskCompletion
 {
         soft_alert=0
+	log_time=0
         SECONDS_BEGIN=$SECONDS
         while eval "$PROCESS_TEST_CMD" > /dev/null
         do
@@ -424,7 +425,11 @@ function WaitForTaskCompletion
                 EXEC_TIME=$(($SECONDS - $SECONDS_BEGIN))
                 if [ $((($EXEC_TIME + 1) % $KEEP_LOGGING)) -eq 0 ]
                 then
-                        Log "Current task still running."
+			if [ $log_time -ne $EXEC_TIME ]
+			then
+				log_time=$EXEC_TIME
+                        	Log "Current task still running."
+			fi
                 fi
                 if [ $EXEC_TIME -gt "$2" ]
                 then
@@ -1384,14 +1389,20 @@ function Main
 	if [ "$BACKUP_FILES" != "no" ]
 	then
 		ListDirectories
-		GetDirectoriesSize
+		if [ "$dontgetsize" -ne 1 ]
+		then
+			GetDirectoriesSize
+		fi
 	fi
 	if [ $dryrun -ne 1 ]
 	then
 		CreateLocalStorageDirectories
 	fi
 
-	CheckSpaceRequirements
+	if [ "$dontgetsize" -ne 1  ]
+	then
+		CheckSpaceRequirements
+	fi
 
 	# Actual backup process
 	if [ "$BACKUP_SQL" != "no" ]
@@ -1440,6 +1451,7 @@ function Usage
         echo "--partial         Allows rsync to keep partial downloads that can be resumed later (experimental)"
 	echo "--no-maxtime      disables any soft and hard execution time checks"
 	echo "--delete          Deletes files on destination that vanished on source"
+	echo "--dontgetsize	Does not try to evaluate backup size"
 	exit 128
 }
 
@@ -1453,6 +1465,7 @@ then
 else
 	verbose=0
 fi
+dontgetsize=0
 stats=0
 PARTIAL=0
 # Alert flags
@@ -1487,6 +1500,9 @@ do
 		;;
 		--delete)
 		DELETE_VANISHED_FILES="yes"
+		;;
+		--dontgetsize)
+		dontgetsize=1
 		;;
 		--help|-h|--version|-v)
 		Usage

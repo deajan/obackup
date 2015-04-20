@@ -22,6 +22,8 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Added --dontgetsize parameter to backup huge systems immediatly
+- Fixed multiple keep logging messages since sleep time between commands has been lowered under a second
 - Create local subdirectories if not exist before running rsync (rsync doesn't handle mkdir -p)
 - Backported some fixes from Osync
 	- Lowered sleep time between commands
