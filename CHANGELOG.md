@@ -22,6 +22,8 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Added obackup-batch.sh from osync project to rerun failed backups in row
+- Delta copy algorithm is now used even for local copies (usefull for network drives), this can be overriden in config file
 - Added --dontgetsize parameter to backup huge systems immediatly
 - Fixed multiple keep logging messages since sleep time between commands has been lowered under a second
 - Create local subdirectories if not exist before running rsync (rsync doesn't handle mkdir -p)
