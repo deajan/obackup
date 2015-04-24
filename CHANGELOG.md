@@ -22,6 +22,7 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Moved command line arguments after config file load for allowing command line overrides
 - Added a config file option equivalent to --dontgetsize
 - Added basic install script from osync project
 - Added obackup-batch.sh from osync project to rerun failed backups in row

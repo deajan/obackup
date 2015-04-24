@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2404201502
+PROGRAM_BUILD=2404201503
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1396,7 +1396,7 @@ function Main
 	if [ "$BACKUP_FILES" != "no" ]
 	then
 		ListDirectories
-		if [ "$dontgetsize" -ne 1 ] || [ "$DONT_GET_BACKUP_FILE_SIZE" == "no" ]
+		if [ "$DISABLE_GET_BACKUP_FILE_SIZE" != "yes" ]
 		then
 			GetDirectoriesSize
 		fi
@@ -1406,10 +1406,7 @@ function Main
 		CreateLocalStorageDirectories
 	fi
 
-	if [ "$dontgetsize" -ne 1  ]
-	then
-		CheckSpaceRequirements
-	fi
+	CheckSpaceRequirements
 
 	# Actual backup process
 	if [ "$BACKUP_SQL" != "no" ]
@@ -1462,60 +1459,63 @@ function Usage
 	exit 128
 }
 
-# Command line argument flags
-dryrun=0
-silent=0
-no_maxtime=0
-if [ "$DEBUG" == "yes" ]
-then
-	verbose=1
-else
-	verbose=0
-fi
-dontgetsize=0
-stats=0
-PARTIAL=0
-# Alert flags
-soft_alert_total=0
-error_alert=0
-
-if [ $# -eq 0 ]
-then
-	Usage
-fi
-
-for i in "$@"
-do
-	case $i in
-		--dry)
-		dryrun=1
-		;;
-		--silent)
-		silent=1
-		;;
-		--verbose)
+function GetCommandlineArguments
+{
+	# Command line argument flags
+	dryrun=0
+	silent=0
+	no_maxtime=0
+	if [ "$DEBUG" == "yes" ]
+	then
 		verbose=1
-		;;
-		--stats)
-		stats=1
-		;;
-		--partial)
-		PARTIAL="yes"
-		;;
-		--no-maxtime)
-		no_maxtime=1
-		;;
-		--delete)
-		DELETE_VANISHED_FILES="yes"
-		;;
-		--dontgetsize)
-		dontgetsize=1
-		;;
-		--help|-h|--version|-v)
+	else
+		verbose=0
+	fi
+	dontgetsize=0
+	stats=0
+	PARTIAL=0
+	# Alert flags
+	soft_alert_total=0
+	error_alert=0
+
+	if [ $# -eq 0 ]
+	then
 		Usage
-		;;
-	esac
-done
+	fi
+
+	for i in "$@"
+	do
+		case $i in
+			--dry)
+			dryrun=1
+			;;
+			--silent)
+			silent=1
+			;;
+			--verbose)
+			verbose=1
+			;;
+			--stats)
+			stats=1
+			;;
+			--partial)
+			PARTIAL="yes"
+			;;
+			--no-maxtime)
+			no_maxtime=1
+			;;
+			--delete)
+			DELETE_VANISHED_FILES="yes"
+			;;
+			--dontgetsize)
+			DISABLE_GET_BACKUP_FILE_SIZE="yes"
+			;;
+			--help|-h|--version|-v)
+			Usage
+			;;
+		esac
+	done
+}
 
 CheckEnvironment
 if [ $? == 0 ]
@@ -1536,6 +1536,7 @@ then
 			else
 				LOG_FILE="$LOGFILE"
 			fi
+			GetCommandlineArguments "$@"
 
 			GetLocalOS
 			InitLocalOSSettings
