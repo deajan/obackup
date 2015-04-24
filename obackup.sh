@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2004201501
+PROGRAM_BUILD=2404201502
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1249,7 +1249,7 @@ function Init
         fi
 
 	## Set Rsync arguments
-        RSYNC_ARGS=-rlptgoD
+        RSYNC_ARGS=-rlptgoDu
         if [ "$PRESERVE_ACL" == "yes" ]
         then
                 RSYNC_ARGS=$RSYNC_ARGS"A"
@@ -1297,6 +1297,13 @@ function Init
 	if [ "$DELETE_VANISHED_FILES" == "yes" ]
 	then
 		RSYNC_ARGS=$RSYNC_ARGS" --delete"
+	fi
+
+	if [ "$DELTA_COPIES" != "no" ]
+	then
+		RSYNC_ARGS=$RSYNC_ARGS" --no-whole-file"
+	else
+		RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
 	fi
 
         if [ $stats -eq 1 ]
@@ -1389,7 +1396,7 @@ function Main
 	if [ "$BACKUP_FILES" != "no" ]
 	then
 		ListDirectories
-		if [ "$dontgetsize" -ne 1 ]
+		if [ "$dontgetsize" -ne 1 ] || [ "$DONT_GET_BACKUP_FILE_SIZE" == "no" ]
 		then
 			GetDirectoriesSize
 		fi

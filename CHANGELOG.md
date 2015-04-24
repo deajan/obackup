@@ -22,6 +22,7 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Added a config file option equivalent to --dontgetsize
 - Added basic install script from osync project
 - Added obackup-batch.sh from osync project to rerun failed backups in row
 - Delta copy algorithm is now used even for local copies (usefull for network drives), this can be overriden in config file
