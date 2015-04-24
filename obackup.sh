@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2404201503
+PROGRAM_BUILD=2404201504
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -1459,25 +1459,25 @@ function Usage
 	exit 128
 }
 
+# Command line argument flags
+dryrun=0
+silent=0
+no_maxtime=0
+if [ "$DEBUG" == "yes" ]
+then
+	verbose=1
+else
+	verbose=0
+fi
+	dontgetsize=0
+stats=0
+PARTIAL=0
+# Alert flags
+soft_alert_total=0
+error_alert=0
+
 function GetCommandlineArguments
 {
-	# Command line argument flags
-	dryrun=0
-	silent=0
-	no_maxtime=0
-	if [ "$DEBUG" == "yes" ]
-	then
-		verbose=1
-	else
-		verbose=0
-	fi
-	dontgetsize=0
-	stats=0
-	PARTIAL=0
-	# Alert flags
-	soft_alert_total=0
-	error_alert=0
-
 	if [ $# -eq 0 ]
 	then
 		Usage
@@ -1517,6 +1517,7 @@ function GetCommandlineArguments
 	done
 }
 
+GetCommandlineArguments "$@"
 CheckEnvironment
 if [ $? == 0 ]
 then
@@ -1536,7 +1537,6 @@ then
 			else
 				LOG_FILE="$LOGFILE"
 			fi
-			GetCommandlineArguments "$@"
 
 			GetLocalOS
 			InitLocalOSSettings
