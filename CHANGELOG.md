@@ -22,6 +22,7 @@ UNDER WORK
 CHANGELOG
 ---------
 
+- Added detection of obackup.sh script in obackup-batch.sh to overcome mising path in crontab
 - Moved command line arguments after config file load for allowing command line overrides
 - Added a config file option equivalent to --dontgetsize
 - Added basic install script from osync project

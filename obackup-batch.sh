@@ -3,7 +3,7 @@
 PROGRAM="Obackup-batch" # Batch program to run obackup instances sequentially and rerun failed ones
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_BUILD=2404201501
+PROGRAM_BUILD=2504201501
 
 ## Runs an obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
@@ -16,15 +16,6 @@ MAX_EXECUTION_TIME=36000
 
 ## Specifies the number of reruns an instance may get
 MAX_RERUNS=3
-
-
-## Obackup executable full path can be set here if it cannot be found on the system
-if ! type -p obackup.sh > /dev/null 2>&1
-then
-	OBACKUP_EXECUTABLE=./obackup.sh
-else
-	OBACKUP_EXECUTABLE=$(type -p obackup.sh)
-fi
 
 ## Log file path
 if [ -w /var/log ]
@@ -47,6 +38,25 @@ function Log
         fi
 }
 
+function CheckEnvironment
+{
+        ## Obackup executable full path can be set here if it cannot be found on the system
+        if ! type -p obackup.sh > /dev/null 2>&1
+        then
+                if [ -f /usr/local/bin/obackup.sh ]
+                then
+                        OBACKUP_EXECUTABLE=/usr/local/bin/obackup.sh
+                elif [ -f ./obackup.sh ]
+                then
+                        OBACKUP_EXECUTABLE=./obackup.sh
+                else
+                        Log "Could not find obackup.sh"
+                        exit 1
+                fi
+        else
+                OBACKUP_EXECUTABLE=$(type -p obackup.sh)
+        fi
+}
 
 function Batch
 {
@@ -77,8 +87,7 @@ function Batch
 				else
 					RUN_AGAIN=$RUN_AGAIN" $i"
 				fi
-			elif [ $verbose -eq 1 ]
-			then
+			else
 				Log "Run instance $(basename $i) succeed."
 			fi
 		done
@@ -145,5 +154,6 @@ do
 	esac
 done
 
+CheckEnvironment
 Log "$(date) Obackup batch run"
 Batch
