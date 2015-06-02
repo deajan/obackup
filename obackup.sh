@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2404201504
+PROGRAM_BUILD=2805201501
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -78,12 +78,20 @@ TOTAL_FILES_SIZE=0					# Total file size of $DIRECTORIES_TO_BACKUP
 
 ALERT_LOG_FILE=$RUN_DIR/obackup_lastlog		# This is the path where to store a temporary log file to send by mail
 
+# $1 is the string to log, $2 == noprefix will remove prefix
 function Log
 {
-	echo -e "TIME: $SECONDS - $1" >> "$LOG_FILE"
+	if [ "$2" != "noprefix" ]
+	then
+		local prefix="TIME: $SECONDS - "
+	else
+		local prefix=""
+	fi
+
+	echo -e "$prefix$1" >> "$LOG_FILE"
 	if [ $silent -eq 0 ]
 	then
-		echo -e "TIME: $SECONDS - $1"
+		echo -e "$prefix$1"
 	fi
 }
 
@@ -222,10 +230,10 @@ function CleanUp
 function SendAlert
 {
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
-	MAIL_ALERT_MSG=$MAIL_ALERT_MSG$'\n\n'$(tail -n 25 "$LOG_FILE")
+	MAIL_ALERT_MSG=$MAIL_ALERT_MSG$'\n\n'$( sed -n 'H; /^Obackup starting$/h; ${g;p;}' "$LOG_FILE")
         if type -p mutt > /dev/null 2>&1
         then
-            echo $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a "$ALERT_LOG_FILE"
+            echo -e $MAIL_ALERT_MSG | $(type -p mutt) -x -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS -a "$ALERT_LOG_FILE"
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mutt) !!!"
@@ -234,11 +242,11 @@ function SendAlert
             fi
         elif type -p mail > /dev/null 2>&1
 		then
-			echo $MAIL_ALERT_MSG | $(type -p mail) -a "$ALERT_LOG_FILE" -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
+			echo -e $MAIL_ALERT_MSG | $(type -p mail) -a "$ALERT_LOG_FILE" -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
             if [ $? != 0 ]
             then
                 Log "WARNING: Cannot send alert email via $(type -p mail) with attachments !!!"
-				echo $MAIL_ALERT_MSG | $(type -p mail) -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
+				echo -e $MAIL_ALERT_MSG | $(type -p mail) -s "Backup alert for $BACKUP_ID" $DESTINATION_MAILS
 				if [ $? != 0 ]
 				then
 					Log "WARNING: Cannot send alert email via $(type -p mail) without attachments !!!"
@@ -1545,6 +1553,7 @@ then
 			GetRemoteOS
 			InitRemoteOSSettings
 			DATE=$(date)
+			Log "Obackup starting" "noprefix"
 			Log "--------------------------------------------------------------------"
 			Log "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION script begin."
 			Log "--------------------------------------------------------------------"
