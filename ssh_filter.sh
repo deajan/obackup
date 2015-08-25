@@ -33,19 +33,13 @@ function Go
 case ${SSH_ORIGINAL_COMMAND%% *} in
 	"$RSYNC_EXECUTABLE")
 	Go ;;
-	"echo")
-	Go ;;
 	"find")
 	Go ;;
 	"du")
 	Go ;;
-	"mkdir")
+	"mysql")
 	Go ;;
-	"rm")
-	Go ;;
-	"df")
-	Go ;;
-	"mv")
+	"mysqldump")
 	Go ;;
 	"$CMD1")
 	if [ "$CMD1" != "" ]
@@ -74,19 +68,10 @@ case ${SSH_ORIGINAL_COMMAND%% *} in
 		elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo find"* ]]
 		then
 			Go
-                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo mkdir"* ]]
+                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo mysql"* ]]
                 then
                         Go
-                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo rm"* ]]
-                then
-                        Go
-                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo echo"* ]]
-                then
-                        Go
-                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo df"* ]]
-                then
-                        Go
-                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo mv"* ]]
+                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo mysqldump"* ]]
                 then
                         Go
 		elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo $CMD1"* ]]
