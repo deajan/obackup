@@ -3,7 +3,7 @@
 PROGRAM="Obackup-batch" # Batch program to run obackup instances sequentially and rerun failed ones
 AUTHOR="(L) 2013-2014 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_BUILD=2504201501
+PROGRAM_BUILD=2508201501
 
 ## Runs an obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
@@ -56,6 +56,13 @@ function CheckEnvironment
         else
                 OBACKUP_EXECUTABLE=$(type -p obackup.sh)
         fi
+
+	## Check for CONF_FILE_PATH
+        if [ ! -d "$CONF_FILE_PATH" ]
+        then
+                Log "Cannot find conf file path $CONF_FILE_PATH"
+                Usage
+        fi
 }
 
 function Batch
@@ -72,7 +79,7 @@ function Batch
 	done
 
 	RERUNS=0
-	while [ $MAX_EXECUTION_TIME -gt $SECONDS ] && [ "$RUN" != "" ] && [ $MAX_RERUNS -gt $RERUNS ]
+	while ([ $MAX_EXECUTION_TIME -gt $SECONDS ] || [ $MAX_EXECUTION_TIME -eq 0 ]) && [ "$RUN" != "" ] && [ $MAX_RERUNS -gt $RERUNS ]
 	do
 		Log "Obackup instances will be run for: $RUN"
 		for i in $RUN
@@ -110,6 +117,7 @@ function Usage
 	echo "--path=/path/to/conf      Path to obackup conf files, defaults to /etc/obackup"
 	echo "--max-reruns=X            Number of runs  max for failed instances, (defaults to 3)"
 	echo "--max-exec-time=X         Retry failed instances only if max execution time not reached (defaults to 36000 seconds)"
+	echo "--no-maxtime		Run obackup without honoring conf file defined timeouts"
         echo "--dry                     Will run obackup without actually doing anything; just testing"
         echo "--silent                  Will run obackup without any output to stdout, used for cron jobs"
         echo "--verbose                 Increases output"
@@ -135,6 +143,9 @@ do
                 verbose=1
                 opts=$opts" --verbose"
 		;;
+		--no-maxtime)
+		opts=$opts" --no-maxtime"
+		;;
 		--path=*)
 		CONF_FILE_PATH=${i##*=}
 		;;
@@ -144,7 +155,7 @@ do
 		--max-exec-time=*)
 		MAX_EXECUTION_TIME=${i##*=}
 		;;
-		--help|-h)
+		--help|-h|-?)
 		Usage
 		;;
 		*)
