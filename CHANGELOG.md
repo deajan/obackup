@@ -21,6 +21,7 @@ UNDER WORK
 
 CHANGELOG
 ---------
+- Improved some logging
 - Backported some fixes from Osync
 	- Small improvements on install script
 	- Copy ssh_filter.sh from osync project

@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2805201501
+PROGRAM_BUILD=2015082601
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -374,13 +374,13 @@ function GetRemoteOS
                 retval=$?
                 if [ $retval != 0 ]
                 then
-                        eval "$SSH_CMD \"uname -v\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+                        eval "$SSH_CMD \"uname -v\" >> $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
                         child_pid=$!
                         WaitForTaskCompletion $child_pid 120 240
                         retval=$?
                         if [ $retval != 0 ]
                         then
-                                eval "$SSH_CMD \"uname\" > $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
+                                eval "$SSH_CMD \"uname\" >> $RUN_DIR/obackup_remote_os_$SCRIPT_PID 2>&1"
                                 child_pid=$!
                                 WaitForTaskCompletion $child_pid 120 240
                                 retval=$?
@@ -567,11 +567,21 @@ function CreateLocalStorageDirectories
 	if [ ! -d $LOCAL_SQL_STORAGE ] && [ "$BACKUP_SQL" != "no" ]
 	then
 		mkdir -p $LOCAL_SQL_STORAGE
+		if [ $? != 0 ]
+		then
+			LogError "Cannot create directory $LOCAL_SQL_STORAGE"
+			return 1
+		fi
 	fi
 
 	if [ ! -d $LOCAL_FILE_STORAGE ] && [ "$BACKUP_FILES" != "no" ]
 	then
 		mkdir -p $LOCAL_FILE_STORAGE
+		if [ $? != 0 ]
+		then
+			LogError "Cannot create directory $LOCAL_FILE_STORAGE"
+			return 1
+		fi
 	fi
 }
 
@@ -586,6 +596,7 @@ function CheckSpaceRequirements
 			if [ $? != 0 ]
 			then
 				LOCAL_SQL_SPACE=0
+				LogError "Command Output:\n$(cat $RUN_DIR/obackup_local_sql_storage_$SCRIPT_PID)"
 			else
 				LOCAL_SQL_SPACE=$(cat $RUN_DIR/obackup_local_sql_storage_$SCRIPT_PID | tail -1 | awk '{print $4}')
 				LOCAL_SQL_DRIVE=$(cat $RUN_DIR/obackup_local_sql_storage_$SCRIPT_PID | tail -1 | awk '{print $1}')
@@ -614,6 +625,7 @@ function CheckSpaceRequirements
                         if [ $? != 0 ]
                         then
                                 LOCAL_FILE_SPACE=0
+				LogError "Command Output:\n$(cat $RUN_DIR/obackup_local_file_storage_$SCRIPT_PID)"
                         else
                                 LOCAL_FILE_SPACE=$(cat $RUN_DIR/obackup_local_file_storage_$SCRIPT_PID | tail -1 | awk '{print $4}')
                                 LOCAL_FILE_DRIVE=$(cat $RUN_DIR/obackup_local_file_storage_$SCRIPT_PID | tail -1 | awk '{print $1}')
