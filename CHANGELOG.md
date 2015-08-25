@@ -21,7 +21,9 @@ UNDER WORK
 
 CHANGELOG
 ---------
-
+- Backported some fixes from Osync
+	- Small improvments on install script
+	- Copy ssh_filter.sh from osync project
 - Quick and dirty hack to get the full last run log in SendAlert email
 - Added detection of obackup.sh script in obackup-batch.sh to overcome mising path in crontab
 - Moved command line arguments after config file load for allowing command line overrides

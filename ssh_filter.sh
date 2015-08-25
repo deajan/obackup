@@ -1,9 +1,12 @@
 #!/bin/bash
 
-##### Obackup / Osync ssh command filter build 2306201301
-##### This script should be located in /usr/local/bin in the remote system that will be backed up / synced
+##### Osync ssh command filter build 2015070203
+##### This script should be located in /usr/local/bin in the remote system to sync / backup
 ##### It will filter the commands that can be run remotely via ssh.
 ##### Please chmod 755 and chown root:root this file
+
+##### Obackup needed commands: rsync find du mysql mysqldump (sudo)
+##### Osync needed commands: rsync find du echo mkdir rm if df (sudo)
 
 ## If enabled, execution of "sudo" command will be allowed.
 SUDO_EXEC=yes
@@ -30,22 +33,35 @@ function Go
 case ${SSH_ORIGINAL_COMMAND%% *} in
 	"$RSYNC_EXECUTABLE")
 	Go ;;
-	"mysqldump")
-	Go ;;
-	"mysql")
-	Go ;;
 	"echo")
 	Go ;;
 	"find")
 	Go ;;
 	"du")
 	Go ;;
+	"mkdir")
+	Go ;;
+	"rm")
+	Go ;;
+	"df")
+	Go ;;
+	"mv")
+	Go ;;
 	"$CMD1")
-	Go ;;
+	if [ "$CMD1" != "" ]
+	then
+		Go ;;
+	fi
 	"$CMD2")
-	Go ;;
+	if [ "$CMD2" != "" ]
+	then
+		Go ;;
+	fi
 	"$CMD3")
-	Go ;;
+	if [ "$CMD3" != "" ]
+	then
+		Go ;;
+	fi
 	"sudo")
 	if [ "$SUDO_EXEC" == "yes" ]
 	then
@@ -58,22 +74,49 @@ case ${SSH_ORIGINAL_COMMAND%% *} in
 		elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo find"* ]]
 		then
 			Go
+                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo mkdir"* ]]
+                then
+                        Go
+                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo rm"* ]]
+                then
+                        Go
+                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo echo"* ]]
+                then
+                        Go
+                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo df"* ]]
+                then
+                        Go
+                elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo mv"* ]]
+                then
+                        Go
 		elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo $CMD1"* ]]
 		then
+			if [ "$CMD1" != "" ]
+			then
 			Go
+			fi
 		elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo $CMD2"* ]]
 		then
+			if [ "$CMD2" != "" ]
+			then
 			Go
+			fi
 		elif [[ "$SSH_ORIGINAL_COMMAND" == "sudo $CMD3"* ]]
 		then
+			if [ "$CMD3" != "" ]
+			then
 			Go
+			fi
 		else
 			Log "Command [$SSH_ORIGINAL_COMMAND] not allowed."
+			exit 1
 		fi
 	else
 		Log "Command [$SSH_ORIGINAL_COMMAND] not allowed. sudo not enabled."
+		exit 1
 	fi
 	;;
 	*)
 	Log "Command [$SSH_ORIGINAL_COMMAND] not allowed."
+	exit 1
 esac
