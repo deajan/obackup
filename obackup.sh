@@ -97,8 +97,9 @@ function Log
 
 function LogError
 {
-	Log "$1"
-	error_alert=1
+        # \e[93m = light yellow, \e[0m = normal
+        Log "\e[93m$1\e[0m"
+        error_alert=1
 }
 
 function LogDebug
