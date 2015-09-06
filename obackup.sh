@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2015090601
+PROGRAM_BUILD=2015090603
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -654,13 +654,16 @@ function CheckSpaceRequirements
 		LOCAL_SPACE=$(($LOCAL_SQL_SPACE+$LOCAL_FILE_SPACE))
 	fi
 
-        if [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ]
+        if [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ] && [ "$DISABLE_GET_BACKUP_FILE_SIZE" != "yes" ]
         then
-                LogError "Backup size is smaller then expected."
-	elif [ $LOCAL_STORAGE_WARN_MIN_SPACE -gt $LOCAL_SPACE ]
+               	LogError "Backup size is smaller than expected."
+	fi
+
+	if [ $LOCAL_STORAGE_WARN_MIN_SPACE -gt $LOCAL_SPACE ]
 	then
 		LogError "Local disk space is lower than warning value [$LOCAL_STORAGE_WARN_MIN_SPACE Ko]."
 	fi
+
 	Log "Local Space: $LOCAL_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko - Files size: $TOTAL_FILES_SIZE Ko"
 }
 
