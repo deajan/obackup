@@ -21,6 +21,7 @@ UNDER WORK
 
 CHANGELOG
 ---------
+- Fixed no_maxtime not honored
 - Improved some logging, also added highlighting to stdout errors
 - Backported some fixes from Osync
 	- Small improvements on install script

@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2015082601
+PROGRAM_BUILD=2015090601
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -674,7 +674,7 @@ function CheckTotalExecutionTime
                 	LogError "Max soft execution time of the whole backup exceeded while backing up $BACKUP_TASK."
                         soft_alert_total=1
                 fi
-                if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ]
+                if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]
                 then
                         LogError "Max hard execution time of the whole backup exceeded while backing up $BACKUP_TASK, stopping backup process."
                         exit 1
@@ -1574,8 +1574,11 @@ then
 
 			if [ $no_maxtime -eq 1 ]
                         then
-                                SOFT_MAX_EXEC_TIME=0
-                                HARD_MAX_EXEC_TIME=0
+                                SOFT_MAX_EXEC_TIME_DB_TASK=0
+				SOFT_MAX_EXEC_TIME_FILE_TASK=0
+				HARD_MAX_EXEC_TIME_DB_TASK=0
+                                HARD_MAX_EXEC_TIME_FILE_TASK=0
+				HARD_MAX_EXEC_TIME_TOTAL=0
                         fi
 			OLD_IFS=$IFS
 			RunBeforeHook
