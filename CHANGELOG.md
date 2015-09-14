@@ -21,6 +21,7 @@ UNDER WORK
 
 CHANGELOG
 ---------
+- New function to kill child processes
 - Fixed no_maxtime not honored
 - Improved some logging, also added highlighting to stdout errors
 - Backported some fixes from Osync

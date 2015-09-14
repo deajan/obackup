@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2015090603
+PROGRAM_BUILD=2015091401
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -110,6 +110,21 @@ function LogDebug
         fi
 }
 
+# Highly portable killtree function from http://stackoverflow.com/a/18214698/2635443, modded not to kill itself
+function KillTree {
+	local parent=$1 child
+
+	for child in $(ps -o ppid= -o pid= | awk "\$1==$parent {print \$2}"); do
+		KillTree $child
+	done
+	
+	if [ $parent -ne $$ ]; then
+		kill -9 $parent > /dev/null 2>&1
+	fi
+}
+
+killtree $$
+
 function TrapError
 {
 	local JOB="$0"
@@ -130,35 +145,35 @@ function TrapStop
 function TrapQuit
 {
 	# Kill all child processes
-	if type -p pkill > /dev/null 2>&1
-	then
-		## Added || : to return success even if there is no child process to kill
-                pkill -TERM -P $$ || :
-	elif [ "$LOCAL_OS" == "msys" ] || [ "$OSTYPE" == "msys" ]
-	then
+	#if type -p pkill > /dev/null 2>&1
+	#then
+	#	## Added || : to return success even if there is no child process to kill
+        #        pkill -TERM -P $$ || :
+	#elif [ "$LOCAL_OS" == "msys" ] || [ "$OSTYPE" == "msys" ]
+	#then
 		## This is not really a clean way to get child process pids, especially the tail -n +2 which resolves a strange char apparition in msys bash
-		for pid in $(ps -a | awk '{$1=$1}$1' | awk '{print $1" "$2}' | grep " $$$" | awk '{print $1}' | tail -n +2)
-		do
-			kill -9 $pid > /dev/null 2>&1
-		done
-	else
-		for pid in $(ps -a --Group $$)
-		do
-			kill -9 $pid
-		done
-	fi
+	#	for pid in $(ps -a | awk '{$1=$1}$1' | awk '{print $1" "$2}' | grep " $$$" | awk '{print $1}' | tail -n +2)
+	#	do
+	#		kill -9 $pid > /dev/null 2>&1
+	#	done
+	#else
+	#	for pid in $(ps -a --Group $$)
+	#	do
+	#		kill -9 $pid
+	#	done
+	#fi
 
         if [ $error_alert -ne 0 ]
         then
                 SendAlert
 		CleanUp
                 LogError "Backup script finished with errors."
-                exit 1
         else
 		CleanUp
                 Log "Backup script finshed."
-                exit 0
         fi
+	
+	KillTree $$
 }
 
 function Spinner
