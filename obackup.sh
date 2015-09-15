@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2015091401
+PROGRAM_BUILD=2015091501
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -110,20 +110,21 @@ function LogDebug
         fi
 }
 
-# Highly portable killtree function from http://stackoverflow.com/a/18214698/2635443, modded not to kill itself
-function KillTree {
-	local parent=$1 child
+# Portable child (and grandchild) kill function tester under Linux, BSD and MacOS X, see http://stackoverflow.com/a/32566506/2635443
+KillChilds() {
+        local pid="${1}"
+        local self="${2:-false}"
 
-	for child in $(ps -o ppid= -o pid= | awk "\$1==$parent {print \$2}"); do
-		KillTree $child
-	done
-	
-	if [ $parent -ne $$ ]; then
-		kill -9 $parent > /dev/null 2>&1
-	fi
+        if children="$(pgrep -P "$pid")"; then
+                for child in $children; do
+                        KillChilds "$child" true
+                done
+        fi
+
+        if [ "$self" == true ]; then
+                kill -s SIGTERM "$pid" || (sleep 10 && kill -9 "$pid" &)
+        fi
 }
-
-killtree $$
 
 function TrapError
 {
@@ -173,7 +174,7 @@ function TrapQuit
                 Log "Backup script finshed."
         fi
 	
-	KillTree $$
+	KillChilds $$ > /dev/null 2&>1
 }
 
 function Spinner
