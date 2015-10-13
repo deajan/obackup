@@ -5,7 +5,7 @@
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=1.9pre
-PROGRAM_BUILD=2015091501
+PROGRAM_BUILD=2015101301
 
 ## type doesn't work on platforms other than linux (bash). If if doesn't work, always assume output is not a zero exitcode
 if ! type -p "$BASH" > /dev/null
@@ -173,8 +173,8 @@ function TrapQuit
 		CleanUp
                 Log "Backup script finshed."
         fi
-	
-	KillChilds $$ > /dev/null 2&>1
+
+	KillChilds $$ > /dev/null 2>&1
 }
 
 function Spinner
