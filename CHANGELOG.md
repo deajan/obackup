@@ -1,9 +1,3 @@
-SHORT FUTURE IMPROVEMENTS
--------------------------
-
-- Rewrite rsync exclude patterns using \"pattern\" instead of escaped chars
-- Clean most of recursive task creation code
-
 KNOWN ISSUES
 ------------
 
@@ -11,16 +5,27 @@ KNOWN ISSUES
 - Bandwidth parameter is ignored for SQL backups
 - Missing symlink support when run from MSYS environment
 
-UNDER WORK
-----------
-
-- Commands like cp should have their stderr redirected to log file
-- Mysqldump must be checked for not telling success if a table is damaged (also check for event table error)
-- Mysqldump commands error msg must be logged
-
-
 CHANGELOG
 ---------
+
+README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
+
+! XX Dec 2015: obackup v2.0 released
+- Added reverse backup, now backups can be local, pushed or pulled to or from a remote system
+- Better fallback for SendAlert even if disk full
+- Added an alert email sent on warnings while backup script is running
+- Way better logging of errors in _GetDirectoriesSizeX, _BackupDatabaseX, _CreateStorageDirectoriesX
+- Added bogus config file checks & environment checks
+- Full code refactoring to use local and remote code once
+- Fully merged codebase with osync
+	- Added (much) more verbose debugging (and possibility to remove debug code to gain speed)
+	- Replace child_pid by $? directly, add a better sub process killer in TrapQuit
+	- Added some automatic checks in code, for _DEBUG mode (and _PARANOIA_DEBUG now)
+	- Improved Logging
+	- Updated obackup to be fully compliant with coding style
+- A long list of minor improvements
+
+v0-1.x - Jan 2013 - Oct 2015
 - New function to kill child processes
 - Fixed no_maxtime not honored
 - Improved some logging, also added highlighting to stdout errors
