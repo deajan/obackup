@@ -6,7 +6,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015111501
+PROGRAM_BUILD=2015111502
 IS_STABLE=no
 
 FUNC_BUILD=2015111102
@@ -1118,7 +1118,7 @@ function ListRecursiveBackupDirectories {
 	IFS=$PATH_SEPARATOR_CHAR
 	for directory in $DIRECTORY_LIST
 	do
-		FILE_SIZE_LIST="$FILE_SIZE_LIST $(EscapeSpaces $line)"
+		FILE_SIZE_LIST="$FILE_SIZE_LIST $(EscapeSpaces $directory)"
 		if [ "$FILE_BACKUP_TASKS" == "" ]; then
 			FILE_BACKUP_TASKS="$directory"
 		else
