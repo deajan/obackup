@@ -6,7 +6,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015111107
+PROGRAM_BUILD=2015111501
 IS_STABLE=no
 
 FUNC_BUILD=2015111102
@@ -1790,7 +1790,7 @@ function RemoteLogger {
 
 function _RotateBackupsRemoteSSH {
 	OLD_IFS=$IFS
-	IFS=$' \t\n'
+	IFS=$'\t\n'
 	for backup in $(ls -I "*.$PROGRAM.*" "$backup_path")
 	do
 		copy=$ROTATE_COPIES
