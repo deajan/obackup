@@ -6,10 +6,10 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015111502
+PROGRAM_BUILD=2015111603
 IS_STABLE=no
 
-FUNC_BUILD=2015111102
+FUNC_BUILD=2015111601
 ## BEGIN Generic functions for osync & obackup written in 2013-2015 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -552,8 +552,9 @@ function RunLocalCommand {
 
 	if [ $_DRYRUN -ne 0 ]; then
 		Logger "Dryrun: Local command [$command] not run." "NOTICE"
-		return 1
+		return 0
 	fi
+
 	Logger "Running command [$command] on local host." "NOTICE"
 	eval "$command" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1 &
 	WaitForTaskCompletion $! 0 $hard_max_time $FUNCNAME
@@ -584,8 +585,9 @@ function RunRemoteCommand {
 	CheckConnectivityRemoteHost
 	if [ $_DRYRUN -ne 0 ]; then
 		Logger "Dryrun: Local command [$command] not run." "NOTICE"
-		return 1
+		return 0
 	fi
+
 	Logger "Running command [$command] on remote host." "NOTICE"
 	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
@@ -990,7 +992,7 @@ function CheckCurrentConfig {
 	fi
 
 	# Check all variables that should contain a numerical value >= 0
-	declare -a num_vars=(BACKUP_SIZE_MINIMUM BANDWIDTH SQL_WARN_MIN_SPACE FILE_WARN_MIN_SPACE SOFT_MAX_EXEC_TIME_DB_TASK HARD_MAX_EXEC_TIME_DB_TASK COMPRESSION_LEVEL SOFT_MAX_EXEC_TIME_FILE_TASK HARD_MAX_EXEC_TIME_FILE_TASK SOFT_MAX_EXEC_TIME_TOTAL HARD_MAX_EXEC_TIME_TOTAL ROTATE_COPIES MAX_EXEC_TIME_PER_CMD_BEFORE MAX_EXEC_TIME_PER_CMD_AFTER)
+	declare -a num_vars=(BACKUP_SIZE_MINIMUM BANDWIDTH SQL_WARN_MIN_SPACE FILE_WARN_MIN_SPACE SOFT_MAX_EXEC_TIME_DB_TASK HARD_MAX_EXEC_TIME_DB_TASK COMPRESSION_LEVEL SOFT_MAX_EXEC_TIME_FILE_TASK HARD_MAX_EXEC_TIME_FILE_TASK SOFT_MAX_EXEC_TIME_TOTAL HARD_MAX_EXEC_TIME_TOTAL ROTATE_SQL_COPIES ROTATE_FILE_COPIES MAX_EXEC_TIME_PER_CMD_BEFORE MAX_EXEC_TIME_PER_CMD_AFTER)
 	for i in ${num_vars[@]}; do
 		test="if [ $(IsNumeric \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value defined in config file.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
@@ -1346,20 +1348,20 @@ function CreateStorageDirectories {
 	__CheckArguments 0 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		if [ "SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateStorageDirsLocal "$SQL_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_SQL=0
 			fi
 		fi
-		if [ "FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateStorageDirsLocal "$FILE_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_FILES=0
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		if [ "SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateStorageDirsRemote "$SQL_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_SQL=0
@@ -1816,16 +1818,17 @@ function RsyncExcludeFrom {
 
 function _RotateBackupsLocal {
 	local backup_path="${1}"
-	__CheckArguments 1 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
+	local rotate_copies="${2}"
+	__CheckArguments 2 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
 	OLD_IFS=$IFS
 	IFS=$'\t\n'
 	for backup in $(ls -I "*.$PROGRAM.*" "$backup_path")
 	do
-		copy=$ROTATE_COPIES
+		copy=$rotate_copies
 		while [ $copy -gt 1 ]
 		do
-			if [ $copy -eq $ROTATE_COPIES ]; then
+			if [ $copy -eq $rotate_copies ]; then
 				cmd="$COMMAND_SUDO rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
@@ -1882,8 +1885,9 @@ function _RotateBackupsLocal {
 
 function _RotateBackupsRemote {
 	local backup_path="${1}"
-	__CheckArguments 1 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
-$SSH_CMD PROGRAM=$PROGRAM REMOTE_OPERATION=$REMOTE_OPERATION _DEBUG=$_DEBUG COMMAND_SUDO=$COMMAND_SUDO ROTATE_COPIES=$ROTATE_COPIES backup_path="$backup_path" 'bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1 &
+	local rotate_copies="${2}"
+	__CheckArguments 2 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
+$SSH_CMD PROGRAM=$PROGRAM REMOTE_OPERATION=$REMOTE_OPERATION _DEBUG=$_DEBUG COMMAND_SUDO=$COMMAND_SUDO rotate_copies=$rotate_copies backup_path="$backup_path" 'bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1 &
 
 function _RemoteLogger {
 	local value="${1}" # What to log
@@ -1929,10 +1933,10 @@ function _RotateBackupsRemoteSSH {
 	IFS=$'\t\n'
 	for backup in $(ls -I "*.$PROGRAM.*" "$backup_path")
 	do
-		copy=$ROTATE_COPIES
+		copy=$rotate_copies
 		while [ $copy -gt 1 ]
 		do
-			if [ $copy -eq $ROTATE_COPIES ]; then
+			if [ $copy -eq $rotate_copies ]; then
 				cmd="$COMMAND_SUDO rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
 				eval "$cmd"
@@ -2000,14 +2004,15 @@ ENDSSH
 
 function RotateBackups {
 	local backup_path="${1}"
-	__CheckArguments 1 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
+	local rotate_copies="${2}"
+	__CheckArguments 2 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
 	Logger "Rotating backups." "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		_RotateBackupsLocal "$backup_path"
+		_RotateBackupsLocal "$backup_path" "$rotate_copies"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		_RotateBackupsRemote "$backup_path"
+		_RotateBackupsRemote "$backup_path" "$rotate_copies"
 	fi
 }
 
@@ -2099,14 +2104,14 @@ function Main {
 	# Actual backup process
 	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL -eq 1 ]; then
 		if [ $_DRYRUN -ne 1 ] && [ "$ROTATE_SQL_BACKUPS" == "yes" ]; then
-			RotateBackups "$SQL_STORAGE"
+			RotateBackups "$SQL_STORAGE" "$ROTATE_SQL_COPIES"
 		fi
 		BackupDatabases
 	fi
 
 	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES -eq 1 ]; then
 		if [ $_DRYRUN -ne 1 ] && [ "$ROTATE_FILE_BACKUPS" == "yes" ]; then
-			RotateBackups "$FILE_STORAGE"
+			RotateBackups "$FILE_STORAGE" "$ROTATE_FILE_COPIES"
 		fi
 		## Add Rsync exclude patterns
 		RsyncExcludePattern
