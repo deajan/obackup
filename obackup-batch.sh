@@ -3,7 +3,7 @@ SUBPROGRAM=obackup
 PROGRAM="$SUBPROGRAM-batch" # Batch program to run osync / obackup instances sequentially and rerun failed ones
 AUTHOR="(L) 2013-2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr - ozy@netpower.fr"
-PROGRAM_BUILD=2015103001
+PROGRAM_BUILD=2015111801
 
 ## Runs an osync /obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
@@ -63,7 +63,7 @@ function Logger {
 
 function CheckEnvironment {
 	## osync / obackup executable full path can be set here if it cannot be found on the system
-	if ! type -p $SUBPROGRAM.sh > /dev/null 2>&1
+	if ! type $SUBPROGRAM.sh > /dev/null 2>&1
 	then
 		if [ -f /usr/local/bin/$SUBPROGRAM.sh ]
 		then

@@ -6,7 +6,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015111603
+PROGRAM_BUILD=2015111801
 IS_STABLE=no
 
 source "/home/git/common/ofunctions.sh"
@@ -240,7 +240,8 @@ function _ListRecursiveBackupDirectoriesLocal {
 	IFS=$PATH_SEPARATOR_CHAR
 	for directory in $RECURSIVE_DIRECTORY_LIST
 	do
-		cmd="$COMMAND_SUDO $FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.$FUNCNAME.error.$SCRIPT_PID"
+		# No sudo here, assuming you should have all necessary rights for local checks
+		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.$FUNCNAME.error.$SCRIPT_PID"
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $FUNCNAME
@@ -357,7 +358,8 @@ function _GetDirectoriesSizeLocal {
 	local dir_list="${1}"
         __CheckArguments 1 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
-	cmd='echo "'$dir_list'" | xargs '$COMMAND_SUDO' du -cs | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.$FUNCNAME.error.$SCRIPT_PID
+	# No sudo here, assuming you should have all the necessary rights
+	cmd='echo "'$dir_list'" | xargs du -cs | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.$FUNCNAME.error.$SCRIPT_PID
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $FUNCNAME
@@ -430,7 +432,8 @@ function _CreateStorageDirsLocal {
 	        __CheckArguments 1 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ ! -d "$dir_to_create" ]; then
-                $COMMAND_SUDO mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1
+		# No sudo, you should have all necessary rights
+                mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1
                 if [ $? != 0 ]; then
                         Logger "Cannot create directory [$dir_to_create]" "CRITICAL"
 			if [ -f $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID ]; then
@@ -498,7 +501,8 @@ function GetDiskSpaceLocal {
 
         if [ -w "$path_to_check" ]; then
 		# Not elegant solution to make df silent on errors
-		$COMMAND_SUDO df -P "$path_to_check" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
+		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
+		df -P "$path_to_check" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
         	if [ $? != 0 ]; then
         		DISK_SPACE=0
 			Logger "Cannot get disk space in [$path_to_check] on local system." "ERROR"
@@ -760,9 +764,11 @@ function Rsync {
 		RSYNC_NO_RECURSE_ARGS=""
 	fi
 
+	#TODO : add remote directory creation
 	# Creating subdirectories because rsync cannot handle mkdir -p
 	if [ ! -d "$file_storage_path/$backup_directory" ]; then
-		$COMMAND_SUDO mkdir -p "$file_storage_path/$backup_directory"
+		# no sudo here
+		mkdir -p "$file_storage_path/$backup_directory"
 		if [ $? != 0 ]; then
 			Logger "Cannot create storage path [$file_storage_path/$backup_directory]." "ERROR"
 		fi
@@ -943,7 +949,7 @@ function _RotateBackupsLocal {
 		while [ $copy -gt 1 ]
 		do
 			if [ $copy -eq $rotate_copies ]; then
-				cmd="$COMMAND_SUDO rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
+				cmd="rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
 				WaitForTaskCompletion $! 720 0 $FUNCNAME
@@ -953,7 +959,7 @@ function _RotateBackupsLocal {
 			fi
 			path="$backup_path/$backup.$PROGRAM.$(($copy-1))"
 			if [[ -f $path || -d $path ]]; then
-				cmd="$COMMAND_SUDO mv \"$path\" \"$backup_path/$backup.$PROGRAM.$copy\""
+				cmd="mv \"$path\" \"$backup_path/$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
 				WaitForTaskCompletion $! 720 0 $FUNCNAME
@@ -967,7 +973,7 @@ function _RotateBackupsLocal {
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]; then
-			cmd="$COMMAND_SUDO mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 720 0 $FUNCNAME
@@ -976,7 +982,7 @@ function _RotateBackupsLocal {
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
-			cmd="$COMMAND_SUDO cp -R \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="cp -R \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 720 0 $FUNCNAME
@@ -985,7 +991,7 @@ function _RotateBackupsLocal {
 			fi
 
 		else
-			cmd="$COMMAND_SUDO mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 720 0 $FUNCNAME
