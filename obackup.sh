@@ -6,7 +6,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015111801
+PROGRAM_BUILD=2015111901
 IS_STABLE=no
 
 FUNC_BUILD=2015111601
@@ -1201,7 +1201,7 @@ function GetDirectoriesSize {
 	fi
 }
 
-function _CreateStorageDirsLocal {
+function _CreateDirectoryLocal {
 	local dir_to_create="${1}"
 
 	if [ ! -d "$dir_to_create" ]; then
@@ -1217,7 +1217,7 @@ function _CreateStorageDirsLocal {
 	fi
 }
 
-function _CreateStorageDirsRemote {
+function _CreateDirectoryRemote {
 	local dir_to_create="${1}"
 
 	CheckConnectivity3rdPartyHosts
@@ -1237,26 +1237,26 @@ function CreateStorageDirectories {
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
-			_CreateStorageDirsLocal "$SQL_STORAGE"
+			_CreateDirectoryLocal "$SQL_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_SQL=0
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_CreateStorageDirsLocal "$FILE_STORAGE"
+			_CreateDirectoryLocal "$FILE_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_FILES=0
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
-			_CreateStorageDirsRemote "$SQL_STORAGE"
+			_CreateDirectoryRemote "$SQL_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_SQL=0
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_CreateStorageDirsRemote "$FILE_STORAGE"
+			_CreateDirectoryRemote "$FILE_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_FILES=0
 			fi
@@ -1526,25 +1526,19 @@ function Rsync {
 		RSYNC_NO_RECURSE_ARGS=""
 	fi
 
-	#TODO : add remote directory creation
-	# Creating subdirectories because rsync cannot handle mkdir -p
-	if [ ! -d "$file_storage_path/$backup_directory" ]; then
-		# no sudo here
-		mkdir -p "$file_storage_path/$backup_directory"
-		if [ $? != 0 ]; then
-			Logger "Cannot create storage path [$file_storage_path/$backup_directory]." "ERROR"
-		fi
-	fi
-
+	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
+		_CreateDirectoryLocal "$file_storage_path/$backup_directory"
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
+		_CreateDirectoryLocal "$file_storage_path/$backup_directory"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
+		_CreateDirectoryRemote "$file_storage_path/$backup_directory"
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	fi
 
