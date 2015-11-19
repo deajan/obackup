@@ -9,7 +9,7 @@ PROGRAM_VERSION=2.0-pre
 PROGRAM_BUILD=2015111901
 IS_STABLE=no
 
-source "/home/git/common/ofunctions.sh"
+source "./ofunctions.sh"
 
 ## Working directory for partial downloads
 PARTIAL_DIR=".obackup_workdir_partial"
