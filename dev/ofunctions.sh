@@ -1,4 +1,4 @@
-FUNC_BUILD=2015111901
+FUNC_BUILD=2015111601
 ## BEGIN Generic functions for osync & obackup written in 2013-2015 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -249,7 +249,7 @@ function SendAlert {
 	# </OSYNC SPECIFIC>
 
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
-	MAIL_ALERT_MSG="$MAIL_ALERT_MSG"$'\n\n'$(tail -n 50 "$LOG_FILE")
+	MAIL_ALERT_MSG="$MAIL_ALERT_MSG"$'\n\n'$(tail -n 25 "$LOG_FILE")
 	if [ $ERROR_ALERT -eq 1 ]; then
 		subject="Error alert for $INSTANCE_ID"
 	elif [ $WARN_ALERT -eq 1 ]; then
