@@ -6,7 +6,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015111901
+PROGRAM_BUILD=2015112002
 IS_STABLE=no
 
 FUNC_BUILD=2015111901
@@ -85,6 +85,7 @@ function Dummy {
 	sleep .1
 }
 
+#__FUNC:Logger
 function _Logger {
 	local svalue="${1}" # What to log to screen
 	local lvalue="${2:-$svalue}" # What to log to logfile, defaults to screen value
@@ -137,6 +138,7 @@ function Logger {
 		_Logger "$prefix$value"
 	fi
 }
+#__ENDFUNC
 
 # Portable child (and grandchild) kill function tester under Linux, BSD and MacOS X
 function KillChilds {
@@ -998,6 +1000,13 @@ function CheckCurrentConfig {
 		eval "$test"
 	done
 
+	if [ "$FILE_BACKUP" == "yes" ]; then
+		if [ "$DIRECTORY_LIST" == "" ] && [ "$RECURSIVE_DIRECTORY_LIST" == "" ]; then
+			Logger "No directories specified in config file, no files to backup." "ERROR"
+			CAN_BACKUP_FILES=0
+		fi
+	fi
+
 	#TODO-v2.1: Add runtime variable tests (RSYNC_ARGS etc)
 }
 
@@ -1385,7 +1394,7 @@ function GetDiskSpaceLocal {
 	local path_to_check="${1}"
 	__CheckArguments 1 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ -w "$path_to_check" ]; then
+	if [ -d "$path_to_check" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
 		df -P "$path_to_check" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
@@ -1398,7 +1407,7 @@ function GetDiskSpaceLocal {
 			DRIVE=$(cat $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID | tail -1 | awk '{print $1}')
 		fi
 	else
-		Logger "Storage path [$path_to_check] does not exist or cannot write to it." "CRITICAL"
+		Logger "Storage path [$path_to_check] does not exist." "CRITICAL"
 		return 1
 	fi
 }
@@ -1408,7 +1417,7 @@ function GetDiskSpaceRemote {
 	local path_to_check="${1}"
 	__CheckArguments 1 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
-	cmd=$SSH_CMD' "if [ -w \"'$path_to_check'\" ]; then '$COMMAND_SUDO' df -P \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID'" 2>&1'
+	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' df -P \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $FUNCNAME
@@ -1637,7 +1646,7 @@ function Rsync {
 	__CheckArguments 2 $# $FUNCNAME "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$KEEP_ABSOLUTE_PATHS" == "yes" ]; then
-		local file_storage_path="$(dirname $FILE_STORAGE$backup_directory)"
+		local file_storage_path="$(dirname $FILE_STORAGE/${backup_directory#/})"
 	else
 		local file_storage_path="$FILE_STORAGE"
 	fi
@@ -1652,17 +1661,17 @@ function Rsync {
 
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
-		_CreateDirectoryLocal "$file_storage_path/$backup_directory"
+		_CreateDirectoryLocal "$file_storage_path"
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_CreateDirectoryLocal "$file_storage_path/$backup_directory"
+		_CreateDirectoryLocal "$file_storage_path"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		_CreateDirectoryRemote "$file_storage_path/$backup_directory"
+		_CreateDirectoryRemote "$file_storage_path"
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	fi
 

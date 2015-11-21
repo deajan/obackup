@@ -24,6 +24,7 @@ README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, s
 	- Added some automatic checks in code, for _DEBUG mode (and _PARANOIA_DEBUG now)
 	- Improved Logging
 	- Updated obackup to be fully compliant with coding style
+- Fixed creation of bogus subdirectories in some cases
 - A long list of minor improvements
 
 v0-1.x - Jan 2013 - Oct 2015
