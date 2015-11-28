@@ -1,4 +1,4 @@
-FUNC_BUILD=2015111601
+FUNC_BUILD=2015112801
 ## BEGIN Generic functions for osync & obackup written in 2013-2015 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -258,7 +258,6 @@ function SendAlert {
 		subject="Alert for $INSTANCE_ID"
 	fi
 
-	# Need better fallback if mail sending does not succeed
 	if type mutt > /dev/null 2>&1 ; then
 		echo "$MAIL_ALERT_MSG" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS -a "$ALERT_LOG_FILE"
 		if [ $? != 0 ]; then
@@ -336,6 +335,8 @@ function LoadConfigFile {
 		# Shellcheck source=./sync.conf
 		source "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID"
 	fi
+
+	CONFIG_FILE="$config_file"
 }
 
 function GetLocalOS {
