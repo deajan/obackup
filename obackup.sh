@@ -6,7 +6,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015112002
+PROGRAM_BUILD=2015112802
 IS_STABLE=no
 
 FUNC_BUILD=2015111901
@@ -1538,17 +1538,17 @@ function Rsync {
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
 		_CreateDirectoryLocal "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_CreateDirectoryLocal "$file_storage_path"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		_CreateDirectoryRemote "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	fi
 
 	Logger "cmd: $rsync_cmd" "DEBUG"
@@ -1656,11 +1656,14 @@ function CheckTotalExecutionTime {
 	fi
 }
 
-function RsyncExcludePattern {
+function RsyncPatternsAdd {
+	local pattern="${1}"
+	local pattern_type="${2}"       # exclude or include
+
 
 	# Disable globbing so wildcards from exclusions do not get expanded
 	set -f
-	rest="$RSYNC_EXCLUDE_PATTERN"
+	rest="$pattern"
 	while [ -n "$rest" ]
 	do
 		# Take the string until first occurence until $PATH_SEPARATOR_CHAR
@@ -1672,27 +1675,52 @@ function RsyncExcludePattern {
 			# Cut everything before the first occurence of $PATH_SEPARATOR_CHAR
 			rest=${rest#*$PATH_SEPARATOR_CHAR}
 		fi
-
-		if [ "$RSYNC_EXCLUDE" == "" ]; then
-			RSYNC_EXCLUDE="--exclude=\"$str\""
+			if [ "$RSYNC_PATTERNS" == "" ]; then
+			RSYNC_PATTERNS="--"$pattern_type"=\"$str\""
 		else
-			RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$str\""
+			RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"=\"$str\""
 		fi
 	done
 	set +f
 }
 
-function RsyncExcludeFrom {
+function RsyncPatternsFromAdd {
+	local pattern_from="${1}"
+	local pattern_type="${2}"
 
-	if [ ! $RSYNC_EXCLUDE_FROM == "" ]; then
-		## Check if the exclude list has a full path, and if not, add the config file path if there is one
-		if [ "$(basename $RSYNC_EXCLUDE_FROM)" == "$RSYNC_EXCLUDE_FROM" ]; then
-			RSYNC_EXCLUDE_FROM=$(dirname $ConfigFile)/$RSYNC_EXCLUDE_FROM
-		fi
 
-		if [ -e $RSYNC_EXCLUDE_FROM ]; then
-			RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude-from=\"$RSYNC_EXCLUDE_FROM\""
+	## Check if the exclude list has a full path, and if not, add the config file path if there is one
+	if [ "$(basename $pattern_from)" == "$pattern_from" ]; then
+		pattern_from="$(dirname $CONFIG_FILE)/$pattern_from"
+	fi
+
+	if [ -e "$pattern_from" ]; then
+		RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"-from=\"$pattern_from\""
+	fi
+}
+
+function RsyncPatterns {
+
+	if [ "$RSYNC_PATTERN_FIRST" == "exclude" ]; then
+		RsyncPatternsAdd "$RSYNC_EXCLUDE_PATTERN" "exclude"
+		if [ "$RSYNC_EXCLUDE_FROM" != "" ]; then
+			RsyncPatternsFromAdd "$RSYNC_EXCLUDE_FROM" "exclude"
 		fi
+		RsyncPatternsAdd "$RSYNC_INCLUDE_PATTERN" "include"
+		if [ "$RSYNC_INCLUDE_FROM" != "" ]; then
+			RsyncPatternsFromAdd "$RSYNC_INCLUDE_FROM" "include"
+		fi
+	elif [ "$RSYNC_PATTERN_FIRST" == "include" ]; then
+		RsyncPatternsAdd "$RSYNC_INCLUDE_PATTERN" "include"
+		if [ "$RSYNC_INCLUDE_FROM" != "" ]; then
+			RsyncPatternsFromAdd "$RSYNC_INCLUDE_FROM" "include"
+		fi
+		RsyncPatternsAdd "$RSYNC_EXCLUDE_PATTERN" "exclude"
+		if [ "$RSYNC_EXCLUDE_FROM" != "" ]; then
+			RsyncPatternsFromAdd "$RSYNC_EXCLUDE_FROM" "exclude"
+		fi
+	else
+		Logger "Bogus RSYNC_PATTERN_FIRST value in config file. Will not use rsync patterns." "WARN"
 	fi
 }
 
@@ -1931,7 +1959,7 @@ function Init {
 
 	if [ "$PARTIAL" == "yes" ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
-		RSYNC_EXCLUDE="$RSYNC_EXCLUDE --exclude=\"$PARTIAL_DIR\""
+		RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
 	fi
 
 	if [ "$DELETE_VANISHED_FILES" == "yes" ]; then
@@ -1983,10 +2011,8 @@ function Main {
 		if [ $_DRYRUN -ne 1 ] && [ "$ROTATE_FILE_BACKUPS" == "yes" ]; then
 			RotateBackups "$FILE_STORAGE" "$ROTATE_FILE_COPIES"
 		fi
-		## Add Rsync exclude patterns
-		RsyncExcludePattern
-		## Add Rsync exclude from file
-		RsyncExcludeFrom
+		## Add Rsync include / exclude patterns
+		RsyncPatterns
 		FilesBackup
 	fi
 }
