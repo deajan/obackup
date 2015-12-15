@@ -11,6 +11,7 @@ CHANGELOG
 README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
 
 ! XX Dec 2015: obackup v2.0 released
+- Improved upgrade script
 - Revamped rsync patterns to allow include and exclude patterns
 - Better SQL and file backup task separation (rotate copies and warnings are defined for sql and/or file)
 - Added reverse backup, now backups can be local, pushed or pulled to or from a remote system

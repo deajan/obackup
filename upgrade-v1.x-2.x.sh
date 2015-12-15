@@ -6,7 +6,7 @@ AUTHOR="(L) 2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.x"
-PROGRAM_BUILD=2015111601
+PROGRAM_BUILD=2015121501
 
 function Usage {
 	echo "$PROGRAM $PROGRAM_BUILD"
@@ -52,31 +52,31 @@ function RewriteConfigFiles {
 
 	echo "Rewriting config file $config_file"
 
-	sed -i 's/BACKUP_ID=/INSTANCE_ID=/g' "$config_file"
-	sed -i 's/BACKUP_SQL=/SQL_BACKUP=/g' "$config_file"
-	sed -i 's/BACKUP_FILES=/FILE_BACKUP=/g' "$config_file"
-	sed -i 's/LOCAL_SQL_STORAGE=/SQL_STORAGE=/g' "$config_file"
-	sed -i 's/LOCAL_FILE_STORAGE=/FILE_STORAGE=/g' "$config_file"
-	sed -i '/FILE_STORAGE=*/a ENCRYPTION=no' "$config_file"
-	sed -i 's/DISABLE_GET_BACKUP_FILE_SIZE=no/GET_BACKUP_SIZE=yes/g' "$config_file"
-	sed -i 's/DISABLE_GET_BACKUP_FILE_SIZE=yes/GET_BACKUP_SIZE=no/g' "$config_file"
-	sed -i 's/LOCAL_STORAGE_KEEP_ABSOLUTE_PATHS=/KEEP_ABSOLUTE_PATHS=/g' "$config_file"
-	sed -i 's/LOCAL_STORAGE_WARN_MIN_SPACE=/SQL_WARN_MIN_SPACE=/g' "$config_file"
+	sed -i 's/^BACKUP_ID=/INSTANCE_ID=/g' "$config_file"
+	sed -i 's/^BACKUP_SQL=/SQL_BACKUP=/g' "$config_file"
+	sed -i 's/^BACKUP_FILES=/FILE_BACKUP=/g' "$config_file"
+	sed -i 's/^LOCAL_SQL_STORAGE=/SQL_STORAGE=/g' "$config_file"
+	sed -i 's/^LOCAL_FILE_STORAGE=/FILE_STORAGE=/g' "$config_file"
+	sed -i '/^FILE_STORAGE=*/a ENCRYPTION=no' "$config_file"
+	sed -i 's/^DISABLE_GET_BACKUP_FILE_SIZE=no/GET_BACKUP_SIZE=yes/g' "$config_file"
+	sed -i 's/^DISABLE_GET_BACKUP_FILE_SIZE=yes/GET_BACKUP_SIZE=no/g' "$config_file"
+	sed -i 's/^LOCAL_STORAGE_KEEP_ABSOLUTE_PATHS=/KEEP_ABSOLUTE_PATHS=/g' "$config_file"
+	sed -i 's/^LOCAL_STORAGE_WARN_MIN_SPACE=/SQL_WARN_MIN_SPACE=/g' "$config_file"
 	VALUE=$(cat $config_file | grep "SQL_WARN_MIN_SPACE=")
 	VALUE=${VALUE#*=}
-	sed -i '/SQL_WARN_MIN_SPACE=*/a FILE_WARN_MIN_SPACE='$VALUE "$config_file"
+	sed -i '/^SQL_WARN_MIN_SPACE=*/a FILE_WARN_MIN_SPACE='$VALUE "$config_file"
 	# Add encryption
-	sed -i 's/DIRECTORIES_SIMPLE_LIST=/DIRECTORY_LIST=/g' "$config_file"
-	sed -i 's/DIRECTORIES_RECURSE_LIST=/RECURSIVE_DIRECTORY_LIST=/g' "$config_file"
-	sed -i 's/DIRECTORIES_RECURSE_EXCLUDE_LIST=/RECURSIVE_EXCLUDE_LIST=/g' "$config_file"
-	sed -i 's/ROTATE_BACKUPS=/ROTATE_SQL_BACKUPS=/g' "$config_file"
+	sed -i 's/^DIRECTORIES_SIMPLE_LIST=/DIRECTORY_LIST=/g' "$config_file"
+	sed -i 's/^DIRECTORIES_RECURSE_LIST=/RECURSIVE_DIRECTORY_LIST=/g' "$config_file"
+	sed -i 's/^DIRECTORIES_RECURSE_EXCLUDE_LIST=/RECURSIVE_EXCLUDE_LIST=/g' "$config_file"
+	sed -i 's/^ROTATE_BACKUPS=/ROTATE_SQL_BACKUPS=/g' "$config_file"
 	VALUE=$(cat $config_file | grep "ROTATE_SQL_BACKUPS=")
 	VALUE=${VALUE#*=}
-	sed -i '/ROTATE_SQL_BACKUPS=*/a ROTATE_FILE_BACKUPS='$VALUE "$config_file"
-	sed -i 's/ROTATE_COPIES=/ROTATE_SQL_COPIES=/g' "$config_file"
+	sed -i '/^ROTATE_SQL_BACKUPS=*/a ROTATE_FILE_BACKUPS='$VALUE "$config_file"
+	sed -i 's/^ROTATE_COPIES=/ROTATE_SQL_COPIES=/g' "$config_file"
 	VALUE=$(cat $config_file | grep "ROTATE_SQL_COPIES=")
 	VALUE=${VALUE#*=}
-	sed -i '/ROTATE_SQL_COPIES=*/a ROTATE_FILE_COPIES='$VALUE "$config_file"
+	sed -i '/^ROTATE_SQL_COPIES=*/a ROTATE_FILE_COPIES='$VALUE "$config_file"
 
 	REMOTE_BACKUP=$(cat $config_file | grep "REMOTE_BACKUP=")
 	REMOTE_BACKUP=${REMOTE_BACKUP#*=}
@@ -90,14 +90,22 @@ function RewriteConfigFiles {
 
 		REMOTE_SYSTEM_URI="ssh://$REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT/"
 
-		sed -i 's#REMOTE_BACKUP=yes#REMOTE_SYSTEM_URI='$REMOTE_SYSTEM_URI'#g' "$config_file"
-		sed -i '/REMOTE_USER=*/d' "$config_file"
-		sed -i '/REMOTE_HOST=*/d' "$config_file"
-		sed -i '/REMOTE_PORT=*/d' "$config_file"
+		sed -i 's#^REMOTE_BACKUP=yes#REMOTE_SYSTEM_URI='$REMOTE_SYSTEM_URI'#g' "$config_file"
+		sed -i '/^REMOTE_USER=*/d' "$config_file"
+		sed -i '/^REMOTE_HOST=*/d' "$config_file"
+		sed -i '/^REMOTE_PORT=*/d' "$config_file"
 
-		sed -i '/INSTANCE_ID=*/a BACKUP_TYPE=pull' "$config_file"
+		sed -i '/^INSTANCE_ID=*/a BACKUP_TYPE=pull' "$config_file"
 	else
-		sed -i '/INSTANCE_ID=*/a BACKUP_TYPE=local' "$config_file"
+		sed -i '/^INSTANCE_ID=*/a BACKUP_TYPE=local' "$config_file"
+	fi
+
+	# Add missing values if they don't exist
+	sed -i '/^LOGFILE=*/a RSYNC_PATTERN_FIRST=include' "$config_file"
+        sed -i '/^RSYNC_EXCLUDE_PATTERN=*/a RSYNC_INCLUDE_PATTERN=""' "$config_file"
+        sed -i '/^RSYNC_EXCLUDE_FROM=*/a RSYNC_INCLUDE_FROM=""' "$config_file"
+	if grep "DELTA_COPIES=" "$config_file"; then
+		sed -i '/^PARTIAL=*/a DELTA_COPIES=yes' "$config_file"
 	fi
 }
 
