@@ -6,7 +6,7 @@ AUTHOR="(L) 2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.x"
-PROGRAM_BUILD=2015121501
+PROGRAM_BUILD=2016020801
 
 function Usage {
 	echo "$PROGRAM $PROGRAM_BUILD"
@@ -100,13 +100,26 @@ function RewriteConfigFiles {
 		sed -i '/^INSTANCE_ID=*/a BACKUP_TYPE=local' "$config_file"
 	fi
 
-	# Add missing values if they don't exist
-	sed -i '/^LOGFILE=*/a RSYNC_PATTERN_FIRST=include' "$config_file"
-        sed -i '/^RSYNC_EXCLUDE_PATTERN=*/a RSYNC_INCLUDE_PATTERN=""' "$config_file"
-        sed -i '/^RSYNC_EXCLUDE_FROM=*/a RSYNC_INCLUDE_FROM=""' "$config_file"
-	if grep "DELTA_COPIES=" "$config_file"; then
-		sed -i '/^PARTIAL=*/a DELTA_COPIES=yes' "$config_file"
+	# Add new config values from v1.1 if they don't exist
+	if ! grep "RSYNC_PATTERN_FIRST=" "$config_file" > /dev/null; then
+		sed -i '/^LOGFILE=*/a RSYNC_PATTERN_FIRST=include' "$config_file"
 	fi
+
+	if ! grep "RSYNC_INCLUDE_PATTERN=" "$config_file" > /dev/null; then
+	        sed -i '/^RSYNC_EXCLUDE_PATTERN=*/a RSYNC_INCLUDE_PATTERN=""' "$config_file"
+	fi
+
+	if ! grep "RSYNC_INCLUDE_FROM=" "$config_file" > /dev/null; then
+	        sed -i '/^RSYNC_EXCLUDE_FROM=*/a RSYNC_INCLUDE_FROM=""' "$config_file"
+	fi
+
+        if ! grep "PARTIAL=" "$config_file" > /dev/null; then
+                sed -i '/^FORCE_STRANGER_LOCK_RESUME=*/a PARTIAL=no' "$config_file"
+        fi
+
+	if ! grep "DELTA_COPIES=" "$config_file" > /dev/null; then
+                sed -i '/^PARTIAL=*/a DELTA_COPIES=yes' "$config_file"
+        fi
 }
 
 if [ "$1" != "" ] && [ -f "$1" ] && [ -w "$1" ]; then
