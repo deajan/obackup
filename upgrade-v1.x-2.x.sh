@@ -6,7 +6,7 @@ AUTHOR="(L) 2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.x"
-PROGRAM_BUILD=2016020801
+PROGRAM_BUILD=2016021102
 
 function Usage {
 	echo "$PROGRAM $PROGRAM_BUILD"
@@ -43,8 +43,8 @@ function RewriteConfigFiles {
 		exit 1
 	fi
 
-	echo "Backing up [$config_file] as [$config_file.save]"
-	cp --preserve "$config_file" "$config_file.save"
+	echo "Backing up [$config_file] as [$config_file.v1.x.save]"
+	cp --preserve "$config_file" "$config_file.v1.x.save"
 	if [ $? != 0 ]; then
 		echo "Cannot backup config file."
 		exit 1
@@ -101,24 +101,68 @@ function RewriteConfigFiles {
 	fi
 
 	# Add new config values from v1.1 if they don't exist
-	if ! grep "RSYNC_PATTERN_FIRST=" "$config_file" > /dev/null; then
+	if ! grep "^ENCRYPTION=" "$config_file" > /dev/null; then
+		sed -i '/^FILE_STORAGE=*/a ENCRYPTION=no' "$config_file"
+	fi
+
+	if ! grep "^CREATE_DIRS=" "$config_file" > /dev/null; then
+		sed -i '/^ENCRYPTION=*/a CREATE_DIRS=yes' "$config_file"
+	fi
+
+	if ! grep "^GET_BACKUP_SIZE=" "$config_file" > /dev/null; then
+		sed -i '/^BACKUP_SIZE_MINIMUM=*/a GET_BACKUP_SIZE=yes' "$config_file"
+	fi
+
+	if ! grep "^RSYNC_REMOTE_PATH=" "$config_file" > /dev/null; then
+		sed -i '/^SSH_COMPRESSION=*/a RSYNC_REMOTE_PATH=' "$config_file"
+	fi
+
+	if ! grep "^REMOTE_HOST_PING=" "$config_file" > /dev/null; then
+		sed -i '/^RSYNC_REMOTE_PATH=*/a REMOTE_HOST_PING=yes' "$config_file"
+	fi
+
+	if ! grep "^COPY_SYMLINKS=" "$config_file" > /dev/null; then
+		sed -i '/^PRESERVE_XATTR=*/a COPY_SYMLINKS=yes' "$config_file"
+	fi
+
+	if ! grep "^KEEP_DIRLINKS=" "$config_file" > /dev/null; then
+		sed -i '/^COPY_SYMLINKS=*/a KEEP_DIRLINKS=yes' "$config_file"
+	fi
+
+	if ! grep "^PRESERVE_HARDLINKS=" "$config_file" > /dev/null; then
+		sed -i '/^KEEP_DIRLINKS=*/a PRESERVE_HARDLINKS=no' "$config_file"
+	fi
+
+	if ! grep "^RSYNC_PATTERN_FIRST=" "$config_file" > /dev/null; then
 		sed -i '/^LOGFILE=*/a RSYNC_PATTERN_FIRST=include' "$config_file"
 	fi
 
-	if ! grep "RSYNC_INCLUDE_PATTERN=" "$config_file" > /dev/null; then
+	if ! grep "^RSYNC_INCLUDE_PATTERN=" "$config_file" > /dev/null; then
 	        sed -i '/^RSYNC_EXCLUDE_PATTERN=*/a RSYNC_INCLUDE_PATTERN=""' "$config_file"
 	fi
 
-	if ! grep "RSYNC_INCLUDE_FROM=" "$config_file" > /dev/null; then
+	if ! grep "^RSYNC_INCLUDE_FROM=" "$config_file" > /dev/null; then
 	        sed -i '/^RSYNC_EXCLUDE_FROM=*/a RSYNC_INCLUDE_FROM=""' "$config_file"
 	fi
 
-        if ! grep "PARTIAL=" "$config_file" > /dev/null; then
-                sed -i '/^FORCE_STRANGER_LOCK_RESUME=*/a PARTIAL=no' "$config_file"
+        if ! grep "^PARTIAL=" "$config_file" > /dev/null; then
+                sed -i '/^HARD_MAX_EXEC_TIME_FILE_TASK==*/a PARTIAL=no' "$config_file"
         fi
 
-	if ! grep "DELTA_COPIES=" "$config_file" > /dev/null; then
+	if ! grep "^DELETE_VANISHED_FILES=" "$config_file" > /dev/null; then
+		sed -i '/^PARTIAL=*/a DELETE_VANISHED_FILES=no' "$config_file"
+	fi
+
+	if ! grep "^DELTA_COPIES=" "$config_file" > /dev/null; then
                 sed -i '/^PARTIAL=*/a DELTA_COPIES=yes' "$config_file"
+        fi
+
+	if ! grep "^BANDWIDTH=" "$config_file" > /dev/null; then
+                sed -i '/^DELTA_COPIES=*/a BANDWIDTH=0' "$config_file"
+        fi
+
+	if ! grep "^STOP_ON_CMD_ERROR=" "$config_file" > /dev/null; then
+                sed -i '/^MAX_EXEC_TIME_PER_CMD_AFTER=*/a STOP_ON_CMD_ERROR=no' "$config_file"
         fi
 }
 
