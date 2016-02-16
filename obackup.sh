@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 
 ###### Remote push/pull (or local) backup script for files & databases
-###### (L) 2013-2015 by Orsiris "Ozy" de Jong (www.netpower.fr)
 PROGRAM="obackup"
 AUTHOR="(L) 2013-2015 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2015112802
+PROGRAM_BUILD=2016021601
 IS_STABLE=no
 
-FUNC_BUILD=2015113001
+FUNC_BUILD=2016021604
 ## BEGIN Generic functions for osync & obackup written in 2013-2015 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -248,6 +247,12 @@ function SendAlert {
 	# </OSYNC SPECIFIC>
 
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
+	if [ $? != 0 ]; then
+		Logger "Cannot create [$ALERT_LOG_FILE]" "WARN"
+		mail_no_attachment=1
+	else
+		mail_no_attachment=0
+	fi
 	MAIL_ALERT_MSG="$MAIL_ALERT_MSG"$'\n\n'$(tail -n 50 "$LOG_FILE")
 	if [ $ERROR_ALERT -eq 1 ]; then
 		subject="Error alert for $INSTANCE_ID"
@@ -257,8 +262,11 @@ function SendAlert {
 		subject="Alert for $INSTANCE_ID"
 	fi
 
+	if [ mail_no_attachment -eq 0 ]; then
+		attachment_command="-a $ALERT_LOG_FILE"
+	fi
 	if type mutt > /dev/null 2>&1 ; then
-		echo "$MAIL_ALERT_MSG" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS -a "$ALERT_LOG_FILE"
+		echo "$MAIL_ALERT_MSG" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS $attachment_command
 		if [ $? != 0 ]; then
 			Logger "WARNING: Cannot send alert email via $(type -p mutt) !!!" "WARN"
 		else
@@ -268,7 +276,14 @@ function SendAlert {
 	fi
 
 	if type mail > /dev/null 2>&1 ; then
-		echo "$MAIL_ALERT_MSG" | $(type -p mail) -a "$ALERT_LOG_FILE" -s "$subject" $DESTINATION_MAILS
+		if [ $mail_no_attachment -eq 0 ] && $(type -p mail) -V | grep "GNU" > /dev/null; then
+			attachment_command="-A $ALERT_LOG_FILE"
+		elif [ $mail_no_attachment -eq 0 ] && $(type -p mail) -V > /dev/null; then
+			attachment_command="-a $ALERT_LOG_FILE"
+		else
+			attachment_command=""
+		fi
+		echo "$MAIL_ALERT_MSG" | $(type -p mail) $attachment_command -s "$subject" $DESTINATION_MAILS
 		if [ $? != 0 ]; then
 			Logger "WARNING: Cannot send alert email via $(type -p mail) with attachments !!!" "WARN"
 			echo "$MAIL_ALERT_MSG" | $(type -p mail) -s "$subject" $DESTINATION_MAILS
@@ -310,7 +325,7 @@ function SendAlert {
 	fi
 
 	# If function has not returned 0 yet, assume it's critical that no alert can be sent
-	Logger "/!\ CRITICAL: Cannot send alert" "ERROR" # Is not marked critical because execution must continue
+	Logger "/!\ CRITICAL: Cannot send alert (neither mutt, mail, sendmail nor sendemail found)." "ERROR" # Is not marked critical because execution must continue
 
 	# Delete tmp log file
 	if [ -f "$ALERT_LOG_FILE" ]; then
@@ -688,13 +703,14 @@ function PreInit {
         fi
 
 	 ## Set rsync default arguments
-        RSYNC_ARGS="-rlptgoD"
+        RSYNC_ARGS="-rltD"
+	RSYNC_ATTR_ARGS="-pgo"
 
         if [ "$PRESERVE_ACL" == "yes" ]; then
-                RSYNC_ARGS=$RSYNC_ARGS" -A"
+                RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
         fi
         if [ "$PRESERVE_XATTR" == "yes" ]; then
-                RSYNC_ARGS=$RSYNC_ARGS" -X"
+                RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -X"
         fi
         if [ "$RSYNC_COMPRESS" == "yes" ]; then
                 RSYNC_ARGS=$RSYNC_ARGS" -z"
@@ -709,7 +725,7 @@ function PreInit {
                 RSYNC_ARGS=$RSYNC_ARGS" -H"
         fi
         if [ "$CHECKSUM" == "yes" ]; then
-                RSYNC_ARGS=$RSYNC_ARGS" --checksum"
+                RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --checksum"
         fi
 	if [ $_DRYRUN -eq 1 ]; then
                 RSYNC_ARGS=$RSYNC_ARGS" -n"
@@ -717,6 +733,17 @@ function PreInit {
         fi
         if [ "$BANDWIDTH" != "" ] && [ "$BANDWIDTH" != "0" ]; then
                 RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
+        fi
+
+        if [ "$PARTIAL" == "yes" ]; then
+                RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
+                RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
+        fi
+
+	if [ "$DELTA_COPIES" != "no" ]; then
+                RSYNC_ARGS=$RSYNC_ARGS" --no-whole-file"
+        else
+            	RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
         fi
 
 	 ## Set compression executable and extension
@@ -785,7 +812,7 @@ function InitRemoteOSSettings {
 
         ## MacOSX does not use the -E parameter like Linux or BSD does (-E is mapped to extended attrs instead of preserve executability)
         if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
-                RSYNC_ARGS=$RSYNC_ARGS" -E"
+                RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -E"
         fi
 
         if [ "$REMOTE_OS" == "msys" ]; then
@@ -1537,17 +1564,17 @@ function Rsync {
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
 		_CreateDirectoryLocal "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_CreateDirectoryLocal "$file_storage_path"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		_CreateDirectoryRemote "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID 2>&1"
 	fi
 
 	Logger "cmd: $rsync_cmd" "DEBUG"
@@ -1956,19 +1983,8 @@ function Init {
 		RSYNC_ARGS=$RSYNC_ARGS"i"
 	fi
 
-	if [ "$PARTIAL" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
-		RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
-	fi
-
 	if [ "$DELETE_VANISHED_FILES" == "yes" ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" --delete"
-	fi
-
-	if [ "$DELTA_COPIES" != "no" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --no-whole-file"
-	else
-		RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
 	fi
 
 	if [ $stats -eq 1 ]; then
@@ -2030,9 +2046,9 @@ function Usage {
 	echo "usage: obackup.sh /path/to/backup.conf [OPTIONS]"
 	echo ""
 	echo "OPTIONS:"
-	echo "--dry: will run obackup without actually doing anything, just testing"
-	echo "--silent: will run obackup without any output to stdout, usefull for cron backups"
-	echo "--verbose: adds command outputs"
+	echo "--dry             will run obackup without actually doing anything, just testing"
+	echo "--silent          will run obackup without any output to stdout, usefull for cron backups"
+	echo "--verbose         adds command outputs"
 	echo "--stats           Adds rsync transfer statistics to verbose output"
 	echo "--partial         Allows rsync to keep partial downloads that can be resumed later (experimental)"
 	echo "--no-maxtime      disables any soft and hard execution time checks"
