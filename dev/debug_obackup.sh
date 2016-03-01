@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016030101
+PROGRAM_BUILD=2016030102
 IS_STABLE=no
 
 ## FUNC_BUILD=2016021803
@@ -2155,10 +2155,10 @@ function Init {
 	fi
 
 	## Add update to default RSYNC_ARGS
-	RSYNC_ARGS=$RSYNC_ARGS"u"
+	RSYNC_ARGS=$RSYNC_ARGS" -u"
 
 	if [ $_VERBOSE -eq 1 ]; then
-		RSYNC_ARGS=$RSYNC_ARGS"i"
+		RSYNC_ARGS=$RSYNC_ARGS" -i"
 	fi
 
 	if [ "$DELETE_VANISHED_FILES" == "yes" ]; then
