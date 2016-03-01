@@ -5,10 +5,10 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016021902
+PROGRAM_BUILD=2016030101
 IS_STABLE=no
 
-## FUNC_BUILD=2016021802
+## FUNC_BUILD=2016021803
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -679,6 +679,76 @@ function CheckConnectivity3rdPartyHosts {
 
 #__BEGIN_WITH_PARANOIA_DEBUG
 #__END_WITH_PARANOIA_DEBUG
+
+function RsyncPatternsAdd {
+	local pattern="${1}"
+	local pattern_type="${2}"	# exclude or include
+
+	local rest=
+
+	# Disable globbing so wildcards from exclusions do not get expanded
+	set -f
+	rest="$pattern"
+	while [ -n "$rest" ]
+	do
+		# Take the string until first occurence until $PATH_SEPARATOR_CHAR
+		str=${rest%%;*}
+		# Handle the last case
+		if [ "$rest" = "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
+			rest=
+		else
+			# Cut everything before the first occurence of $PATH_SEPARATOR_CHAR
+			rest=${rest#*$PATH_SEPARATOR_CHAR}
+		fi
+			if [ "$RSYNC_PATTERNS" == "" ]; then
+			RSYNC_PATTERNS="--"$pattern_type"=\"$str\""
+		else
+			RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"=\"$str\""
+		fi
+	done
+	set +f
+}
+
+function RsyncPatternsFromAdd {
+        local pattern_from="${1}"
+        local pattern_type="${2}"
+
+	local pattern_from=
+
+        ## Check if the exclude list has a full path, and if not, add the config file path if there is one
+        if [ "$(basename $pattern_from)" == "$pattern_from" ]; then
+                pattern_from="$(dirname $CONFIG_FILE)/$pattern_from"
+        fi
+
+        if [ -e "$pattern_from" ]; then
+                RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"-from=\"$pattern_from\""
+        fi
+}
+
+function RsyncPatterns {
+
+        if [ "$RSYNC_PATTERN_FIRST" == "exclude" ]; then
+                RsyncPatternsAdd "$RSYNC_EXCLUDE_PATTERN" "exclude"
+                if [ "$RSYNC_EXCLUDE_FROM" != "" ]; then
+                        RsyncPatternsFromAdd "$RSYNC_EXCLUDE_FROM" "exclude"
+                fi
+                RsyncPatternsAdd "$RSYNC_INCLUDE_PATTERN" "include"
+                if [ "$RSYNC_INCLUDE_FROM" != "" ]; then
+                        RsyncPatternsFromAdd "$RSYNC_INCLUDE_FROM" "include"
+                fi
+        elif [ "$RSYNC_PATTERN_FIRST" == "include" ]; then
+                RsyncPatternsAdd "$RSYNC_INCLUDE_PATTERN" "include"
+                if [ "$RSYNC_INCLUDE_FROM" != "" ]; then
+                        RsyncPatternsFromAdd "$RSYNC_INCLUDE_FROM" "include"
+                fi
+                RsyncPatternsAdd "$RSYNC_EXCLUDE_PATTERN" "exclude"
+                if [ "$RSYNC_EXCLUDE_FROM" != "" ]; then
+                        RsyncPatternsFromAdd "$RSYNC_EXCLUDE_FROM" "exclude"
+                fi
+        else
+                Logger "Bogus RSYNC_PATTERN_FIRST value in config file. Will not use rsync patterns." "WARN"
+        fi
+}
 
 function PreInit {
 
@@ -1741,78 +1811,6 @@ function CheckTotalExecutionTime {
 	fi
 }
 
-function RsyncPatternsAdd {
-	local pattern="${1}"
-	local pattern_type="${2}"       # exclude or include
-
-
-	local rest
-
-	# Disable globbing so wildcards from exclusions do not get expanded
-	set -f
-	rest="$pattern"
-	while [ -n "$rest" ]
-	do
-		# Take the string until first occurence until $PATH_SEPARATOR_CHAR
-		str=${rest%%;*}
-		# Handle the last case
-		if [ "$rest" = "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
-			rest=
-		else
-			# Cut everything before the first occurence of $PATH_SEPARATOR_CHAR
-			rest=${rest#*$PATH_SEPARATOR_CHAR}
-		fi
-			if [ "$RSYNC_PATTERNS" == "" ]; then
-			RSYNC_PATTERNS="--"$pattern_type"=\"$str\""
-		else
-			RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"=\"$str\""
-		fi
-	done
-	set +f
-}
-
-function RsyncPatternsFromAdd {
-	local pattern_from="${1}"
-	local pattern_type="${2}"
-
-
-	local pattern_from
-
-	## Check if the exclude list has a full path, and if not, add the config file path if there is one
-	if [ "$(basename $pattern_from)" == "$pattern_from" ]; then
-		pattern_from="$(dirname $CONFIG_FILE)/$pattern_from"
-	fi
-
-	if [ -e "$pattern_from" ]; then
-		RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"-from=\"$pattern_from\""
-	fi
-}
-
-function RsyncPatterns {
-
-	if [ "$RSYNC_PATTERN_FIRST" == "exclude" ]; then
-		RsyncPatternsAdd "$RSYNC_EXCLUDE_PATTERN" "exclude"
-		if [ "$RSYNC_EXCLUDE_FROM" != "" ]; then
-			RsyncPatternsFromAdd "$RSYNC_EXCLUDE_FROM" "exclude"
-		fi
-		RsyncPatternsAdd "$RSYNC_INCLUDE_PATTERN" "include"
-		if [ "$RSYNC_INCLUDE_FROM" != "" ]; then
-			RsyncPatternsFromAdd "$RSYNC_INCLUDE_FROM" "include"
-		fi
-	elif [ "$RSYNC_PATTERN_FIRST" == "include" ]; then
-		RsyncPatternsAdd "$RSYNC_INCLUDE_PATTERN" "include"
-		if [ "$RSYNC_INCLUDE_FROM" != "" ]; then
-			RsyncPatternsFromAdd "$RSYNC_INCLUDE_FROM" "include"
-		fi
-		RsyncPatternsAdd "$RSYNC_EXCLUDE_PATTERN" "exclude"
-		if [ "$RSYNC_EXCLUDE_FROM" != "" ]; then
-			RsyncPatternsFromAdd "$RSYNC_EXCLUDE_FROM" "exclude"
-		fi
-	else
-		Logger "Bogus RSYNC_PATTERN_FIRST value in config file. Will not use rsync patterns." "WARN"
-	fi
-}
-
 function _RotateBackupsLocal {
 	local backup_path="${1}"
 	local rotate_copies="${2}"
@@ -1833,7 +1831,7 @@ function _RotateBackupsLocal {
 				cmd="rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
-				WaitForTaskCompletion $! 720 0 ${FUNCNAME[0]}
+				WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]}
 				if [ $? != 0 ]; then
 					Logger "Cannot delete oldest copy [$backup_path/$backup.$PROGRAM.$copy]." "ERROR"
 				fi
@@ -1843,7 +1841,7 @@ function _RotateBackupsLocal {
 				cmd="mv \"$path\" \"$backup_path/$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
-				WaitForTaskCompletion $! 720 0 ${FUNCNAME[0]}
+				WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]}
 				if [ $? != 0 ]; then
 					Logger "Cannot move [$path] to [$backup_path/$backup.$PROGRAM.$copy]." "ERROR"
 				fi
@@ -1857,7 +1855,7 @@ function _RotateBackupsLocal {
 			cmd="mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 720 0 ${FUNCNAME[0]}
+			WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]}
 			if [ $? != 0 ]; then
 				Logger "Cannot move [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
 			fi
@@ -1866,7 +1864,7 @@ function _RotateBackupsLocal {
 			cmd="cp -R \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 720 0 ${FUNCNAME[0]}
+			WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]}
 			if [ $? != 0 ]; then
 				Logger "Cannot copy [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
 			fi
@@ -1875,7 +1873,7 @@ function _RotateBackupsLocal {
 			cmd="mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 720 0 ${FUNCNAME[0]}
+			WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]}
 			if [ $? != 0 ]; then
 				Logger "Cannot move [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
 			fi
