@@ -8,7 +8,7 @@ PROGRAM_VERSION=2.0-pre
 PROGRAM_BUILD=2016030301
 IS_STABLE=no
 
-## FUNC_BUILD=2016030301
+## FUNC_BUILD=2016030302
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -107,15 +107,15 @@ function Logger {
 	# </OSYNC SPECIFIC>
 
 	if [ "$level" == "CRITICAL" ]; then
-		_Logger "$prefix\e[41m$level:$value\e[0m" "$prefix$value"
+		_Logger "$prefix\e[41m$value\e[0m" "$prefix$level:$value"
 		ERROR_ALERT=1
 		return
 	elif [ "$level" == "ERROR" ]; then
-		_Logger "$prefix\e[91m$level:$value\e[0m" "$prefix$value"
+		_Logger "$prefix\e[91m$value\e[0m" "$prefix$level:$value"
 		ERROR_ALERT=1
 		return
 	elif [ "$level" == "WARN" ]; then
-		_Logger "$prefix\e[93m$level:$value\e[0m" "$prefix$value"
+		_Logger "$prefix\e[93m$value\e[0m" "$prefix$level:$value"
 		WARN_ALERT=1
 		return
 	elif [ "$level" == "NOTICE" ]; then
