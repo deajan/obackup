@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016030301
+PROGRAM_BUILD=2016030302
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -27,7 +27,7 @@ CAN_BACKUP_SQL=1
 CAN_BACKUP_FILES=1
 
 function TrapStop {
-	Logger " /!\ WARNING: Manual exit of backup script. Backups may be in inconsistent state." "WARN"
+	Logger "/!\ Manual exit of backup script. Backups may be in inconsistent state." "WARN"
 	exit 1
 }
 

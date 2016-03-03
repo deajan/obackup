@@ -1,4 +1,4 @@
-## FUNC_BUILD=2016030302
+## FUNC_BUILD=2016030303
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -271,9 +271,10 @@ function SendAlert {
 		attachment_command="-a $ALERT_LOG_FILE"
 	fi
 	if type mutt > /dev/null 2>&1 ; then
-		echo "$MAIL_ALERT_MSG" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS $attachment_command
+		cmd="echo \"$MAIL_ALERT_MSG\" | $(type -p mutt) -x -s \"$subject\" $DESTINATION_MAILS $attachment_command"
+		eval $cmd
 		if [ $? != 0 ]; then
-			Logger "WARNING: Cannot send alert email via $(type -p mutt) !!!" "WARN"
+			Logger "Cannot send alert email via $(type -p mutt) !!!" "WARN"
 		else
 			Logger "Sent alert mail using mutt." "NOTICE"
 			return 0
@@ -288,12 +289,14 @@ function SendAlert {
 		else
 			attachment_command=""
 		fi
-		echo "$MAIL_ALERT_MSG" | $(type -p mail) $attachment_command -s "$subject" $DESTINATION_MAILS
+		cmd="echo \"$MAIL_ALERT_MSG\" | $(type -p mail) $attachment_command -s \"$subject\" $DESTINATION_MAILS"
+		eval $cmd
 		if [ $? != 0 ]; then
-			Logger "WARNING: Cannot send alert email via $(type -p mail) with attachments !!!" "WARN"
-			echo "$MAIL_ALERT_MSG" | $(type -p mail) -s "$subject" $DESTINATION_MAILS
+			Logger "Cannot send alert email via $(type -p mail) with attachments !!!" "WARN"
+			cmd="echo \"$MAIL_ALERT_MSG\" | $(type -p mail) -s \"$subject\" $DESTINATION_MAILS"
+			eval $cmd
 			if [ $? != 0 ]; then
-				Logger "WARNING: Cannot send alert email via $(type -p mail) without attachments !!!" "WARN"
+				Logger "Cannot send alert email via $(type -p mail) without attachments !!!" "WARN"
 			else
 				Logger "Sent alert mail using mail command without attachment." "NOTICE"
 				return 0
@@ -305,9 +308,10 @@ function SendAlert {
 	fi
 
 	if type sendmail > /dev/null 2>&1 ; then
-		echo -e "Subject:$subject\r\n$MAIL_ALERT_MSG" | $(type -p sendmail) $DESTINATION_MAILS
+		cmd="echo -e \"Subject:$subject\r\n$MAIL_ALERT_MSG\" | $(type -p sendmail) $DESTINATION_MAILS"
+		eval $cmd
 		if [ $? != 0 ]; then
-			Logger "WARNING: Cannot send alert email via $(type -p sendmail) !!!" "WARN"
+			Logger "Cannot send alert email via $(type -p sendmail) !!!" "WARN"
 		else
 			Logger "Sent alert mail using sendmail command without attachment." "NOTICE"
 			return 0
@@ -322,7 +326,7 @@ function SendAlert {
 		fi
 		$(type -p sendemail) -f $SENDER_MAIL -t $DESTINATION_MAILS -u "$subject" -m "$MAIL_ALERT_MSG" -s $SMTP_SERVER $SMTP_OPTIONS > /dev/null 2>&1
 		if [ $? != 0 ]; then
-			Logger "WARNING: Cannot send alert email via $(type -p sendemail) !!!" "WARN"
+			Logger "Cannot send alert email via $(type -p sendemail) !!!" "WARN"
 		else
 			Logger "Sent alert mail using sendemail command without attachment." "NOTICE"
 			return 0
@@ -330,7 +334,7 @@ function SendAlert {
 	fi
 
 	# If function has not returned 0 yet, assume it's critical that no alert can be sent
-	Logger "/!\ CRITICAL: Cannot send alert (neither mutt, mail, sendmail nor sendemail found)." "ERROR" # Is not marked critical because execution must continue
+	Logger "Cannot send alert (neither mutt, mail, sendmail nor sendemail found)." "ERROR" # Is not marked critical because execution must continue
 
 	# Delete tmp log file
 	if [ -f "$ALERT_LOG_FILE" ]; then
