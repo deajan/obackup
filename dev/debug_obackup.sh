@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016030102
+PROGRAM_BUILD=2016030301
 IS_STABLE=no
 
 ## FUNC_BUILD=2016021803
@@ -1019,6 +1019,10 @@ function TrapQuit {
 		exitcode=0
 	fi
 
+	if [ -f "$RUN_DIR/$PROGRAM.$INSTANCE_ID" ]; then
+		rm -f "$RUN_DIR/$PROGRAM.$INSTANCE_ID"
+	fi
+
 	KillChilds $$ > /dev/null 2>&1
 	exit $exitcode
 }
@@ -1094,6 +1098,20 @@ function CheckCurrentConfig {
 	fi
 
 	#TODO-v2.1: Add runtime variable tests (RSYNC_ARGS etc)
+}
+
+function CheckRunningInstances {
+	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+
+	if [ -f "$RUN_DIR/$PROGRAM.$INSTANCE_ID" ]; then
+		pid=$(cat "$RUN_DIR/$PROGRAM.$INSTANCE_ID")
+		if ps aux | awk '{print $2}' | grep $pid > /dev/null; then
+			Logger "Another instance [$INSTANCE_ID] of obackup is already running." "CRITICAL"
+			exit 1
+		fi
+	fi
+
+	echo $SCRIPT_PID > "$RUN_DIR/$PROGRAM.$INSTANCE_ID"
 }
 
 function _ListDatabasesLocal {
@@ -2304,6 +2322,7 @@ fi
 GetLocalOS
 InitLocalOSSettings
 CheckEnvironment
+CheckRunningInstances
 PreInit
 Init
 PostInit
