@@ -10,7 +10,9 @@ CHANGELOG
 
 README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
 
-! XX Dec 2015: obackup v2.0 released
+! XX Mar 2016: obackup v2.0 released
+- Improved mail fallback
+- More logging enhancements
 - Improved upgrade script
 - Revamped rsync patterns to allow include and exclude patterns
 - Better SQL and file backup task separation (rotate copies and warnings are defined for sql and/or file)
@@ -27,7 +29,7 @@ README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, s
 	- Improved Logging
 	- Updated obackup to be fully compliant with coding style
 - Fixed creation of bogus subdirectories in some cases
-- A long list of minor improvements
+- A long list of minor improvements and bug fixes
 
 v0-1.x - Jan 2013 - Oct 2015
 - New function to kill child processes

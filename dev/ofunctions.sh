@@ -1,4 +1,4 @@
-## FUNC_BUILD=2016030303
+## FUNC_BUILD=2016030401
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -30,6 +30,8 @@ else
 	trap 'TrapError ${LINENO} $?' ERR
 	_VERBOSE=1
 fi
+
+#### MINIMAL-FUNCTION-SET BEGIN ####
 
 SCRIPT_PID=$$
 
@@ -144,95 +146,6 @@ function KillChilds {
 	fi
 }
 
-function TrapError {
-	local job="$0"
-	local line="$1"
-	local code="${2:-1}"
-	if [ $_SILENT -eq 0 ]; then
-		echo -e " /!\ ERROR in ${job}: Near line ${line}, exit code ${code}"
-	fi
-}
-
-function Spinner {
-	if [ $_SILENT -eq 1 ]; then
-		return 0
-	fi
-
-	case $toggle
-	in
-	1)
-	echo -n " \ "
-	echo -ne "\r"
-	toggle="2"
-	;;
-
-	2)
-	echo -n " | "
-	echo -ne "\r"
-	toggle="3"
-	;;
-
-	3)
-	echo -n " / "
-	echo -ne "\r"
-	toggle="4"
-	;;
-
-	*)
-	echo -n " - "
-	echo -ne "\r"
-	toggle="1"
-	;;
-	esac
-}
-
-function SedStripQuotes {
-        echo $(echo $1 | sed "s/^\([\"']\)\(.*\)\1\$/\2/g")
-}
-
-function StripSingleQuotes {
-	local string="${1}"
-	string="${string/#\'/}" # Remove singlequote if it begins string
-	string="${string/%\'/}" # Remove singlequote if it ends string
-	echo "$string"
-}
-
-function StripDoubleQuotes {
-	local string="${1}"
-	string="${string/#\"/}"
-	string="${string/%\"/}"
-	echo "$string"
-}
-
-function StripQuotes {
-	local string="${1}"
-	echo "$(StripSingleQuotes $(StripDoubleQuotes $string))"
-}
-
-function EscapeSpaces {
-	local string="${1}" # String on which spaces will be escaped
-	echo "${string// /\ }"
-}
-
-function IsNumeric {
-	eval "local value=\"${1}\"" # Needed so variable variables can be processed
-
-	local re="^-?[0-9]+([.][0-9]+)?$"
-	if [[ $value =~ $re ]]; then
-		echo 1
-	else
-		echo 0
-	fi
-}
-
-function CleanUp {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
-
-	if [ "$_DEBUG" != "yes" ]; then
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID"
-	fi
-}
-
 function SendAlert {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
@@ -339,6 +252,97 @@ function SendAlert {
 	# Delete tmp log file
 	if [ -f "$ALERT_LOG_FILE" ]; then
 		rm "$ALERT_LOG_FILE"
+	fi
+}
+
+#### MINIMAL-FUNCTION-SET END ####
+
+function TrapError {
+	local job="$0"
+	local line="$1"
+	local code="${2:-1}"
+	if [ $_SILENT -eq 0 ]; then
+		echo -e " /!\ ERROR in ${job}: Near line ${line}, exit code ${code}"
+	fi
+}
+
+function Spinner {
+	if [ $_SILENT -eq 1 ]; then
+		return 0
+	fi
+
+	case $toggle
+	in
+	1)
+	echo -n " \ "
+	echo -ne "\r"
+	toggle="2"
+	;;
+
+	2)
+	echo -n " | "
+	echo -ne "\r"
+	toggle="3"
+	;;
+
+	3)
+	echo -n " / "
+	echo -ne "\r"
+	toggle="4"
+	;;
+
+	*)
+	echo -n " - "
+	echo -ne "\r"
+	toggle="1"
+	;;
+	esac
+}
+
+function SedStripQuotes {
+        echo $(echo $1 | sed "s/^\([\"']\)\(.*\)\1\$/\2/g")
+}
+
+function StripSingleQuotes {
+	local string="${1}"
+	string="${string/#\'/}" # Remove singlequote if it begins string
+	string="${string/%\'/}" # Remove singlequote if it ends string
+	echo "$string"
+}
+
+function StripDoubleQuotes {
+	local string="${1}"
+	string="${string/#\"/}"
+	string="${string/%\"/}"
+	echo "$string"
+}
+
+function StripQuotes {
+	local string="${1}"
+	echo "$(StripSingleQuotes $(StripDoubleQuotes $string))"
+}
+
+function EscapeSpaces {
+	local string="${1}" # String on which spaces will be escaped
+	echo "${string// /\ }"
+}
+
+function IsNumeric {
+	eval "local value=\"${1}\"" # Needed so variable variables can be processed
+
+	local re="^-?[0-9]+([.][0-9]+)?$"
+	if [[ $value =~ $re ]]; then
+		echo 1
+	else
+		echo 0
+	fi
+}
+
+function CleanUp {
+	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+
+	if [ "$_DEBUG" != "yes" ]; then
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID"
 	fi
 }
 
@@ -484,13 +488,13 @@ function WaitForTaskCompletion {
 		fi
 		if [ $exec_time -gt $soft_max_time ]; then
 			if [ $soft_alert -eq 0 ] && [ $soft_max_time -ne 0 ]; then
-				Logger "Max soft execution time exceeded for task." "WARN"
+				Logger "Max soft execution time exceeded for task [$caller_name]." "WARN"
 				soft_alert=1
 				SendAlert
 
 			fi
 			if [ $exec_time -gt $hard_max_time ] && [ $hard_max_time -ne 0 ]; then
-				Logger "Max hard execution time exceeded for task. Stopping task execution." "ERROR"
+				Logger "Max hard execution time exceeded for task [$caller_name]. Stopping task execution." "ERROR"
 				kill -s SIGTERM $pid
 				if [ $? == 0 ]; then
 					Logger "Task stopped succesfully" "NOTICE"
