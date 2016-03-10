@@ -8,7 +8,7 @@ PROGRAM_VERSION=2.0-pre
 PROGRAM_BUILD=2016030302
 IS_STABLE=no
 
-## FUNC_BUILD=2016030401
+## FUNC_BUILD=2016031001
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -154,6 +154,7 @@ function KillChilds {
 	if [ "$self" == true ]; then
 		kill -s SIGTERM "$pid" || (sleep 30 && kill -9 "$pid" &)
 	fi
+	# sleep 30 needs to wait before killing itself
 }
 
 function SendAlert {
@@ -161,6 +162,10 @@ function SendAlert {
 
 	local mail_no_attachment=
 	local attachment_command=
+
+	if [ "$DESTINATION_MAILS" == "" ]; then
+		return 0
+	fi
 
 	if [ "$_DEBUG" == "yes" ]; then
 		Logger "Debug mode, no warning email will be sent." "NOTICE"
@@ -556,7 +561,7 @@ function WaitForCompletion {
 				SendAlert
 			fi
 			if [ $SECONDS -gt $hard_max_time ] && [ $hard_max_time != 0 ]; then
-				Logger "Max hard execution time exceeded for script. Stopping current task execution." "ERROR"
+				Logger "Max hard execution time exceeded for script in [$caller_name]. Stopping current task execution." "ERROR"
 				kill -s SIGTERM $pid
 				if [ $? == 0 ]; then
 					Logger "Task stopped succesfully" "NOTICE"
@@ -698,14 +703,14 @@ function CheckConnectivity3rdPartyHosts {
 				eval "$PING_CMD $i > /dev/null 2>&1" &
 				WaitForTaskCompletion $! 360 360 ${FUNCNAME[0]}
 				if [ $? != 0 ]; then
-					Logger "Cannot ping 3rd party host $i" "WARN"
+					Logger "Cannot ping 3rd party host $i" "NOTICE"
 				else
 					remote_3rd_party_success=1
 				fi
 			done
 			IFS=$OLD_IFS
 			if [ $remote_3rd_party_success -ne 1 ]; then
-				Logger "No remote 3rd party host responded to ping. No internet ?" "CRITICAL"
+				Logger "No remote 3rd party host responded to ping. No internet ?" "ERROR"
 				return 1
 			fi
 		fi
