@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016030302
+PROGRAM_BUILD=2016031801
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -310,7 +310,7 @@ function _ListRecursiveBackupDirectoriesRemote {
 	IFS=$PATH_SEPARATOR_CHAR
 	for directory in $RECURSIVE_DIRECTORY_LIST
 	do
-		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]}
@@ -1290,7 +1290,6 @@ function Usage {
 _DRYRUN=0
 _SILENT=0
 no_maxtime=0
-dontgetsize=0
 stats=0
 PARTIAL=0
 

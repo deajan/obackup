@@ -5,10 +5,10 @@ PROGRAM="obackup"
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016030302
+PROGRAM_BUILD=2016031801
 IS_STABLE=no
 
-## FUNC_BUILD=2016031101
+## FUNC_BUILD=2016031401
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -16,6 +16,21 @@ if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
 	exit 127
 fi
+
+#### obackup & osync specific code BEGIN ####
+
+## Log a state message every $KEEP_LOGGING seconds. Should not be equal to soft or hard execution time so your log will not be unnecessary big.
+KEEP_LOGGING=1801
+
+## Correct output of sort command (language agnostic sorting)
+export LC_ALL=C
+
+# Standard alert mail body
+MAIL_ALERT_MSG="Execution of $PROGRAM instance $INSTANCE_ID on $(date) has warnings/errors."
+
+#### obackup & osync specific code END ####
+
+#### MINIMAL-FUNCTION-SET BEGIN ####
 
 # Environment variables
 _DRYRUN=0
@@ -41,8 +56,6 @@ else
 	_VERBOSE=1
 fi
 
-#### MINIMAL-FUNCTION-SET BEGIN ####
-
 SCRIPT_PID=$$
 
 LOCAL_USER=$(whoami)
@@ -64,14 +77,6 @@ else
 	RUN_DIR=.
 fi
 
-## Log a state message every $KEEP_LOGGING seconds. Should not be equal to soft or hard execution time so your log will not be unnecessary big.
-KEEP_LOGGING=1801
-
-## Correct output of sort command (language agnostic sorting)
-export LC_ALL=C
-
-# Standard alert mail body
-MAIL_ALERT_MSG="Execution of $PROGRAM instance $INSTANCE_ID on $(date) has warnings/errors."
 
 # Default alert attachment filename
 ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.last.log"
@@ -274,8 +279,6 @@ function SendAlert {
 	fi
 }
 
-#### MINIMAL-FUNCTION-SET END ####
-
 function TrapError {
 	local job="$0"
 	local line="$1"
@@ -284,6 +287,28 @@ function TrapError {
 		echo -e " /!\ ERROR in ${job}: Near line ${line}, exit code ${code}"
 	fi
 }
+
+function LoadConfigFile {
+	local config_file="${1}"
+	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+
+
+	if [ ! -f "$config_file" ]; then
+		Logger "Cannot load configuration file [$config_file]. Cannot start." "CRITICAL"
+		exit 1
+	elif [[ "$1" != *".conf" ]]; then
+		Logger "Wrong configuration file supplied [$config_file]. Cannot start." "CRITICAL"
+		exit 1
+	else
+		grep '^[^ ]*=[^;&]*' "$config_file" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" # WITHOUT COMMENTS
+		# Shellcheck source=./sync.conf
+		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
+	fi
+
+	CONFIG_FILE="$config_file"
+}
+
+#### MINIMAL-FUNCTION-SET END ####
 
 function Spinner {
 	if [ $_SILENT -eq 1 ]; then
@@ -363,26 +388,6 @@ function CleanUp {
 	if [ "$_DEBUG" != "yes" ]; then
 		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID"
 	fi
-}
-
-function LoadConfigFile {
-	local config_file="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
-
-
-	if [ ! -f "$config_file" ]; then
-		Logger "Cannot load configuration file [$config_file]. Cannot start." "CRITICAL"
-		exit 1
-	elif [[ "$1" != *".conf" ]]; then
-		Logger "Wrong configuration file supplied [$config_file]. Cannot start." "CRITICAL"
-		exit 1
-	else
-		grep '^[^ ]*=[^;&]*' "$config_file" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" # WITHOUT COMMENTS
-		# Shellcheck source=./sync.conf
-		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
-	fi
-
-	CONFIG_FILE="$config_file"
 }
 
 function GetLocalOS {
@@ -1296,7 +1301,7 @@ function _ListRecursiveBackupDirectoriesRemote {
 	IFS=$PATH_SEPARATOR_CHAR
 	for directory in $RECURSIVE_DIRECTORY_LIST
 	do
-		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]}
@@ -2276,7 +2281,6 @@ function Usage {
 _DRYRUN=0
 _SILENT=0
 no_maxtime=0
-dontgetsize=0
 stats=0
 PARTIAL=0
 
