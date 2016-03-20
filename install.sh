@@ -3,7 +3,7 @@
 PROGRAM=obackup
 PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
-SCRIPT_BUILD=2016031401
+SCRIPT_BUILD=2016031502
 
 ## osync / obackup daemon install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8 & 10
@@ -42,23 +42,37 @@ if [ -f "./exlude.list.example" ]; then
 	cp "./exclude.list.example" "/etc/$PROGRAM"
 fi
 
+if [ -f "./snapshot.conf" ]; then
+	cp "./snapshot.conf" "/etc/$PROGRAM/snapshot.conf.example"
+fi
+
 cp "./$PROGRAM_BINARY" "$BIN_DIR"
 if [ $? != 0 ]; then
 	echo "Cannot copy $PROGRAM_BINARY to [$BIN_DIR]."
 else
+	chmod 755 "$BIN_DIR/$PROGRAM_BINARY"
 	echo "Copied $PROGRAM_BINARY to [$BIN_DIR]."
 fi
-cp "./$PROGRAM_BATCH" "/usr/local/bin"
-if [ $? != 0 ]; then
-	echo "Cannot copy $PROGRAM_BATCH to [$BIN_DIR]."
-else
-	echo "Copied $PROGRAM_BATCH to [$BIN_DIR]."
+
+if [ -f "./$PROGRAM_BATCH" ]; then
+	cp "./$PROGRAM_BATCH" "$BIN_DIR"
+	if [ $? != 0 ]; then
+		echo "Cannot copy $PROGRAM_BATCH to [$BIN_DIR]."
+	else
+		chmod 755 "$BIN_DIR/$PROGRAM_BATCH"
+		echo "Copied $PROGRAM_BATCH to [$BIN_DIR]."
+	fi
 fi
-cp "./ssh_filter.sh" "/usr/local/bin"
-if [ $? != 0 ]; then
-	echo "Cannot copy ssh_filter.sh to [$BIN_DIR]."
-else
-	echo "Copied ssh_filter.sh to [$BIN_DIR]."
+
+if [  -f "./ssh_filter.sh" ]; then
+	cp "./ssh_filter.sh" "$BIN_DIR"
+	if [ $? != 0 ]; then
+		echo "Cannot copy ssh_filter.sh to [$BIN_DIR]."
+	else
+		chmod 755 "$BIN_DIR/ssh_filter.sh"
+		chown root:root "$BIN_DIR/ssh_filter.sh"
+		echo "Copied ssh_filter.sh to [$BIN_DIR]."
+	fi
 fi
 
 if [ -f "./osync-srv" ]; then
@@ -66,12 +80,7 @@ if [ -f "./osync-srv" ]; then
 	if [ $? != 0 ]; then
 		echo "Cannot copy osync-srv to [$SERVICE_DIR]."
 	else
+		chmod 755 "$SERVICE_DIR/osync-srv"
 		echo "Created osync-srv service in [$SERVICE_DIR]."
-		chmod 755 "/etc/init.d/osync-srv"
 	fi
 fi
-
-chmod 755 "/usr/local/bin/$PROGRAM_BINARY"
-chmod 755 "/usr/local/bin/$PROGRAM_BATCH"
-chmod 755 "/usr/local/bin/ssh_filter.sh"
-chown root:root "/usr/local/bin/ssh_filter.sh"
