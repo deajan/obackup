@@ -3,7 +3,7 @@
 PROGRAM=obackup
 PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
-SCRIPT_BUILD=2016032201
+SCRIPT_BUILD=2016032202
 
 ## osync / obackup daemon install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8 & 10
@@ -33,8 +33,8 @@ case $local_os_var in
 esac
 
 
-if [ "$(whoami)" != "root" ]; then
-  echo "Must be run as root."
+if [ "$(whoami)" != "$USER" ]; then
+  echo "Must be run as $USER."
   exit 1
 fi
 
@@ -90,7 +90,7 @@ if [  -f "./ssh_filter.sh" ]; then
 		echo "Cannot copy ssh_filter.sh to [$BIN_DIR]."
 	else
 		chmod 755 "$BIN_DIR/ssh_filter.sh"
-		chown root:root "$BIN_DIR/ssh_filter.sh"
+		chown $USER:$GROUP "$BIN_DIR/ssh_filter.sh"
 		echo "Copied ssh_filter.sh to [$BIN_DIR]."
 	fi
 fi
