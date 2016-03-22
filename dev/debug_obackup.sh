@@ -8,7 +8,7 @@ PROGRAM_VERSION=2.0-pre
 PROGRAM_BUILD=2016031801
 IS_STABLE=no
 
-## FUNC_BUILD=2016032201
+## FUNC_BUILD=2016032202
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -273,7 +273,7 @@ function SendAlert {
 
 	# pfSense specific
 	if [ -f /usr/local/bin/mail.php ]; then
-		cmd="echo \"$MAIL_ALERT_MSG\" | /usr/local/bin/mail.php subject=\"$subject\""
+		cmd="echo \"$MAIL_ALERT_MSG\" | /usr/local/bin/mail.php -s=\"$subject\""
 		Logger "Mail cmd: $cmd" "DEBUG"
 		eval $cmd
 		if [ $? != 0 ]; then
