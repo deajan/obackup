@@ -3,7 +3,7 @@
 PROGRAM=obackup
 PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
-SCRIPT_BUILD=2016031502
+SCRIPT_BUILD=2016032201
 
 ## osync / obackup daemon install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8 & 10
@@ -12,6 +12,26 @@ SCRIPT_BUILD=2016031502
 CONF_DIR=/etc/$PROGRAM
 BIN_DIR=/usr/local/bin
 SERVICE_DIR=/etc/init.d
+
+USER=root
+
+local_os_var="$(uname -spio 2>&1)"
+if [ $? != 0 ]; then
+	local_os_var="$(uname -v 2>&1)"
+	if [ $? != 0 ]; then
+		local_os_var="$(uname)"
+	fi
+fi
+
+case $local_os_var in
+	*"BSD"*)
+	GROUP=wheel
+	;;
+	*)
+	GROUP=root
+	;;
+esac
+
 
 if [ "$(whoami)" != "root" ]; then
   echo "Must be run as root."
