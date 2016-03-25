@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 PROGRAM=obackup
+PROGRAM_VERSION=2.0-pre
 PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
-SCRIPT_BUILD=2016032202
+SCRIPT_BUILD=2016032501
 
 ## osync / obackup daemon install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8 & 10
@@ -31,7 +32,6 @@ case $local_os_var in
 	GROUP=root
 	;;
 esac
-
 
 if [ "$(whoami)" != "$USER" ]; then
   echo "Must be run as $USER."
@@ -104,3 +104,28 @@ if [ -f "./osync-srv" ]; then
 		echo "Created osync-srv service in [$SERVICE_DIR]."
 	fi
 fi
+
+function Statistics {
+
+	local link="http://instcount.netpower.fr?program=$PROGRAM&version=$PROGRAM_VERSION"
+	if type wget > /dev/null; then
+		wget $link > /dev/null 2>&1
+	elif type curl > /dev/null; then
+		curl $link > /dev/null 2>&1
+	else
+		echo "Neiter wget nor curl installed. Cannot run statistics. Use link below please."
+	fi
+}
+
+echo "$PROGRAM installed. Use with $BIN_DIR/$PROGRAM"
+echo ""
+echo "In order to make install statistics, the script would like to connect to http://instcount.netpower.fr?program=$PROGRAM&version=$PROGRAM_VERSION"
+read -r -p "No data except those in the url will be send. Allow [Y/n]" response
+case $response in
+	[nN])
+	exit
+	;;
+	*)
+        Statistics
+        ;;
+esac

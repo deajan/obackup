@@ -11,6 +11,7 @@ CHANGELOG
 README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
 
 ! XX Mar 2016: obackup v2.0 released
+- Added optional statistics for installer
 - Added an option to ignore knownhosts for ssh connections (use with caution, this can lead to a security issue)
 - Improved mail fallback
 - More logging enhancements
