@@ -8,7 +8,7 @@ PROGRAM_VERSION=2.0-pre
 PROGRAM_BUILD=2016031801
 IS_STABLE=no
 
-## FUNC_BUILD=2016032202
+## FUNC_BUILD=2016032501
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -803,6 +803,11 @@ function PreInit {
                 SSH_COMP=
         fi
 
+	## Ignore SSH known host verification
+	if [ "$SSH_IGNORE_KNOWN_HOSTS" == "yes" ]; then
+		SSH_OPTS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+	fi
+
         ## Support for older config files without RSYNC_EXECUTABLE option
         if [ "$RSYNC_EXECUTABLE" == "" ]; then
                 RSYNC_EXECUTABLE=rsync
@@ -903,7 +908,7 @@ function PreInit {
 function PostInit {
 
 	# Define remote commands
-        SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
+        SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_IGNORE_KNOWN_HOSTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
         SCP_CMD="$(type -p scp) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -P $REMOTE_PORT"
         RSYNC_SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT"
 }
