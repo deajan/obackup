@@ -6,7 +6,7 @@ AUTHOR="(L) 2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.x"
-PROGRAM_BUILD=2016021102
+PROGRAM_BUILD=2016032501
 
 function Usage {
 	echo "$PROGRAM $PROGRAM_BUILD"
@@ -115,6 +115,10 @@ function RewriteConfigFiles {
 
 	if ! grep "^RSYNC_REMOTE_PATH=" "$config_file" > /dev/null; then
 		sed -i '/^SSH_COMPRESSION=*/a RSYNC_REMOTE_PATH=' "$config_file"
+	fi
+
+	if ! grep "^SSH_IGNORE_KNOWN_HOSTS=" "$config_file" > /dev/null; then
+		sed -i '/^SSH_COMPRESSION=*/a SSH_IGNORE_KNOWN_HOSTS=no' "$config_file"
 	fi
 
 	if ! grep "^REMOTE_HOST_PING=" "$config_file" > /dev/null; then
