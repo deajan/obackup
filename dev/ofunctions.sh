@@ -1,4 +1,4 @@
-## FUNC_BUILD=2016032501
+## FUNC_BUILD=2016033101
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -82,11 +82,15 @@ function Dummy {
 }
 
 function _Logger {
-	local svalue="${1}" # What to log to screen
+	local svalue="${1}" # What to log to stdout
 	local lvalue="${2:-$svalue}" # What to log to logfile, defaults to screen value
+	local evalue="${3}" # What to log to stderr
 	echo -e "$lvalue" >> "$LOG_FILE"
 
-	if [ $_SILENT -eq 0 ]; then
+	# <OSYNC SPECIFIC> Special case in daemon mode where systemctl doesn't need double timestamps
+	if [ "$sync_on_changes" == "1" ]; then
+		cat <<< "$evalue" 1>&2	# Log to stderr in daemon mode
+	elif [ $_SILENT -eq 0 ]; then
 		echo -e "$svalue"
 	fi
 }
@@ -104,15 +108,15 @@ function Logger {
 	# </OSYNC SPECIFIC>
 
 	if [ "$level" == "CRITICAL" ]; then
-		_Logger "$prefix\e[41m$value\e[0m" "$prefix$level:$value"
+		_Logger "$prefix\e[41m$value\e[0m" "$prefix$level:$value" "$level:$value"
 		ERROR_ALERT=1
 		return
 	elif [ "$level" == "ERROR" ]; then
-		_Logger "$prefix\e[91m$value\e[0m" "$prefix$level:$value"
+		_Logger "$prefix\e[91m$value\e[0m" "$prefix$level:$value" "$level:$value"
 		ERROR_ALERT=1
 		return
 	elif [ "$level" == "WARN" ]; then
-		_Logger "$prefix\e[93m$value\e[0m" "$prefix$level:$value"
+		_Logger "$prefix\e[93m$value\e[0m" "$prefix$level:$value" "$level:$value"
 		WARN_ALERT=1
 		return
 	elif [ "$level" == "NOTICE" ]; then
@@ -485,7 +489,7 @@ function GetRemoteOS {
 			exit 1
 			;;
 			*)
-			if [ "$IGNORE_OS_VER" == "yes" ]; then		#DOC: Undocumented option
+			if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#DOC: Undocumented option
 				Logger "Running on unknown remote OS [$remote_os_var]." "WARN"
 				return
 			fi
@@ -968,7 +972,7 @@ function PostInit {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	# Define remote commands
-        SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_IGNORE_KNOWN_HOSTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
+        SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
         SCP_CMD="$(type -p scp) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -P $REMOTE_PORT"
         RSYNC_SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -p $REMOTE_PORT"
 }
