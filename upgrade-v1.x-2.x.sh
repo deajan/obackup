@@ -2,11 +2,11 @@
 
 PROGRAM="obackup config file upgrade script"
 SUBPROGRAM="obackup"
-AUTHOR="(L) 2015 by Orsiris \"Ozy\" de Jong"
+AUTHOR="(C) 2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.x"
-PROGRAM_BUILD=2016032501
+PROGRAM_BUILD=2016033101
 
 function Usage {
 	echo "$PROGRAM $PROGRAM_BUILD"
@@ -38,8 +38,8 @@ function LoadConfigFile {
 function RewriteConfigFiles {
 	local config_file="${1}"
 
-	if ! grep "BACKUP_ID=" $config_file > /dev/null; then
-		echo "File [$config_file] does not seem to be a obackup v1 config file."
+	if ((! grep "BACKUP_ID=" $config_file > /dev/null) && ( ! grep "INSTANCE_ID=" $config_file > /dev/null)); then
+		echo "File [$config_file] does not seem to be a obackup config file."
 		exit 1
 	fi
 
