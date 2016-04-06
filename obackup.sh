@@ -5,10 +5,10 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016033101
+PROGRAM_BUILD=2016040601
 IS_STABLE=no
 
-## FUNC_BUILD=2016040102
+## FUNC_BUILD=2016040602
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -60,6 +60,8 @@ LOCAL_HOST=$(hostname)
 ## Default log file until config file is loaded
 if [ -w /var/log ]; then
 	LOG_FILE="/var/log/$PROGRAM.log"
+elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
+	LOG_FILE="$HOME/$PROGRAM.log"
 else
 	LOG_FILE="./$PROGRAM.log"
 fi
@@ -704,7 +706,7 @@ function CheckConnectivityRemoteHost {
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
 			WaitForTaskCompletion $! 180 180 ${FUNCNAME[0]}
 			if [ $? != 0 ]; then
-				Logger "Cannot ping $REMOTE_HOST" "CRITICAL"
+				Logger "Cannot ping $REMOTE_HOST" "ERROR"
 				return 1
 			fi
 		fi
@@ -952,8 +954,10 @@ function InitLocalOSSettings {
         ## Stat command has different syntax on Linux and FreeBSD/MacOSX
         if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
                 STAT_CMD="stat -f \"%Sm\""
+		STAT_CTIME_MTIME_CMD="stat -f %N;%c;%m"
         else
                 STAT_CMD="stat --format %y"
+		STAT_CTIME_MTIME_CMD="stat -c %n;%Z;%Y"
         fi
 }
 
@@ -969,6 +973,16 @@ function InitRemoteOSSettings {
         else
                 REMOTE_FIND_CMD=find
         fi
+
+        ## Stat command has different syntax on Linux and FreeBSD/MacOSX
+        if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
+                REMOTE_STAT_CMD="stat -f \"%Sm\""
+		REMOTE_STAT_CTIME_MTIME_CMD="stat -f \\\"%N;%c;%m\\\""
+        else
+                REMOTE_STAT_CMD="stat --format %y"
+		REMOTE_STAT_CTIME_MTIME_CMD="stat -c \\\"%n;%Z;%Y\\\""
+        fi
+
 }
 
 ## END Generic functions
@@ -2261,7 +2275,9 @@ GetCommandlineArguments "$@"
 LoadConfigFile "$1"
 if [ "$LOGFILE" == "" ]; then
 	if [ -w /var/log ]; then
-		LOG_FILE=/var/log/$PROGRAM.$INSTANCE_ID.log
+		LOG_FILE="/var/log/$PROGRAM.$INSTANCE_ID.log"
+	elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
+		LOG_FILE="$HOME/$PROGRAM.$INSTANCE_ID.log"
 	else
 		LOG_FILE=./$PROGRAM.$INSTANCE_ID.log
 	fi

@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016033101
+PROGRAM_BUILD=2016040601
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1336,7 +1336,9 @@ GetCommandlineArguments "$@"
 LoadConfigFile "$1"
 if [ "$LOGFILE" == "" ]; then
 	if [ -w /var/log ]; then
-		LOG_FILE=/var/log/$PROGRAM.$INSTANCE_ID.log
+		LOG_FILE="/var/log/$PROGRAM.$INSTANCE_ID.log"
+	elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
+		LOG_FILE="$HOME/$PROGRAM.$INSTANCE_ID.log"
 	else
 		LOG_FILE=./$PROGRAM.$INSTANCE_ID.log
 	fi
