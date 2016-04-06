@@ -36,15 +36,24 @@ function TrapQuit {
 
 	if [ $ERROR_ALERT -ne 0 ]; then
 		SendAlert
+		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
+			RunAfterHook
+		fi
 		CleanUp
 		Logger "Backup script finished with errors." "ERROR"
 		exitcode=1
 	elif [ $WARN_ALERT -ne 0 ]; then
 		SendAlert
+		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
+			RunAfterHook
+		fi
 		CleanUp
 		Logger "Backup script finished with warnings." "WARN"
 		exitcode=2
 	else
+		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
+			RunAfterHook
+		fi
 		CleanUp
 		Logger "Backup script finshed." "NOTICE"
 		exitcode=0

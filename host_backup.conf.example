@@ -1,6 +1,6 @@
 ###### Local / Remote backup script for files & databases
 ###### (C) 2013-2015 by Ozy de Jong (www.netpower.fr)
-###### obackup v2.x config file rev 2016032501
+###### obackup v2.x config file rev 2016040601
 
 ###### GENERAL BACKUP OPTIONS
 
@@ -198,3 +198,6 @@ MAX_EXEC_TIME_PER_CMD_AFTER=0
 
 ## Stops whole backup execution if one of the above commands fail
 STOP_ON_CMD_ERROR=no
+
+## Run local and remote after backup cmd's even on failure
+RUN_AFTER_CMD_ON_ERROR=no

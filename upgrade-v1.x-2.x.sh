@@ -6,7 +6,7 @@ AUTHOR="(C) 2015 by Orsiris \"Ozy\" de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.x"
-PROGRAM_BUILD=2016033101
+PROGRAM_BUILD=2016040601
 
 function Usage {
 	echo "$PROGRAM $PROGRAM_BUILD"
@@ -43,8 +43,8 @@ function RewriteConfigFiles {
 		exit 1
 	fi
 
-	echo "Backing up [$config_file] as [$config_file.v1.x.save]"
-	cp --preserve "$config_file" "$config_file.v1.x.save"
+	echo "Backing up [$config_file] as [$config_file.save]"
+	cp --preserve "$config_file" "$config_file.save"
 	if [ $? != 0 ]; then
 		echo "Cannot backup config file."
 		exit 1
@@ -168,6 +168,11 @@ function RewriteConfigFiles {
 	if ! grep "^STOP_ON_CMD_ERROR=" "$config_file" > /dev/null; then
                 sed -i '/^MAX_EXEC_TIME_PER_CMD_AFTER=*/a STOP_ON_CMD_ERROR=no' "$config_file"
         fi
+
+	if ! grep "^RUN_AFTER_CMD_ON_ERROR=" "$config_file" > /dev/null; then
+                sed -i '/^STOP_ON_CMD_ERROR=*/a RUN_AFTER_CMD_ON_ERROR=no' "$config_file"
+        fi
+
 }
 
 if [ "$1" != "" ] && [ -f "$1" ] && [ -w "$1" ]; then
