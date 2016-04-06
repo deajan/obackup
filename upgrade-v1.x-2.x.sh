@@ -16,6 +16,7 @@ function Usage {
 	echo "This script migrates $SUBPROGRAM $OLD_PROGRAM_VERSION config files to $NEW_PROGRAM_VERSION."
 	echo ""
 	echo "Usage: $0 /path/to/config_file.conf"
+	echo "Please make sure the config file is writable."
 	exit 128
 }
 
