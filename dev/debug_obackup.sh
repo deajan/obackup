@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016040601
+PROGRAM_BUILD=2016040602
 IS_STABLE=no
 
 ## FUNC_BUILD=2016040602
@@ -2408,15 +2408,17 @@ PreInit
 Init
 PostInit
 CheckCurrentConfig
-if [ "$REMOTE_OPERATION" == "yes" ]; then
-	GetRemoteOS
-	InitRemoteOSSettings
-fi
+
 DATE=$(date)
 Logger "--------------------------------------------------------------------" "NOTICE"
 Logger "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
 Logger "--------------------------------------------------------------------" "NOTICE"
 Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
+
+if [ "$REMOTE_OPERATION" == "yes" ]; then
+	GetRemoteOS
+	InitRemoteOSSettings
+fi
 
 if [ $no_maxtime -eq 1 ]; then
 	SOFT_MAX_EXEC_TIME_DB_TASK=0
