@@ -8,7 +8,7 @@ PROGRAM_VERSION=2.0-pre
 PROGRAM_BUILD=2016040603
 IS_STABLE=no
 
-## FUNC_BUILD=2016040602
+## FUNC_BUILD=2016040802
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -553,17 +553,6 @@ function WaitForTaskCompletion {
 				else
 					return 1
 				fi
-				#kill -s SIGTERM $pid
-				#if [ $? == 0 ]; then
-				#	Logger "Task stopped succesfully" "NOTICE"
-				#else
-				#	Logger "Sending SIGTERM to proces failed. Trying the hard way." "ERROR"
-				#	sleep 5 && kill -9 $pid
-				#	if [ $? != 0 ]; then
-				#		Logger "Could not stop task." "ERROR"
-				#	fi
-				#fi
-				#return 1
 			fi
 		fi
 		sleep $SLEEP_TIME
@@ -612,17 +601,6 @@ function WaitForCompletion {
 				else
 					return 1
 				fi
-				#kill -s SIGTERM $pid
-				#if [ $? == 0 ]; then
-				#	Logger "Task stopped succesfully" "NOTICE"
-				#else
-				#	Logger "Sending SIGTERM to proces failed. Trying the hard way." "ERROR"
-				#	kill -9 $pid
-				#	if [ $? != 0 ]; then
-				#		Logger "Could not stop task." "ERROR"
-				#	fi
-				#fi
-				#return 1
 			fi
 		fi
 		sleep $SLEEP_TIME
@@ -1011,10 +989,10 @@ function InitLocalOSSettings {
         ## Ping command is not the same
         if [ "$LOCAL_OS" == "msys" ]; then
                 FIND_CMD=$(dirname $BASH)/find
-                #TODO: The following command needs to be checked on msys. Does the $1 variable substitution work ?
                 # PROCESS_TEST_CMD assumes there is a variable $pid
+		# Tested on MSYS and cygwin
                 PROCESS_TEST_CMD='ps -a | awk "{\$1=\$1}\$1" | awk "{print \$1}" | grep $pid'
-                PING_CMD="ping -n 2"
+                PING_CMD='$SYSTEMROOT\system32\ping -n 2'
         else
                 FIND_CMD=find
                 # PROCESS_TEST_CMD assumes there is a variable $pid

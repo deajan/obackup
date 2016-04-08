@@ -4,15 +4,28 @@ PROGRAM=obackup
 PROGRAM_VERSION=2.0-pre
 PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
-SCRIPT_BUILD=2016032501
+SCRIPT_BUILD=2016040801
 
-## osync / obackup daemon install script
+## osync / obackup / pmocr / zsnap install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8 & 10
 ## Please adapt this to fit your distro needs
 
 CONF_DIR=/etc/$PROGRAM
 BIN_DIR=/usr/local/bin
-SERVICE_DIR=/etc/init.d
+SERVICE_DIR_INIT=/etc/init.d
+SERVICE_DIR_SYSTEMD_SYSTEM=/usr/lib/systemd/system
+SERVICE_DIR_SYSTEMD_USER=/etc/systemd/user
+
+## osync specific code
+OSYNC_SERVICE_FILE_INIT="osync-srv"
+OSYNC_SERVICE_FILE_SYSTEMD_SYSTEM="osync-srv@.service"
+OSYNC_SERVICE_FILE_SYSTEMD_USER="osync-srv@.service.user"
+
+## pmocr specfic code
+PMOCR_SERVICE_FILE_INIT="pmocr-srv"
+PMOCR_SERVICE_FILE_SYSTEMD_SYSTEM="pmocr-srv.service"
+
+## Generic code
 
 USER=root
 
@@ -31,11 +44,26 @@ case $local_os_var in
 	*)
 	GROUP=root
 	;;
+	*"MINGW32"*|*"CYGWIN"*)
+	USER=""
+	GROUP=""
+	;;
 esac
 
-if [ "$(whoami)" != "$USER" ]; then
+if ([ "$USER" != "" ] && [ "$(whoami)" != "$USER" ]); then
   echo "Must be run as $USER."
   exit 1
+fi
+
+if [ -f /sbin/init ]; then
+	if file /sbin/init | grep systemd > /dev/null; then
+		init=systemd
+	else
+		init=init
+	fi
+else
+	echo "Can't detect init system."
+	exit 1
 fi
 
 if [ ! -d "$CONF_DIR" ]; then
@@ -90,31 +118,77 @@ if [  -f "./ssh_filter.sh" ]; then
 		echo "Cannot copy ssh_filter.sh to [$BIN_DIR]."
 	else
 		chmod 755 "$BIN_DIR/ssh_filter.sh"
-		chown $USER:$GROUP "$BIN_DIR/ssh_filter.sh"
+		if ([ "$USER" != "" ] && [ "$GROUP" != "" ]); then
+			chown $USER:$GROUP "$BIN_DIR/ssh_filter.sh"
+		fi
 		echo "Copied ssh_filter.sh to [$BIN_DIR]."
 	fi
 fi
 
-if [ -f "./osync-srv" ]; then
-	cp "./osync-srv" "$SERVICE_DIR"
+# OSYNC SPECIFIC
+if ([ "$init" == "systemd" ] && [ -f "./$OSYNC_SERVICE_FILE_SYSTEMD_SYSTEM" ]); then
+	cp "./$OSYNC_SERVICE_FILE_SYSTEMD_SYSTEM" "$SERVICE_DIR_SYSTEMD_SYSTEM" && cp "./$OSYNC_SERVICE_FILE_SYSTEMD_USER" "$SERVICE_DIR_SYSTEMD_USER/$SERVICE_FILE_SYSTEMD_SYSTEM"
 	if [ $? != 0 ]; then
-		echo "Cannot copy osync-srv to [$SERVICE_DIR]."
+		echo "Cannot copy the systemd file to [$SERVICE_DIR_SYSTEMD_SYSTEM] or [$SERVICE_DIR_SYSTEMD_USER]."
 	else
-		chmod 755 "$SERVICE_DIR/osync-srv"
-		echo "Created osync-srv service in [$SERVICE_DIR]."
+		echo "Created osync-srv service in [$SERVICE_DIR_SYSTEMD_SYSTEM] and [$SERVICE_DIR_SYSTEMD_USER]."
+		echo "Can be activated with [systemctl start osync-srv@instance.conf] where instance.conf is the name of the config file in /etc/osync."
+		echo "Can be enabled on boot with [systemctl enable osync-srv@instance.conf]."
+		echo "In userland, active with [systemctl --user start osync-srv@instance.conf]."
+	fi
+elif [ -f "./$OSYNC_SERVICE_FILE_INIT" ]; then
+	cp "./$OSYNC_SERVICE_FILE_INIT" "$SERVICE_DIR_INIT"
+	if [ $? != 0 ]; then
+		echo "Cannot copy osync-srv to [$SERVICE_DIR_INIT]."
+	else
+		chmod 755 "$SERVICE_DIR_INIT/$OSYNC_SERVICE_FILE_INIT"
+		echo "Created osync-srv service in [$SERVICE_DIR_INIT]."
+		echo "Can be activated with [service $OSYNC_SERVICE_FILE_INIT start]."
+		echo "Can be enabled on boot with [chkconfig $OSYNC_SERVICE_FILE_INIT on]."
+	fi
+fi
+
+# PMOCR SPECIFIC
+if ([ "$init" == "systemd" ] && [ -f "./$PMOCR_SERVICE_FILE_SYSTEMD_SYSTEM" ]); then
+	cp "./$PMOCR_SERVICE_FILE_SYSTEMD_SYSTEM" "$SERVICE_DIR_SYSTEMD_SYSTEM"
+	if [ $? != 0 ]; then
+		echo "Cannot copy the systemd file to [$SERVICE_DIR_SYSTEMD_SYSTEM] or [$SERVICE_DIR_SYSTEMD_USER]."
+	else
+		echo "Created pmocr-srv service in [$SERVICE_DIR_SYSTEMD_SYSTEM] and [$SERVICE_DIR_SYSTEMD_USER]."
+		echo "Can be activated with [systemctl start pmocr-srv] after configuring file options in [$BIN_DIR/$PROGRAM]."
+		echo "Can be enabled on boot with [systemctl enable pmocr-srv]."
+	fi
+elif [ -f "./$PMOCR_SERVICE_FILE_INIT" ]; then
+	cp "./$PMOCR_SERVICE_FILE_INIT" "$SERVICE_DIR_INIT"
+	if [ $? != 0 ]; then
+		echo "Cannot copy pmoct-srv to [$SERVICE_DIR_INIT]."
+	else
+		chmod 755 "$SERVICE_DIR_INIT/$PMOCR_SERVICE_FILE_INIT"
+		echo "Created osync-srv service in [$SERVICE_DIR_INIT]."
+		echo "Can be activated with [service $PMOCR_SERVICE_FILE_INIT start]."
+		echo "Can be enabled on boot with [chkconfig $PMOCR_SERVICE_FILE_INIT on]."
 	fi
 fi
 
 function Statistics {
 
-	local link="http://instcount.netpower.fr?program=$PROGRAM&version=$PROGRAM_VERSION"
-	if type wget > /dev/null; then
-		wget $link > /dev/null 2>&1
-	elif type curl > /dev/null; then
-		curl $link > /dev/null 2>&1
-	else
-		echo "Neiter wget nor curl installed. Cannot run statistics. Use link below please."
+        local link="http://instcount.netpower.fr?program=$PROGRAM&version=$PROGRAM_VERSION"
+        if type wget > /dev/null; then
+                wget -qO- $link > /dev/null 2>&1
+                if [ $? == 0 ]; then
+                        return 0
+                fi
 	fi
+
+        if type curl > /dev/null; then
+                curl $link > /dev/null 2>&1
+                if [ $? == 0 ]; then
+                        return 0
+                fi
+	fi
+
+       	echo "Neiter wget nor curl could be used for. Cannot run statistics. Use the provided link please."
+        retun 1
 }
 
 echo "$PROGRAM installed. Use with $BIN_DIR/$PROGRAM"
@@ -127,5 +201,6 @@ case $response in
 	;;
 	*)
         Statistics
+	exit $?
         ;;
 esac
