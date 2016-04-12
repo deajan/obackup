@@ -1,4 +1,4 @@
-## FUNC_BUILD=2016041201
+## FUNC_BUILD=2016041202
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -147,13 +147,13 @@ function KillChilds {
 
 	if children="$(pgrep -P "$pid")"; then
 		for child in $children; do
-			Logger "Launching KillChilds \"$child\" true" "DEBUG"
+			Logger "Launching KillChilds \"$child\" true" "DEBUG"	#__WITH_PARANOIA_DEBUG
 			KillChilds "$child" true
 		done
 	fi
 
 	# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
-	if [ "$self" == true ]; then
+	if ( [ "$self" == true ] && eval $PROCESS_TEST_CMD > /dev/null 2>&1); then
 		Logger "Sending SIGTERM to process [$pid]." "DEBUG"
 		kill -s SIGTERM "$pid"
 		if [ $? != 0 ]; then
@@ -163,12 +163,11 @@ function KillChilds {
 			if [ $? != 0 ]; then
 				Logger "Sending SIGKILL to process [$pid] failed." "DEBUG"
 				return 1
-			else
-				return 0
 			fi
-		else
-			return 0
 		fi
+		return 0
+	else
+		return 0
 	fi
 }
 

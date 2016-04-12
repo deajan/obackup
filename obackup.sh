@@ -5,10 +5,10 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016040603
+PROGRAM_BUILD=2016041201
 IS_STABLE=no
 
-## FUNC_BUILD=2016041201
+## FUNC_BUILD=2016041202
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -147,13 +147,12 @@ function KillChilds {
 
 	if children="$(pgrep -P "$pid")"; then
 		for child in $children; do
-			Logger "Launching KillChilds \"$child\" true" "DEBUG"
 			KillChilds "$child" true
 		done
 	fi
 
 	# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
-	if [ "$self" == true ]; then
+	if ( [ "$self" == true ] && eval $PROCESS_TEST_CMD > /dev/null 2>&1); then
 		Logger "Sending SIGTERM to process [$pid]." "DEBUG"
 		kill -s SIGTERM "$pid"
 		if [ $? != 0 ]; then
@@ -163,12 +162,11 @@ function KillChilds {
 			if [ $? != 0 ]; then
 				Logger "Sending SIGKILL to process [$pid] failed." "DEBUG"
 				return 1
-			else
-				return 0
 			fi
-		else
-			return 0
 		fi
+		return 0
+	else
+		return 0
 	fi
 }
 
@@ -2281,6 +2279,11 @@ if [ "$IS_STABLE" != "yes" ]; then
 	Logger "This is an unstable dev build. Please use with caution." "WARN"
 fi
 
+DATE=$(date)
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
 
 GetLocalOS
 InitLocalOSSettings
@@ -2290,12 +2293,6 @@ PreInit
 Init
 PostInit
 CheckCurrentConfig
-
-DATE=$(date)
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
 
 if [ "$REMOTE_OPERATION" == "yes" ]; then
 	GetRemoteOS

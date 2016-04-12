@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-pre
-PROGRAM_BUILD=2016040603
+PROGRAM_BUILD=2016041201
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1359,6 +1359,11 @@ if [ "$IS_STABLE" != "yes" ]; then
 	Logger "This is an unstable dev build. Please use with caution." "WARN"
 fi
 
+DATE=$(date)
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
 
 GetLocalOS
 InitLocalOSSettings
@@ -1368,12 +1373,6 @@ PreInit
 Init
 PostInit
 CheckCurrentConfig
-
-DATE=$(date)
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
 
 if [ "$REMOTE_OPERATION" == "yes" ]; then
 	GetRemoteOS
