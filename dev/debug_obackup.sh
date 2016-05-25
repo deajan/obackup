@@ -4,9 +4,9 @@
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.0-pre
+PROGRAM_VERSION=2.0-RC1
 PROGRAM_BUILD=2016041201
-IS_STABLE=no
+IS_STABLE=yes
 
 ## FUNC_BUILD=2016052502
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
