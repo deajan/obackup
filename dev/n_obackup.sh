@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-RC1
-PROGRAM_BUILD=2016041201
+PROGRAM_BUILD=2016052601
 IS_STABLE=yes
 
 source "./ofunctions.sh"
@@ -490,7 +490,7 @@ function _CreateDirectoryLocal {
 
 	if [ ! -d "$dir_to_create" ]; then
 		# No sudo, you should have all necessary rights
-                mkdir --parents "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1
+                mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1
                 if [ $? != 0 ]; then
                         Logger "Cannot create directory [$dir_to_create]" "CRITICAL"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
@@ -509,7 +509,7 @@ function _CreateDirectoryRemote {
 
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
-        cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir --parents \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2>&1'
+        cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir -p \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2>&1'
         Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! 720 1800 ${FUNCNAME[0]}

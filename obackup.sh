@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-RC1
-PROGRAM_BUILD=2016041201
+PROGRAM_BUILD=2016052601
 IS_STABLE=yes
 
 ## FUNC_BUILD=2016052502
@@ -88,6 +88,7 @@ function Dummy {
 	sleep .1
 }
 
+# Sub function of Logger
 function _Logger {
 	local svalue="${1}" # What to log to stdout
 	local lvalue="${2:-$svalue}" # What to log to logfile, defaults to screen value
@@ -102,6 +103,7 @@ function _Logger {
 	fi
 }
 
+# General log function with log levels
 function Logger {
 	local value="${1}" # Sentence to log (in double quotes)
 	local level="${2}" # Log level: PARANOIA_DEBUG, DEBUG, NOTICE, WARN, ERROR, CRITIAL
@@ -137,6 +139,29 @@ function Logger {
 	else
 		_Logger "\e[41mLogger function called without proper loglevel.\e[0m"
 		_Logger "$prefix$value"
+	fi
+}
+
+# QuickLogger subfunction, can be called directly
+function _QuickLogger {
+	local value="${1}"
+	local destination="${2}" # Destination: stdout, log, both
+
+	if ([ "$destination" == "log" ] || [ "$destination" == "both" ]); then
+		echo -e "$(date) - $value" >> "$LOG_FILE"
+	elif ([ "$destination" == "stdout" ] || [ "$destination" == "both" ]); then
+		echo -e "$value"
+	fi
+}
+
+# Generic quick logging function
+function QuickLogger {
+	local value="${1}"
+
+	if [ "$_SILENT" -eq 1 ]; then
+		_QuickLogger "$value" "log"
+	else
+		_QuickLogger "$value" "stdout"
 	fi
 }
 
@@ -1596,7 +1621,7 @@ function _CreateDirectoryLocal {
 
 	if [ ! -d "$dir_to_create" ]; then
 		# No sudo, you should have all necessary rights
-		mkdir --parents "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1
+		mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot create directory [$dir_to_create]" "CRITICAL"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
@@ -1614,7 +1639,7 @@ function _CreateDirectoryRemote {
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
-	cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir --parents \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2>&1'
+	cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir -p \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
 	WaitForTaskCompletion $! 720 1800 ${FUNCNAME[0]}
