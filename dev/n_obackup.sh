@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-RC1
-PROGRAM_BUILD=2016052601
+PROGRAM_BUILD=2016071901
 IS_STABLE=yes
 
 source "./ofunctions.sh"
@@ -689,6 +689,7 @@ function _BackupDatabaseLocalToLocal {
 
 	local dry_sql_cmd
 	local sql_cmd
+	local retval
 
         __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
@@ -703,7 +704,7 @@ function _BackupDatabaseLocalToLocal {
 		eval "$dry_sql_cmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]}
-	local retval=$?
+	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
         fi
@@ -718,6 +719,7 @@ function _BackupDatabaseLocalToRemote {
 
 	local dry_sql_cmd
 	local sql_cmd
+	local retval
 
 	CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
@@ -734,7 +736,7 @@ function _BackupDatabaseLocalToRemote {
 		eval "$dry_sql_cmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]}
-	local retval=$?
+	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
         fi
