@@ -5,10 +5,10 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-RC1
-PROGRAM_BUILD=2016071901
+PROGRAM_BUILD=2016071902
 IS_STABLE=yes
 
-## FUNC_BUILD=2016071901
+## FUNC_BUILD=2016071902
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -744,6 +744,8 @@ function WaitForTaskCompletion {
 	local seconds_begin=$SECONDS # Seconds since the beginning of the script
 	local exec_time=0 # Seconds since the beginning of this function
 
+	local retval=0 # return value of monitored pid process
+
 	while eval "$PROCESS_TEST_CMD" > /dev/null
 	do
 		Spinner
@@ -775,7 +777,7 @@ function WaitForTaskCompletion {
 		sleep $SLEEP_TIME
 	done
 	wait $pid
-	local retval=$?
+	retval=$?
 	Logger "${FUNCNAME[0]} ended for [$caller_name] with status $retval." "PARANOIA_DEBUG"	#__WITH_PARANOIA_DEBUG
 	return $retval
 }
@@ -793,6 +795,8 @@ function WaitForCompletion {
 
 	local seconds_begin=$SECONDS # Seconds since the beginning of the script
 	local exec_time=0 # Seconds since the beginning of this function
+
+	local retval=0 # return value of monitored pid process
 
 	while eval "$PROCESS_TEST_CMD" > /dev/null
 	do
@@ -1951,6 +1955,8 @@ function _BackupDatabaseLocalToLocal {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		# Dirty fix for mysqldump return code not honored
+		retval=1
 	fi
 	return $retval
 }
@@ -1983,6 +1989,8 @@ function _BackupDatabaseLocalToRemote {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		# Dirty fix for mysqldump return code not honored
+		retval=1
 	fi
 	return $retval
 }
@@ -2014,6 +2022,8 @@ function _BackupDatabaseRemoteToLocal {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		# Dirty fix for mysqldump return code not honored
+		retval=1
 	fi
 	return $retval
 }

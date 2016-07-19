@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.0-RC1
-PROGRAM_BUILD=2016071901
+PROGRAM_BUILD=2016071902
 IS_STABLE=yes
 
 source "./ofunctions.sh"
@@ -707,6 +707,8 @@ function _BackupDatabaseLocalToLocal {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		# Dirty fix for mysqldump return code not honored
+		retval=1
         fi
 	return $retval
 }
@@ -739,6 +741,8 @@ function _BackupDatabaseLocalToRemote {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		# Dirty fix for mysqldump return code not honored
+		retval=1
         fi
 	return $retval
 }
@@ -770,6 +774,8 @@ function _BackupDatabaseRemoteToLocal {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		# Dirty fix for mysqldump return code not honored
+		retval=1
         fi
 	return $retval
 }
