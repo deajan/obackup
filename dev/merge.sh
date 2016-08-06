@@ -1,25 +1,35 @@
 #!/usr/bin/env bash
 
-## Merges ofunctions.sh and n_osync.sh into osync.sh
+## Merges ofunctions.sh and n_program.sh into program.sh
+## Adds installer
 
 PROGRAM=obackup
 VERSION=$(grep "PROGRAM_VERSION=" n_$PROGRAM.sh)
 VERSION=${VERSION#*=}
-FUNC_PATH=/home/git/common
 
 PARANOIA_DEBUG_LINE="__WITH_PARANOIA_DEBUG"
 PARANOIA_DEBUG_BEGIN="#__BEGIN_WITH_PARANOIA_DEBUG"
 PARANOIA_DEBUG_END="#__END_WITH_PARANOIA_DEBUG"
+MINIMUM_FUNCTION_BEGIN="#### MINIMAL-FUNCTION-SET BEGIN ####"
+MINIMUM_FUNCTION_END="#### MINIMAL-FUNCTION-SET END ####"
 
 function Unexpand {
 	unexpand n_$PROGRAM.sh > tmp_$PROGRAM.sh
 }
 
-function Merge {
+function MergeAll {
 
-	sed "/source \"\.\/ofunctions.sh\"/r /home/git/common/ofunctions.sh" tmp_$PROGRAM.sh | grep -v 'source "./ofunctions.sh"' > debug_$PROGRAM.sh
+	sed "/source \"\.\/ofunctions.sh\"/r ofunctions.sh" tmp_$PROGRAM.sh | grep -v 'source "./ofunctions.sh"' > debug_$PROGRAM.sh
 	chmod +x debug_$PROGRAM.sh
 }
+
+function MergeMinimum {
+        sed -n "/$MINIMUM_FUNCTION_BEGIN/,/$MINIMUM_FUNCTION_END/p" ofunctions.sh > tmp_minimal.sh
+        sed "/source \"\.\/ofunctions.sh\"/r tmp_minimal.sh" tmp_$PROGRAM.sh | grep -v 'source "./ofunctions.sh"' | grep -v "$PARANOIA_DEBUG_LINE" > ../$PROGRAM.sh
+	rm -f tmp_minimal.sh
+        chmod +x ../$PROGRAM.sh
+}
+
 
 function CleanDebug {
 
@@ -38,16 +48,19 @@ function CleanDebug {
 }
 
 function CopyCommons {
-	sed "s/\[prgname\]/$PROGRAM/g" /home/git/common/common_install.sh > ../tmp_install.sh
+	sed "s/\[prgname\]/$PROGRAM/g" common_install.sh > ../tmp_install.sh
 	sed "s/\[version\]/$VERSION/g" ../tmp_install.sh > ../install.sh
 	sed "s/\[prgname\]/$PROGRAM/g" /home/git/common/common_batch.sh > ../$PROGRAM-batch.sh
 	chmod +x ../install.sh
-	chmod +x ../obackup-batch.sh
+	chmod +x ../$PROGRAM-batch.sh
+	rm -f ../tmp_install.sh
 }
 
 Unexpand
-Merge
+if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "obackup" ]; then
+	MergeAll
+else
+	MergeMinimum
+fi
 CleanDebug
-rm -f tmp_$PROGRAM.sh
-rm -f ../tmp_install.sh
 CopyCommons
