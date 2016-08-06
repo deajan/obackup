@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+## MERGE 2016080601
+
 ## Merges ofunctions.sh and n_program.sh into program.sh
 ## Adds installer
 
@@ -25,9 +27,9 @@ function MergeAll {
 
 function MergeMinimum {
         sed -n "/$MINIMUM_FUNCTION_BEGIN/,/$MINIMUM_FUNCTION_END/p" ofunctions.sh > tmp_minimal.sh
-        sed "/source \"\.\/ofunctions.sh\"/r tmp_minimal.sh" tmp_$PROGRAM.sh | grep -v 'source "./ofunctions.sh"' | grep -v "$PARANOIA_DEBUG_LINE" > ../$PROGRAM.sh
+        sed "/source \"\.\/ofunctions.sh\"/r tmp_minimal.sh" tmp_$PROGRAM.sh | grep -v 'source "./ofunctions.sh"' | grep -v "$PARANOIA_DEBUG_LINE" > debug_$PROGRAM.sh
 	rm -f tmp_minimal.sh
-        chmod +x ../$PROGRAM.sh
+        chmod +x debug_$PROGRAM.sh
 }
 
 
@@ -50,7 +52,9 @@ function CleanDebug {
 function CopyCommons {
 	sed "s/\[prgname\]/$PROGRAM/g" common_install.sh > ../tmp_install.sh
 	sed "s/\[version\]/$VERSION/g" ../tmp_install.sh > ../install.sh
-	sed "s/\[prgname\]/$PROGRAM/g" /home/git/common/common_batch.sh > ../$PROGRAM-batch.sh
+	if [ -f "common_batch.sh" ]; then
+		sed "s/\[prgname\]/$PROGRAM/g" common_batch.sh > ../$PROGRAM-batch.sh
+	fi
 	chmod +x ../install.sh
 	chmod +x ../$PROGRAM-batch.sh
 	rm -f ../tmp_install.sh
@@ -64,3 +68,4 @@ else
 fi
 CleanDebug
 CopyCommons
+rm -f tmp_$PROGRAM.sh
