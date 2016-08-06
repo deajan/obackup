@@ -8,16 +8,19 @@ PROGRAM_VERSION=2.1-dev
 PROGRAM_BUILD=2016080602
 IS_STABLE=yes
 
-## FUNC_BUILD=2016072703
+#### MINIMAL-FUNCTION-SET BEGIN ####
+
+## FUNC_BUILD=2016080601
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
+
+#TODO: set _LOGGER_PREFIX in other apps, specially for osync daemon mode
+#TODO: set _LOGGER_STDERR in other apps
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
 if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
 	exit 127
 fi
-
-#### obackup & osync specific code BEGIN ####
 
 ## Log a state message every $KEEP_LOGGING seconds. Should not be equal to soft or hard execution time so your log will not be unnecessary big.
 KEEP_LOGGING=1801
@@ -28,13 +31,12 @@ export LC_ALL=C
 # Standard alert mail body
 MAIL_ALERT_MSG="Execution of $PROGRAM instance $INSTANCE_ID on $(date) has warnings/errors."
 
-#### obackup & osync specific code END ####
-
-#### MINIMAL-FUNCTION-SET BEGIN ####
-
-# Environment variables
+# Environment variables that can be overriden by programs
 _DRYRUN=0
 _SILENT=0
+_LOGGER_PREFIX="date"
+_LOGGER_STDERR=0
+
 
 # Initial error status, logging 'WARN', 'ERROR' or 'CRITICAL' will enable alerts flags
 ERROR_ALERT=0
@@ -44,7 +46,7 @@ WARN_ALERT=0
 ## allow debugging from command line with _DEBUG=yes
 if [ ! "$_DEBUG" == "yes" ]; then
 	_DEBUG=no
-	SLEEP_TIME=.001 # Tested under linux and FreeBSD bash, #TODO tests on cygwin / msys
+	SLEEP_TIME=.05 # Tested under linux and FreeBSD bash, #TODO tests on cygwin / msys
 	_VERBOSE=0
 else
 	SLEEP_TIME=1
@@ -85,7 +87,8 @@ ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.last.log"
 
 
 function Dummy {
-	sleep .1
+
+	sleep $SLEEP_TIME
 }
 
 # Sub function of Logger
@@ -93,11 +96,11 @@ function _Logger {
 	local svalue="${1}" # What to log to stdout
 	local lvalue="${2:-$svalue}" # What to log to logfile, defaults to screen value
 	local evalue="${3}" # What to log to stderr
+
 	echo -e "$lvalue" >> "$LOG_FILE"
 
-	# <OSYNC SPECIFIC> Special case in daemon mode where systemctl doesn't need double timestamps
-	if [ "$sync_on_changes" == "1" ]; then
-		cat <<< "$evalue" 1>&2	# Log to stderr in daemon mode
+	if [ "$_LOGGER_STDERR" -eq 1 ]; then
+		cat <<< "$evalue" 1>&2
 	elif [ "$_SILENT" -eq 0 ]; then
 		echo -e "$svalue"
 	fi
@@ -108,13 +111,13 @@ function Logger {
 	local value="${1}" # Sentence to log (in double quotes)
 	local level="${2}" # Log level: PARANOIA_DEBUG, DEBUG, NOTICE, WARN, ERROR, CRITIAL
 
-	# <OSYNC SPECIFIC> Special case in daemon mode we should timestamp instead of counting seconds
-	if [ "$sync_on_changes" == "1" ]; then
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
 		prefix="$(date) - "
 	else
-		prefix="TIME: $SECONDS - "
+		prefix=""
 	fi
-	# </OSYNC SPECIFIC>
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "$prefix\e[41m$value\e[0m" "$prefix$level:$value" "$level:$value"
@@ -147,6 +150,7 @@ function _QuickLogger {
 	local value="${1}"
 	local destination="${2}" # Destination: stdout, log, both
 
+
 	if ([ "$destination" == "log" ] || [ "$destination" == "both" ]); then
 		echo -e "$(date) - $value" >> "$LOG_FILE"
 	elif ([ "$destination" == "stdout" ] || [ "$destination" == "both" ]); then
@@ -158,6 +162,7 @@ function _QuickLogger {
 function QuickLogger {
 	local value="${1}"
 
+
 	if [ "$_SILENT" -eq 1 ]; then
 		_QuickLogger "$value" "log"
 	else
@@ -167,17 +172,17 @@ function QuickLogger {
 
 # Portable child (and grandchild) kill function tester under Linux, BSD and MacOS X
 function KillChilds {
-	local pid="${1}"
+	local pid="${1}" # Parent pid to kill
 	local self="${2:-false}"
+
 
 	if children="$(pgrep -P "$pid")"; then
 		for child in $children; do
 			KillChilds "$child" true
 		done
 	fi
-
-	# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
-	if ( [ "$self" == true ] && eval $PROCESS_TEST_CMD > /dev/null 2>&1); then
+		# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
+	if ( [ "$self" == true ] && kill -0 $pid > /dev/null 2>&1); then
 		Logger "Sending SIGTERM to process [$pid]." "DEBUG"
 		kill -s SIGTERM "$pid"
 		if [ $? != 0 ]; then
@@ -188,11 +193,28 @@ function KillChilds {
 				Logger "Sending SIGKILL to process [$pid] failed." "DEBUG"
 				return 1
 			fi
+		else
+			return 0
 		fi
-		return 0
 	else
 		return 0
 	fi
+}
+
+function KillAllChilds {
+	local pids="${1}" # List of parent pids to kill separated by semi-colon
+
+
+	local errorcount=0
+
+	IFS=';' read -a pidsArray <<< "$pids"
+	for pid in "${pidsArray[@]}"; do
+		KillChilds $pid
+		if [ $? != 0 ]; then
+			errorcount=$((errorcount+1))
+			fi
+	done
+	return $errorcount
 }
 
 # osync/obackup/pmocr script specific mail alert function, use SendEmail function for generic mail sending
@@ -335,7 +357,7 @@ function SendAlert {
 		fi
 	fi
 
-	# If function has not returned 0 yet, assume it's critical that no alert can be sent
+	# If function has not returned 0 yet, assume it is critical that no alert can be sent
 	Logger "Cannot send alert (neither mutt, mail, sendmail, mailsend, sendemail or pfSense mail.php could be used)." "ERROR" # Is not marked critical because execution must continue
 
 	# Delete tmp log file
@@ -469,7 +491,7 @@ function SendEmail {
 		fi
 	fi
 
-	# If function has not returned 0 yet, assume it's critical that no alert can be sent
+	# If function has not returned 0 yet, assume it is critical that no alert can be sent
 	Logger "Cannot send mail (neither mutt, mail, sendmail, sendemail, mailsend (windows) or pfSense mail.php could be used)." "ERROR" # Is not marked critical because execution must continue
 }
 
@@ -500,8 +522,6 @@ function LoadConfigFile {
 
 	CONFIG_FILE="$config_file"
 }
-
-#### MINIMAL-FUNCTION-SET END ####
 
 function Spinner {
 	if [ $_SILENT -eq 1 ]; then
@@ -535,6 +555,133 @@ function Spinner {
 	;;
 	esac
 }
+
+function WaitForTaskCompletion {
+	local pids="${1}" # pids to wait for, separated by semi-colon
+	local soft_max_time="${2}" # If program with pid $pid takes longer than $soft_max_time seconds, will log a warning, unless $soft_max_time equals 0.
+	local hard_max_time="${3}" # If program with pid $pid takes longer than $hard_max_time seconds, will stop execution, unless $hard_max_time equals 0.
+	local caller_name="${4}" # Who called this function
+	local exit_on_error="${5:-false}" # Should the function exit on subprocess errors
+
+
+	local soft_alert=0 # Does a soft alert need to be triggered, if yes, send an alert once
+	local log_ttime=0 # local time instance for comparaison
+
+	local seconds_begin=$SECONDS # Seconds since the beginning of the script
+	local exec_time=0 # Seconds since the beginning of this function
+
+	local retval=0 # return value of monitored pid process
+	local errorcount=0 # Number of pids that finished with errors
+
+	local pidCount # number of given pids
+
+	IFS=';' read -a pidsArray <<< "$pids"
+	pidCount=${#pidsArray[@]}
+
+	while [ ${#pidsArray[@]} -gt 0 ]; do
+		newPidsArray=()
+		for pid in "${pidsArray[@]}"; do
+			if kill -0 $pid > /dev/null 2>&1; then
+				newPidsArray+=($pid)
+			else
+				wait $pid
+				result=$?
+				if [ $result -ne 0 ]; then
+					errorcount=$((errorcount+1))
+					Logger "${FUNCNAME[0]} called by [$caller_name] finished monitoring [$pid] with exitcode [$result]." "DEBUG"
+				fi
+			fi
+		done
+
+		Spinner
+		exec_time=$(($SECONDS - $seconds_begin))
+		if [ $((($exec_time + 1) % $KEEP_LOGGING)) -eq 0 ]; then
+			if [ $log_ttime -ne $exec_time ]; then
+				log_ttime=$exec_time
+				Logger "Current tasks still running with pids [${pidsArray[@]}]." "NOTICE"
+			fi
+		fi
+
+		if [ $exec_time -gt $soft_max_time ]; then
+			if [ $soft_alert -eq 0 ] && [ $soft_max_time -ne 0 ]; then
+				Logger "Max soft execution time exceeded for task [$caller_name] with pids [${pidsArray[@]}]." "WARN"
+				soft_alert=1
+				SendAlert
+
+			fi
+			if [ $exec_time -gt $hard_max_time ] && [ $hard_max_time -ne 0 ]; then
+				Logger "Max hard execution time exceeded for task [$caller_name] with pids [${pidsArray[@]}]. Stopping task execution." "ERROR"
+				KillChilds $pid
+				if [ $? == 0 ]; then
+					Logger "Task stopped successfully" "NOTICE"
+					#return 0
+				else
+					errrorcount=$((errorcount+1))
+					#return 1
+				fi
+			fi
+		fi
+
+		pidsArray=("${newPidsArray[@]}")
+		sleep $SLEEP_TIME
+	done
+
+	if [ $exit_on_error == true ] && [ $errorcount -gt 0 ]; then
+		Logger "Stopping execution." "CRITICAL"
+		exit 1337
+	else
+		return $errorcount
+	fi
+}
+
+function WaitForCompletion {
+	local pid="${1}" # pid to wait for
+	local soft_max_time="${2}" # If program with pid $pid takes longer than $soft_max_time seconds, will log a warning, unless $soft_max_time equals 0.
+	local hard_max_time="${3}" # If program with pid $pid takes longer than $hard_max_time seconds, will stop execution, unless $hard_max_time equals 0.
+	local caller_name="${4}" # Who called this function
+
+	local soft_alert=0 # Does a soft alert need to be triggered, if yes, send an alert once
+	local log_time=0 # local time instance for comparaison
+
+	local seconds_begin=$SECONDS # Seconds since the beginning of the script
+	local exec_time=0 # Seconds since the beginning of this function
+
+	local retval=0 # return value of monitored pid process
+
+	while eval "$PROCESS_TEST_CMD" > /dev/null
+	do
+		Spinner
+		if [ $((($SECONDS + 1) % $KEEP_LOGGING)) -eq 0 ]; then
+			if [ $log_time -ne $SECONDS ]; then
+				log_time=$SECONDS
+				Logger "Current task still running." "NOTICE"
+			fi
+		fi
+		if [ $SECONDS -gt $soft_max_time ]; then
+			if [ $soft_alert -eq 0 ] && [ $soft_max_time != 0 ]; then
+				Logger "Max soft execution time exceeded for script." "WARN"
+				soft_alert=1
+				SendAlert
+			fi
+			if [ $SECONDS -gt $hard_max_time ] && [ $hard_max_time != 0 ]; then
+				Logger "Max hard execution time exceeded for script in [$caller_name]. Stopping current task execution." "ERROR"
+				KillChilds $pid
+				if [ $? == 0 ]; then
+					Logger "Task stopped successfully" "NOTICE"
+					return 0
+				else
+					return 1
+				fi
+			fi
+		fi
+		sleep $SLEEP_TIME
+	done
+	wait $pid
+	retval=$?
+	return $retval
+}
+
+#### MINIMAL-FUNCTION-SET END ####
 
 # obsolete, use StripQuotes
 function SedStripQuotes {
@@ -713,180 +860,6 @@ function GetRemoteOS {
 	fi
 }
 
-function WaitForPids {
-	# Takes a list of pids separated by space as argument, and waits until all pids are finished
-       local errors=0
-
-        while [ "$#" -gt 0 ]; do
-                for pid in "$@"; do
-                        shift
-                        if kill -0 "$pid" > /dev/null 2>&1; then
-                                Logger "[$pid] is alive." "DEBUG"
-                                set -- "$@" "$pid"
-                        else
-                                wait "$pid"
-                                result=$?
-                                if [ $result -eq 0 ]; then
-                                        Logger "[$pid] exited okay with [$result]" "DEBUG"
-                                else
-                                        errors=$((errors+1))
-                                        Logger "[$pid] exited with bad status [$result]." "WARN"
-                                fi
-                        fi
-                done
-                sleep $SLEEP_TIME
-        done
-	return $errors
-}
-
-
-function WaitForTaskCompletion {
-	local pids="${1}" # list of pids to wait for, separated by a semicolon
-	local soft_max_time="${2}" # If program with pid $pid takes longer than $soft_max_time seconds, will log a warning, unless $soft_max_time equals 0.
-	local hard_max_time="${3}" # If program with pid $pid takes longer than $hard_max_time seconds, will stop execution, unless $hard_max_time equals 0.
-	local caller_name="${4}" # Who called this function
-	local should_exit="${5}" # If true, the function exits on failure
-
-	local soft_alert=0 # Does a soft alert need to be triggered, if yes, send an alert once
-	local log_ttime=0 # local time instance for comparaison
-
-	local seconds_begin=$SECONDS # Seconds since the beginning of the script
-	local exec_time=0 # Seconds since the beginning of this function
-
-	local retval=0 # return value of monitored pid process
-
-	local pid
-	local new_pids
-	local result
-
-	IFS=';' read -r -a pidarray <<< "$pids"
-
-	while [ ${#pidarray[@]} -gt 0 ]; do
-		newarray=""
-		for index in ${!pidarray[@]}; do
-			pid="${pidarray[index]}"
-			echo "run  for $pid"
-			if kill -0 $pid > /dev/null 2>&1; then
-				echo "pid [$pid] is running."
-				newarray+=$pid
-			else
-				wait "$pid"
-				result=$?
-				echo $result
-				if [ $result -eq 0 ]; then
-					echo "pid [$pid] is finished with exit code 0."
-				else
-					echo "pid [$pid] is finished with exit code $result."
-				fi
-			fi
-		done
-		pidarray=$newarray
-		sleep .05
- 	done
-}
-
-sleep 1 &
-pids=$!
-sleep 5 &
-pids="$pids;$!"
-echo "Waiting for pid $pids"
-#sleep 5 &
-#pids="$pids;$!"
-
-WaitForTaskCompletion $pids 0 0 "caller" 1
-
-echo "done"
-exit
-
-function old {
-
-
-
-
-	#TODO: test on FreeBSD, MacOS X and msys / cygwin
-	while kill -0 "$pid" > /dev/null 2>&1
-	do
-		Spinner
-		exec_time=$(($SECONDS - $seconds_begin))
-		if [ $((($exec_time + 1) % $KEEP_LOGGING)) -eq 0 ]; then
-			if [ $log_ttime -ne $exec_time ]; then
-				log_ttime=$exec_time
-				Logger "Current task still running with pid [$pid]." "NOTICE"
-			fi
-		fi
-		if [ $exec_time -gt $soft_max_time ]; then
-			if [ $soft_alert -eq 0 ] && [ $soft_max_time -ne 0 ]; then
-				Logger "Max soft execution time exceeded for task [$caller_name] with pid [$pid]." "WARN"
-				soft_alert=1
-				SendAlert
-
-			fi
-			if [ $exec_time -gt $hard_max_time ] && [ $hard_max_time -ne 0 ]; then
-				Logger "Max hard execution time exceeded for task [$caller_name] with pid [$pid]. Stopping task execution." "ERROR"
-				KillChilds $pid
-				if [ $? == 0 ]; then
-					Logger "Task stopped successfully" "NOTICE"
-					return 0
-				else
-					return 1
-				fi
-			fi
-		fi
-		sleep $SLEEP_TIME
-	done
-	wait $pid
-	retval=$?
-	return $retval
-}
-
-function WaitForCompletion {
-	local pid="${1}" # pid to wait for
-	local soft_max_time="${2}" # If program with pid $pid takes longer than $soft_max_time seconds, will log a warning, unless $soft_max_time equals 0.
-	local hard_max_time="${3}" # If program with pid $pid takes longer than $hard_max_time seconds, will stop execution, unless $hard_max_time equals 0.
-	local caller_name="${4}" # Who called this function
-
-	local soft_alert=0 # Does a soft alert need to be triggered, if yes, send an alert once
-	local log_time=0 # local time instance for comparaison
-
-	local seconds_begin=$SECONDS # Seconds since the beginning of the script
-	local exec_time=0 # Seconds since the beginning of this function
-
-	local retval=0 # return value of monitored pid process
-
-	#TODO: test on FreeBSD, MacOS X and msys / cygwin
-	while kill -0 "$pid" > /dev/null 2>&1
-	do
-		Spinner
-		if [ $((($SECONDS + 1) % $KEEP_LOGGING)) -eq 0 ]; then
-			if [ $log_time -ne $SECONDS ]; then
-				log_time=$SECONDS
-				Logger "Current task still running." "NOTICE"
-			fi
-		fi
-		if [ $SECONDS -gt $soft_max_time ]; then
-			if [ $soft_alert -eq 0 ] && [ $soft_max_time != 0 ]; then
-				Logger "Max soft execution time exceeded for script." "WARN"
-				soft_alert=1
-				SendAlert
-			fi
-			if [ $SECONDS -gt $hard_max_time ] && [ $hard_max_time != 0 ]; then
-				Logger "Max hard execution time exceeded for script in [$caller_name]. Stopping current task execution." "ERROR"
-				KillChilds $pid
-				if [ $? == 0 ]; then
-					Logger "Task stopped successfully" "NOTICE"
-					return 0
-				else
-					return 1
-				fi
-			fi
-		fi
-		sleep $SLEEP_TIME
-	done
-	wait $pid
-	retval=$?
-	return $retval
-}
-
 function RunLocalCommand {
 	local command="${1}" # Command to run
 	local hard_max_time="${2}" # Max time to wait for command to compleet
@@ -953,23 +926,37 @@ function RunRemoteCommand {
 
 function RunBeforeHook {
 
+	local pids=
+
 	if [ "$LOCAL_RUN_BEFORE_CMD" != "" ]; then
-		RunLocalCommand "$LOCAL_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE
+		RunLocalCommand "$LOCAL_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE &
+		pids="$!"
 	fi
 
 	if [ "$REMOTE_RUN_BEFORE_CMD" != "" ]; then
-		RunRemoteCommand "$REMOTE_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE
+		RunRemoteCommand "$REMOTE_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE &
+		pids="$pids;$!"
+	fi
+	if [ "$pids" != "" ]; then
+		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false
 	fi
 }
 
 function RunAfterHook {
 
+	local pids
+
 	if [ "$LOCAL_RUN_AFTER_CMD" != "" ]; then
-		RunLocalCommand "$LOCAL_RUN_AFTER_CMD" $MAX_EXEC_TIME_PER_CMD_AFTER
+		RunLocalCommand "$LOCAL_RUN_AFTER_CMD" $MAX_EXEC_TIME_PER_CMD_AFTER &
+		pids="$!"
 	fi
 
 	if [ "$REMOTE_RUN_AFTER_CMD" != "" ]; then
-		RunRemoteCommand "$REMOTE_RUN_AFTER_CMD" $MAX_EXEC_TIME_PER_CMD_AFTER
+		RunRemoteCommand "$REMOTE_RUN_AFTER_CMD" $MAX_EXEC_TIME_PER_CMD_AFTER &
+		pids="$pids;$!"
+	fi
+	if [ "$pids" != "" ]; then
+		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false
 	fi
 }
 
@@ -1050,8 +1037,6 @@ function RsyncPatternsAdd {
 function RsyncPatternsFromAdd {
         local pattern_type="${1}"
         local pattern_from="${2}"
-
-	local pattern_from=
 
         ## Check if the exclude list has a full path, and if not, add the config file path if there is one
         if [ "$(basename $pattern_from)" == "$pattern_from" ]; then
@@ -1217,7 +1202,6 @@ function InitLocalOSSettings {
                 FIND_CMD=$(dirname $BASH)/find
                 # PROCESS_TEST_CMD assumes there is a variable $pid
 		# Tested on MSYS and cygwin
-		#TODO: remove PROCESS_TEST_CMD if kill -0 works
                 PROCESS_TEST_CMD='ps -a | awk "{\$1=\$1}\$1" | awk "{print \$1}" | grep $pid'
                 PING_CMD='$SYSTEMROOT\system32\ping -n 2'
         else
