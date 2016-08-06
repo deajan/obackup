@@ -4,7 +4,7 @@
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.0
+PROGRAM_VERSION=2.0-dev
 PROGRAM_BUILD=2016080602
 IS_STABLE=yes
 
@@ -285,11 +285,16 @@ function _ListRecursiveBackupDirectoriesLocal {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local directories
+	local directory
+	local retval
 
-	OLD_IFS=$IFS
-	IFS=$PATH_SEPARATOR_CHAR
-	for directory in $RECURSIVE_DIRECTORY_LIST
-	do
+	IFS=$PATH_SEPARATOR_CHAR read -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
+	#OLD_IFS=$IFS
+	#IFS=$PATH_SEPARATOR_CHAR
+	#TODO CHECK THIS
+	#for directory in $RECURSIVE_DIRECTORY_LIST
+	for directory in "${directories[@]}"; do
 		# No sudo here, assuming you should have all necessary rights for local checks
 		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 		Logger "cmd: $cmd" "DEBUG"
@@ -308,7 +313,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 			retval=0
 		fi
 	done
-	IFS=$OLD_IFS
+	#IFS=$OLD_IFS
 	return $retval
 }
 
@@ -316,11 +321,16 @@ function _ListRecursiveBackupDirectoriesRemote {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local directories
+	local directory
+	local retval
 
-	OLD_IFS=$IFS
-	IFS=$PATH_SEPARATOR_CHAR
-	for directory in $RECURSIVE_DIRECTORY_LIST
-	do
+	IFS=$PATH_SEPARATOR_CHAR read -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
+	#OLD_IFS=$IFS
+	#IFS=$PATH_SEPARATOR_CHAR
+	#TODO CHECK THIS
+	#for directory in $RECURSIVE_DIRECTORY_LIST
+	for directory in "${directories[@]}"; do
 		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
@@ -338,7 +348,7 @@ function _ListRecursiveBackupDirectoriesRemote {
 			retval=0
 		fi
 	done
-	IFS=$OLD_IFS
+	#IFS=$OLD_IFS
 	return $retval
 }
 
@@ -922,11 +932,18 @@ function Duplicity {
 function FilesBackup {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	OLD_IFS=$IFS
-	IFS=$PATH_SEPARATOR_CHAR
+	local backupTask
+	local backupTasks
+
+	#TODO: check this new behavior
+
+	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$FILE_BACKUP_TASKS"
+	for backupTask in "${backupTasks[@]}"; do
+	#OLD_IFS=$IFS
+	#IFS=$PATH_SEPARATOR_CHAR
 	# Backup non recursive directories
-	for BACKUP_TASK in $FILE_BACKUP_TASKS
-	do
+	#for BACKUP_TASK in $FILE_BACKUP_TASKS
+	#do
 		Logger "Beginning file backup of [$BACKUP_TASK]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$BACKUP_TASK" "recurse"
@@ -936,9 +953,12 @@ function FilesBackup {
 		CheckTotalExecutionTime
 	done
 
+	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
+	for backupTask in "${backupTasks[@]}"; do
+
 	## Backup files at root of DIRECTORIES_RECURSE_LIST directories
-	for BACKUP_TASK in $RECURSIVE_DIRECTORY_LIST
-	do
+	#for BACKUP_TASK in $RECURSIVE_DIRECTORY_LIST
+	#do
 		Logger "Beginning non recursive file backup of [$BACKUP_TASK]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$BACKUP_TASK" "no-recurse"
@@ -948,9 +968,12 @@ function FilesBackup {
 		CheckTotalExecutionTime
 	done
 
+	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$FILE_RECURSIVE_BACKUP_TASKS"
+	for backupTask in "${backupTasks[@]}"; do
+
 	# Backup sub directories of recursive directories
-	for BACKUP_TASK in $FILE_RECURSIVE_BACKUP_TASKS
-	do
+	#for BACKUP_TASK in $FILE_RECURSIVE_BACKUP_TASKS
+	#do
 		Logger "Beginning recursive file backup of [$BACKUP_TASK]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$BACKUP_TASK" "recurse"
@@ -959,7 +982,7 @@ function FilesBackup {
 		fi
 		CheckTotalExecutionTime
 	done
-	IFS=$OLD_IFS
+	#IFS=$OLD_IFS
 }
 
 function CheckTotalExecutionTime {
