@@ -4,11 +4,11 @@
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.0-RC1
-PROGRAM_BUILD=2016071902
+PROGRAM_VERSION=2.0
+PROGRAM_BUILD=2016080601
 IS_STABLE=yes
 
-## FUNC_BUILD=2016071902
+## FUNC_BUILD=2016072703
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -44,7 +44,7 @@ WARN_ALERT=0
 ## allow debugging from command line with _DEBUG=yes
 if [ ! "$_DEBUG" == "yes" ]; then
 	_DEBUG=no
-	SLEEP_TIME=.1
+	SLEEP_TIME=.001 # Tested under linux and FreeBSD bash, #TODO tests on cygwin / msys
 	_VERBOSE=0
 else
 	SLEEP_TIME=1
@@ -713,11 +713,39 @@ function GetRemoteOS {
 	fi
 }
 
+function WaitForPids {
+	# Takes a list of pids separated by space as argument, and waits until all pids are finished
+       local errors=0
+
+        while [ "$#" -gt 0 ]; do
+                for pid in "$@"; do
+                        shift
+                        if kill -0 "$pid" > /dev/null 2>&1; then
+                                Logger "[$pid] is alive." "DEBUG"
+                                set -- "$@" "$pid"
+                        else
+                                wait "$pid"
+                                result=$?
+                                if [ $result -eq 0 ]; then
+                                        Logger "[$pid] exited okay with [$result]" "DEBUG"
+                                else
+                                        errors=$((errors+1))
+                                        Logger "[$pid] exited with bad status [$result]." "WARN"
+                                fi
+                        fi
+                done
+                sleep $SLEEP_TIME
+        done
+	return $errors
+}
+
+
 function WaitForTaskCompletion {
-	local pid="${1}" # pid to wait for
+	local pids="${1}" # list of pids to wait for, separated by a semicolon
 	local soft_max_time="${2}" # If program with pid $pid takes longer than $soft_max_time seconds, will log a warning, unless $soft_max_time equals 0.
 	local hard_max_time="${3}" # If program with pid $pid takes longer than $hard_max_time seconds, will stop execution, unless $hard_max_time equals 0.
 	local caller_name="${4}" # Who called this function
+	local should_exit="${5}" # If true, the function exits on failure
 
 	local soft_alert=0 # Does a soft alert need to be triggered, if yes, send an alert once
 	local log_ttime=0 # local time instance for comparaison
@@ -727,7 +755,56 @@ function WaitForTaskCompletion {
 
 	local retval=0 # return value of monitored pid process
 
-	while eval "$PROCESS_TEST_CMD" > /dev/null
+	local pid
+	local new_pids
+	local result
+
+	IFS=';' read -r -a pidarray <<< "$pids"
+
+	while [ ${#pidarray[@]} -gt 0 ]; do
+		newarray=""
+		for index in ${!pidarray[@]}; do
+			pid="${pidarray[index]}"
+			echo "run  for $pid"
+			if kill -0 $pid > /dev/null 2>&1; then
+				echo "pid [$pid] is running."
+				newarray+=$pid
+			else
+				wait "$pid"
+				result=$?
+				echo $result
+				if [ $result -eq 0 ]; then
+					echo "pid [$pid] is finished with exit code 0."
+				else
+					echo "pid [$pid] is finished with exit code $result."
+				fi
+			fi
+		done
+		pidarray=$newarray
+		sleep .05
+ 	done
+}
+
+sleep 1 &
+pids=$!
+sleep 5 &
+pids="$pids;$!"
+echo "Waiting for pid $pids"
+#sleep 5 &
+#pids="$pids;$!"
+
+WaitForTaskCompletion $pids 0 0 "caller" 1
+
+echo "done"
+exit
+
+function old {
+
+
+
+
+	#TODO: test on FreeBSD, MacOS X and msys / cygwin
+	while kill -0 "$pid" > /dev/null 2>&1
 	do
 		Spinner
 		exec_time=$(($SECONDS - $seconds_begin))
@@ -776,7 +853,8 @@ function WaitForCompletion {
 
 	local retval=0 # return value of monitored pid process
 
-	while eval "$PROCESS_TEST_CMD" > /dev/null
+	#TODO: test on FreeBSD, MacOS X and msys / cygwin
+	while kill -0 "$pid" > /dev/null 2>&1
 	do
 		Spinner
 		if [ $((($SECONDS + 1) % $KEEP_LOGGING)) -eq 0 ]; then
@@ -1139,6 +1217,7 @@ function InitLocalOSSettings {
                 FIND_CMD=$(dirname $BASH)/find
                 # PROCESS_TEST_CMD assumes there is a variable $pid
 		# Tested on MSYS and cygwin
+		#TODO: remove PROCESS_TEST_CMD if kill -0 works
                 PROCESS_TEST_CMD='ps -a | awk "{\$1=\$1}\$1" | awk "{print \$1}" | grep $pid'
                 PING_CMD='$SYSTEMROOT\system32\ping -n 2'
         else

@@ -13,7 +13,7 @@ README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, s
 
 06 Aug 2016: obackup v2.0 released
 - Made logging begin before remote checks for sanity purposes
-! RunAfterCommands can get executed when trapquit
+- RunAfterCommands can get executed when trapquit
 - Improved process killing and process time control
 - Added optional statistics for installer
 - Added an option to ignore knownhosts for ssh connections (use with caution, this can lead to a security issue)
