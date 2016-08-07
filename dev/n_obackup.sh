@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 
+#TODO: rework old IFS= statements
+
+
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080701
+PROGRAM_BUILD=2016080702
 IS_STABLE=yes
 
 source "./ofunctions.sh"
@@ -946,9 +949,9 @@ function FilesBackup {
 	#do
 		Logger "Beginning file backup of [$BACKUP_TASK]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Duplicity "$BACKUP_TASK" "recurse"
+			Duplicity "$backupTask" "recurse"
 		else
-			Rsync "$BACKUP_TASK" "recurse"
+			Rsync "$backupTask" "recurse"
 		fi
 		CheckTotalExecutionTime
 	done
@@ -961,9 +964,9 @@ function FilesBackup {
 	#do
 		Logger "Beginning non recursive file backup of [$BACKUP_TASK]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Duplicity "$BACKUP_TASK" "no-recurse"
+			Duplicity "$backupTask" "no-recurse"
 		else
-			Rsync "$BACKUP_TASK" "no-recurse"
+			Rsync "$backupTask" "no-recurse"
 		fi
 		CheckTotalExecutionTime
 	done
@@ -976,9 +979,9 @@ function FilesBackup {
 	#do
 		Logger "Beginning recursive file backup of [$BACKUP_TASK]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Duplicity "$BACKUP_TASK" "recurse"
+			Duplicity "$backupTask" "recurse"
 		else
-			Rsync "$BACKUP_TASK" "recurse"
+			Rsync "$backupTask" "recurse"
 		fi
 		CheckTotalExecutionTime
 	done
