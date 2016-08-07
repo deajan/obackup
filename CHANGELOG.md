@@ -4,7 +4,6 @@ KNOWN ISSUES
 - Backup size check does not honor rsync exclude patterns
 - Bandwidth parameter is ignored for SQL backups
 - Missing symlink support when run from MSYS environment
-- Mysqldump errors aren't taken in account
 
 CHANGELOG
 ---------
