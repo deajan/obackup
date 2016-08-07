@@ -8,7 +8,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080702
+PROGRAM_BUILD=2016080703
 IS_STABLE=yes
 
 source "./ofunctions.sh"
@@ -947,7 +947,7 @@ function FilesBackup {
 	# Backup non recursive directories
 	#for BACKUP_TASK in $FILE_BACKUP_TASKS
 	#do
-		Logger "Beginning file backup of [$BACKUP_TASK]." "NOTICE"
+		Logger "Beginning file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$backupTask" "recurse"
 		else
@@ -962,7 +962,7 @@ function FilesBackup {
 	## Backup files at root of DIRECTORIES_RECURSE_LIST directories
 	#for BACKUP_TASK in $RECURSIVE_DIRECTORY_LIST
 	#do
-		Logger "Beginning non recursive file backup of [$BACKUP_TASK]." "NOTICE"
+		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$backupTask" "no-recurse"
 		else
@@ -977,7 +977,7 @@ function FilesBackup {
 	# Backup sub directories of recursive directories
 	#for BACKUP_TASK in $FILE_RECURSIVE_BACKUP_TASKS
 	#do
-		Logger "Beginning recursive file backup of [$BACKUP_TASK]." "NOTICE"
+		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$backupTask" "recurse"
 		else
@@ -993,11 +993,11 @@ function CheckTotalExecutionTime {
 
 	#### Check if max execution time of whole script as been reached
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
-		Logger "Max soft execution time of the whole backup exceeded while backing up [$BACKUP_TASK]." "ERROR"
+		Logger "Max soft execution time of the whole backup exceeded." "ERROR"
 		WARN_ALERT=1
 		SendAlert
 		if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
-			Logger "Max hard execution time of the whole backup exceeded while backing up [$BACKUP_TASK], stopping backup process." "CRITICAL"
+			Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
 			exit 1
 		fi
 	fi
