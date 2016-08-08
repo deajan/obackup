@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
 
-#TODO: rework old IFS= statements
-
-
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080801
+PROGRAM_BUILD=2016080804
 IS_STABLE=yes
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
@@ -1487,10 +1484,12 @@ function _ListDatabasesRemote {
 function ListDatabases {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local output_file	# Return of subfunction
-	local db_name
-	local db_size
-	local db_backup
+	local outputFile	# Return of subfunction
+	local dbName
+	local dbSize
+	local dbBackup
+
+	local dbArray
 
 	if [ $CAN_BACKUP_SQL -ne 1 ]; then
 		Logger "Cannot list databases." "ERROR"
@@ -1502,61 +1501,56 @@ function ListDatabases {
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		_ListDatabasesLocal
 		if [ $? != 0 ]; then
-			output_file=""
+			outputFile=""
 		else
-			output_file="$RUN_DIR/$PROGRAM._ListDatabasesLocal.$SCRIPT_PID"
+			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesLocal.$SCRIPT_PID"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_ListDatabasesRemote
 		if [ $? != 0 ]; then
-			output_file=""
+			outputFile=""
 		else
-			output_file="$RUN_DIR/$PROGRAM._ListDatabasesRemote.$SCRIPT_PID"
+			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesRemote.$SCRIPT_PID"
 		fi
 	fi
 
-	if [ -f "$output_file" ] && [ $CAN_BACKUP_SQL -eq 1 ]; then
-		OLD_IFS=$IFS
-		IFS=$' \n'
-		for line in $(cat "$output_file")
-		do
-			db_name=$(echo $line | cut -f1)
-			db_size=$(echo $line | cut -f2)
+	if [ -f "$outputFile" ] && [ $CAN_BACKUP_SQL -eq 1 ]; then
+		while read -r line; do
+			while read -r name size; do dbName=$name; dbSize=$size; done <<< "$line"
+			#db_name="${line% *}"
+			#db_size="${line# *}"
+			#db_name=$(echo $line | cut -f1)
+			#db_size=$(echo $line | cut -f2)
 
 			if [ "$DATABASES_ALL" == "yes" ]; then
-				db_backup=1
-				IFS=$PATH_SEPARATOR_CHAR
-				for j in $DATABASES_ALL_EXCLUDE_LIST
-				do
-					if [ "$db_name" == "$j" ]; then
-						db_backup=0
+				dbBackup=1
+				IFs=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
+				for j in "${dbArray[@]}"; do
+					if [ "$dbName" == "$j" ]; then
+						dbBackup=0
 					fi
 				done
-				IFS=$' \n'
 			else
-				db_backup=0
-				IFS=$PATH_SEPARATOR_CHAR
-				for j in $DATABASES_LIST
-				do
-					if [ "$db_name" == "$j" ]; then
-						db_backup=1
+				dbBackup=0
+				IFs=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
+				for j in "${dbArray[@]}"; do
+					if [ "$dbName" == "$j" ]; then
+						dbBackup=1
 					fi
 				done
-				IFS=$' \n'
 			fi
 
-			if [ $db_backup -eq 1 ]; then
+			if [ $dbBackup -eq 1 ]; then
 				if [ "$SQL_BACKUP_TASKS" != "" ]; then
-					SQL_BACKUP_TASKS="$SQL_BACKUP_TASKS $db_name"
+					SQL_BACKUP_TASKS="$SQL_BACKUP_TASKS $dbName"
 				else
-				SQL_BACKUP_TASKS="$db_name"
+				SQL_BACKUP_TASKS="$dbName"
 				fi
-				TOTAL_DATABASES_SIZE=$((TOTAL_DATABASES_SIZE+$db_size))
+				TOTAL_DATABASES_SIZE=$((TOTAL_DATABASES_SIZE+$dbSize))
 			else
-				SQL_EXCLUDED_TASKS="$SQL_EXCLUDED_TASKS $db_name"
+				SQL_EXCLUDED_TASKS="$SQL_EXCLUDED_TASKS $dbName"
 			fi
-		done
-		IFS=$OLD_IFS
+		done < "$outputFile"
 
 		Logger "Database backup list: $SQL_BACKUP_TASKS" "DEBUG"
 		Logger "Database exclude list: $SQL_EXCLUDED_TASKS" "DEBUG"
@@ -1574,7 +1568,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 	local directory
 	local retval
 
-	IFS=$PATH_SEPARATOR_CHAR read -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
+	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		# No sudo here, assuming you should have all necessary rights for local checks
 		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
@@ -1605,7 +1599,7 @@ function _ListRecursiveBackupDirectoriesRemote {
 	local directory
 	local retval
 
-	IFS=$PATH_SEPARATOR_CHAR read -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
+	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 		Logger "cmd: $cmd" "DEBUG"
@@ -1633,6 +1627,8 @@ function ListRecursiveBackupDirectories {
 	local output_file
 	local file_exclude
 
+	local fileArray
+
 	Logger "Listing directories to backup." "NOTICE"
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		_ListRecursiveBackupDirectoriesLocal
@@ -1651,19 +1647,14 @@ function ListRecursiveBackupDirectories {
 	fi
 
 	if [ -f "$output_file" ]; then
-		OLD_IFS=$IFS
-		IFS=$' \n'
-		for line in $(cat "$output_file")
-		do
+		while read -r line; do
 			file_exclude=0
-			IFS=$PATH_SEPARATOR_CHAR
-			for k in $RECURSIVE_EXCLUDE_LIST
-			do
+			IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$RECURSIVE_EXCLUDE_LIST"
+			for k in "${fileArray[@]}"; do
 				if [ "$k" == "$line" ]; then
 					file_exclude=1
 				fi
 			done
-			IFS=$' \n'
 
 			if [ $file_exclude -eq 0 ]; then
 				if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
@@ -1676,14 +1667,11 @@ function ListRecursiveBackupDirectories {
 			else
 				FILE_RECURSIVE_EXCLUDED_TASKS="$FILE_RECURSIVE_EXCLUDED_TASKS$PATH_SEPARATOR_CHAR$line"
 			fi
-		done
-		IFS=$OLD_IFS
+		done < "$output_file"
 	fi
 
-	OLD_IFS=$IFS
-	IFS=$PATH_SEPARATOR_CHAR
-	for directory in $DIRECTORY_LIST
-	do
+	IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
+	for directory in "${fileArray[@]}"; do
 		FILE_SIZE_LIST="$FILE_SIZE_LIST $(EscapeSpaces $directory)"
 		if [ "$FILE_BACKUP_TASKS" == "" ]; then
 			FILE_BACKUP_TASKS="$directory"
@@ -1691,7 +1679,6 @@ function ListRecursiveBackupDirectories {
 			FILE_BACKUP_TASKS="$FILE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$directory"
 		fi
 	done
-	IFS=$OLD_IFS
 }
 
 function _GetDirectoriesSizeLocal {
@@ -1854,8 +1841,8 @@ function GetDiskSpaceLocal {
 			Logger "Cannot get disk space in [$path_to_check] on local system." "ERROR"
 			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
 		else
-			DISK_SPACE=$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID | tail -1 | awk '{print $4}')
-			DRIVE=$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID | tail -1 | awk '{print $1}')
+			DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
+			DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
 		fi
 	else
 		Logger "Storage path [$path_to_check] does not exist." "CRITICAL"
@@ -1880,8 +1867,8 @@ function GetDiskSpaceRemote {
 		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
 		return 1
 	else
-		DISK_SPACE=$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID | tail -1 | awk '{print $4}')
-		DRIVE=$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID | tail -1 | awk '{print $1}')
+		DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
+		DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
 	fi
 }
 
@@ -2099,8 +2086,6 @@ function BackupDatabases {
 
 	local database
 
-	OLD_IFS=$IFS
-	IFS=$' \t\n'
 	for database in $SQL_BACKUP_TASKS
 	do
 		Logger "Backing up database [$database]." "NOTICE"
@@ -2108,7 +2093,6 @@ function BackupDatabases {
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} false true
 		CheckTotalExecutionTime
 	done
-	IFS=$OLD_IFS
 }
 
 function Rsync {
@@ -2209,7 +2193,7 @@ function FilesBackup {
 	local backupTask
 	local backupTasks
 
-	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$FILE_BACKUP_TASKS"
+	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
@@ -2220,7 +2204,7 @@ function FilesBackup {
 		CheckTotalExecutionTime
 	done
 
-	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
+	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
@@ -2231,12 +2215,9 @@ function FilesBackup {
 		CheckTotalExecutionTime
 	done
 
-	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$FILE_RECURSIVE_BACKUP_TASKS"
+	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_RECURSIVE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
-
 	# Backup sub directories of recursive directories
-	#for BACKUP_TASK in $FILE_RECURSIVE_BACKUP_TASKS
-	#do
 		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$backupTask" "recurse"
@@ -2245,7 +2226,6 @@ function FilesBackup {
 		fi
 		CheckTotalExecutionTime
 	done
-	#IFS=$OLD_IFS
 }
 
 function CheckTotalExecutionTime {
@@ -2273,13 +2253,9 @@ function _RotateBackupsLocal {
 	local cmd
 	local path
 
-	OLD_IFS=$IFS
-	IFS=$'\t\n'
-	for backup in $(ls -I "*.$PROGRAM.*" "$backup_path")
-	do
+	find "$backup_path" -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
-		while [ $copy -gt 1 ]
-		do
+		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
 				cmd="rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
@@ -2332,7 +2308,6 @@ function _RotateBackupsLocal {
 			fi
 		fi
 	done
-	IFS=$OLD_IFS
 }
 
 function _RotateBackupsRemote {
@@ -2382,13 +2357,9 @@ function RemoteLogger {
 }
 
 function _RotateBackupsRemoteSSH {
-	OLD_IFS=$IFS
-	IFS=$'\t\n'
-	for backup in $(ls -I "*.$PROGRAM.*" "$backup_path")
-	do
+	find "$backup_path" -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
-		while [ $copy -gt 1 ]
-		do
+		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
 				cmd="$COMMAND_SUDO rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
@@ -2436,7 +2407,6 @@ function _RotateBackupsRemoteSSH {
 			fi
 		fi
 	done
-	IFS=$OLD_IFS
 }
 
 	_RotateBackupsRemoteSSH
@@ -2603,8 +2573,7 @@ function GetCommandlineArguments {
 		Usage
 	fi
 
-	for i in "$@"
-	do
+	for i in "$@"; do
 		case $i in
 			--dry)
 			_DRYRUN=1
