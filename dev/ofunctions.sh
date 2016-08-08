@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016080805
+## FUNC_BUILD=2016080806
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 #TODO: set _LOGGER_PREFIX in other apps, specially for osync daemon mode
@@ -968,26 +968,17 @@ function CheckConnectivity3rdPartyHosts {
 
 		if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]; then
 			remote_3rd_party_success=0
-			OLD_IFS=$IFS
-			IFS=$' \t\n'
 			for i in $REMOTE_3RD_PARTY_HOSTS
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
-				if [ "$pids" == "" ]; then
-					pids="$!"
+				WaitForTaskCompletion $! 10 360 ${FUNCNAME[0]} false true
+				if [ $? != 0 ]; then
+					Logger "Cannot ping 3rd party host $i" "NOTICE"
 				else
-					pids="$pids;$!"
+					remote_3rd_party_success=1
 				fi
 			done
 
-			WaitForTaskCompletion $pids 10 360 ${FUNCNAME[0]} false true
-			if [ $? != 0 ]; then
-				Logger "Cannot ping 3rd party host $i" "NOTICE"
-			else
-				remote_3rd_party_success=1
-			fi
-
-			IFS=$OLD_IFS
 			if [ $remote_3rd_party_success -ne 1 ]; then
 				Logger "No remote 3rd party host responded to ping. No internet ?" "ERROR"
 				return 1
