@@ -8,12 +8,12 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080703
+PROGRAM_BUILD=2016080801
 IS_STABLE=yes
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016080805
+## FUNC_BUILD=2016080806
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 #TODO: set _LOGGER_PREFIX in other apps, specially for osync daemon mode
@@ -952,26 +952,17 @@ function CheckConnectivity3rdPartyHosts {
 
 		if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]; then
 			remote_3rd_party_success=0
-			OLD_IFS=$IFS
-			IFS=$' \t\n'
 			for i in $REMOTE_3RD_PARTY_HOSTS
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
-				if [ "$pids" == "" ]; then
-					pids="$!"
+				WaitForTaskCompletion $! 10 360 ${FUNCNAME[0]} false true
+				if [ $? != 0 ]; then
+					Logger "Cannot ping 3rd party host $i" "NOTICE"
 				else
-					pids="$pids;$!"
+					remote_3rd_party_success=1
 				fi
 			done
 
-			WaitForTaskCompletion $pids 10 360 ${FUNCNAME[0]} false true
-			if [ $? != 0 ]; then
-				Logger "Cannot ping 3rd party host $i" "NOTICE"
-			else
-				remote_3rd_party_success=1
-			fi
-
-			IFS=$OLD_IFS
 			if [ $remote_3rd_party_success -ne 1 ]; then
 				Logger "No remote 3rd party host responded to ping. No internet ?" "ERROR"
 				return 1
@@ -1503,10 +1494,6 @@ function _ListRecursiveBackupDirectoriesLocal {
 	local retval
 
 	IFS=$PATH_SEPARATOR_CHAR read -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
-	#OLD_IFS=$IFS
-	#IFS=$PATH_SEPARATOR_CHAR
-	#TODO CHECK THIS
-	#for directory in $RECURSIVE_DIRECTORY_LIST
 	for directory in "${directories[@]}"; do
 		# No sudo here, assuming you should have all necessary rights for local checks
 		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
@@ -1526,7 +1513,6 @@ function _ListRecursiveBackupDirectoriesLocal {
 			retval=0
 		fi
 	done
-	#IFS=$OLD_IFS
 	return $retval
 }
 
@@ -1538,10 +1524,6 @@ function _ListRecursiveBackupDirectoriesRemote {
 	local retval
 
 	IFS=$PATH_SEPARATOR_CHAR read -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
-	#OLD_IFS=$IFS
-	#IFS=$PATH_SEPARATOR_CHAR
-	#TODO CHECK THIS
-	#for directory in $RECURSIVE_DIRECTORY_LIST
 	for directory in "${directories[@]}"; do
 		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 		Logger "cmd: $cmd" "DEBUG"
@@ -1560,7 +1542,6 @@ function _ListRecursiveBackupDirectoriesRemote {
 			retval=0
 		fi
 	done
-	#IFS=$OLD_IFS
 	return $retval
 }
 
@@ -1938,7 +1919,6 @@ function _BackupDatabaseLocalToRemote {
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
 
-	#TODO-v2.0: cannot catch mysqldump warnings
 	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 	local sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
@@ -2129,15 +2109,8 @@ function FilesBackup {
 	local backupTask
 	local backupTasks
 
-	#TODO: check this new behavior
-
 	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
-	#OLD_IFS=$IFS
-	#IFS=$PATH_SEPARATOR_CHAR
-	# Backup non recursive directories
-	#for BACKUP_TASK in $FILE_BACKUP_TASKS
-	#do
 		Logger "Beginning file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$backupTask" "recurse"
@@ -2149,10 +2122,6 @@ function FilesBackup {
 
 	IFS=$PATH_SEPARATOR_CHAR read -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
-
-	## Backup files at root of DIRECTORIES_RECURSE_LIST directories
-	#for BACKUP_TASK in $RECURSIVE_DIRECTORY_LIST
-	#do
 		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
 			Duplicity "$backupTask" "no-recurse"
