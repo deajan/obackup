@@ -34,7 +34,7 @@ You may disable this behavior in the config file.
 You can download the latest obackup script from authors website.
 You may also clone the following git which will maybe have some more recent builds.
 
-    $ git clone -b "v2.0" git://github.com/deajan/obackup.git
+    $ git clone -b "v2.0-maint" git://github.com/deajan/obackup.git
     $ cd obackup
     $ ./install.sh
 
