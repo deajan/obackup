@@ -69,6 +69,10 @@ All backup activity is logged to "/var/log/obackup_backupname.log" or current di
 
 You may mix "--silent" and "--verbose" parameters to output verbose input only in the log files.
 
+## Troubleshooting
+
+Whenever you may encounter rsync zombie processes and/or in unterruptible sleep state processes, you should force unmounting network drives obackup is supposed to deal with.
+
 ## Final words
 
 Backup tasks aren't always reliable, connectivity loss, insufficient disk space, hacked servers with tons of unusefull stuff to backup... Anything can happen.
