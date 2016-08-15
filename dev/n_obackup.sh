@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 
+#TODO: test bad return of _GetDirectoriesSizeLocal & Remote
+
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080804
-IS_STABLE=yes
+PROGRAM_BUILD=2016081501
+IS_STABLE=no
 
 source "./ofunctions.sh"
 

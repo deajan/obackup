@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
 
+#TODO: test bad return of _GetDirectoriesSizeLocal & Remote
+
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080804
-IS_STABLE=yes
+PROGRAM_BUILD=2016081501
+IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016080806
+## FUNC_BUILD=2016081501
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
-
-#TODO: set _LOGGER_PREFIX in other apps, specially for osync daemon mode
-#TODO: set _LOGGER_STDERR in other apps
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
 if ! type "$BASH" > /dev/null; then
@@ -562,6 +561,9 @@ function joinString {
 	local IFS="$1"; shift; echo "$*";
 }
 
+# Time control function for background processes, suitable for multiple synchronous processes
+# Fills a global variable called WAIT_FOR_TASK_COMPLETION that contains list of failed pids in format pid1:result1;pid2:result2
+# Warning: Don't imbricate this function into another run if you plan to use the global variable output
 function WaitForTaskCompletion {
 	local pids="${1}" # pids to wait for, separated by semi-colon
 	local soft_max_time="${2}" # If program with pid $pid takes longer than $soft_max_time seconds, will log a warning, unless $soft_max_time equals 0.
@@ -581,21 +583,36 @@ function WaitForTaskCompletion {
 	local errorcount=0 # Number of pids that finished with errors
 
 	local pidCount # number of given pids
+	local pidState # State of the process
 
 	IFS=';' read -a pidsArray <<< "$pids"
 	pidCount=${#pidsArray[@]}
+
+	WAIT_FOR_TASK_COMPLETION=""
+
+	#TODO: need to find a way to properly handle processes in unterruptible sleep state
 
 	while [ ${#pidsArray[@]} -gt 0 ]; do
 		newPidsArray=()
 		for pid in "${pidsArray[@]}"; do
 			if kill -0 $pid > /dev/null 2>&1; then
-				newPidsArray+=($pid)
+				# Handle uninterruptible sleep state or zombies by ommiting them from running process array
+				#TODO(high): have this tested on *BSD, Mac & Win
+				pidState=$(ps -p$pid -o state=)
+				if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
+					newPidsArray+=($pid)
+				fi
 			else
 				wait $pid
 				result=$?
 				if [ $result -ne 0 ]; then
 					errorcount=$((errorcount+1))
 					Logger "${FUNCNAME[0]} called by [$caller_name] finished monitoring [$pid] with exitcode [$result]." "DEBUG"
+					if [ "$WAIT_FOR_TASK_COMPLETION" == "" ]; then
+						WAIT_FOR_TASK_COMPLETION="$pid:$result"
+					else
+						WAIT_FOR_TASK_COMPLETION=";$pid:$result"
+					fi
 				fi
 			fi
 		done
@@ -1087,7 +1104,6 @@ function PreInit {
 
 	 ## Set rsync default arguments
 	RSYNC_ARGS="-rltD"
-	RSYNC_ATTR_ARGS="-pgo"
 	if [ "$_DRYRUN" -eq 1 ]; then
 		RSYNC_DRY_ARG="-n"
 		DRY_WARNING="/!\ DRY RUN"
@@ -1095,6 +1111,16 @@ function PreInit {
 		RSYNC_DRY_ARG=""
 	fi
 
+	RSYNC_ATTR_ARGS=""
+	if [ "$PRESERVE_PERMISSIONS" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -p"
+	fi
+	if [ "$PRESERVE_OWNER" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -o"
+	fi
+	if [ "$PRESERVE_GROUP" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -g"
+	fi
 	if [ "$PRESERVE_ACL" == "yes" ]; then
 		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
 	fi
@@ -1194,9 +1220,12 @@ function InitLocalOSSettings {
 
 function InitRemoteOSSettings {
 
+	#TODO: fix add -E when both initiator and targets don't run MacOSX and PRESERVE_EXECUTABILITY=yes
 	## MacOSX does not use the -E parameter like Linux or BSD does (-E is mapped to extended attrs instead of preserve executability)
-	if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -E"
+	if [ "$PRESERVE_EXECUTABILITY" != "no" ];then
+		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
+			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -E"
+		fi
 	fi
 
 	if [ "$REMOTE_OS" == "msys" ]; then

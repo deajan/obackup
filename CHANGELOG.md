@@ -10,6 +10,8 @@ CHANGELOG
 
 README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
 
+- Fixed handling of processes in uninterruptible sleep state
+! -preserve options
 - Code cleanup
 - Refactored waiting functions
 
