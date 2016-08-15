@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081501
+PROGRAM_BUILD=2016081502
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1228,7 +1228,7 @@ function Main {
 		if [ "$GET_BACKUP_SIZE" != "no" ]; then
 			GetDirectoriesSize
 		else
-			TOTAL_FILES_SIZE=0
+			TOTAL_FILES_SIZE=-1
 		fi
 	fi
 
