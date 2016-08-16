@@ -32,8 +32,7 @@ _DRYRUN=0
 _SILENT=0
 _LOGGER_PREFIX="date"
 _LOGGER_STDERR=0
-
-if [ $(isNumeric "$KEEP_LOGGING") -ne 1 ]; then
+if [ "$KEEP_LOGGING" == "" ]; then
         KEEP_LOGGING=1801
 fi
 
@@ -202,13 +201,14 @@ function KillChilds {
 
 function KillAllChilds {
 	local pids="${1}" # List of parent pids to kill separated by semi-colon
+	local self="${2:-false}" # Should parent be killed too ?
 
 
 	local errorcount=0
 
 	IFS=';' read -a pidsArray <<< "$pids"
 	for pid in "${pidsArray[@]}"; do
-		KillChilds $pid
+		KillChilds $pid $self
 		if [ $? != 0 ]; then
 			errorcount=$((errorcount+1))
 			fi
