@@ -16,6 +16,9 @@ README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, s
 - Code cleanup
 - Refactored waiting functions
 
+XX xxx 2016: obackup v2.0.1 released
+- Fixed double RunAfterHook launch
+
 06 Aug 2016: obackup v2.0 released
 - Made logging begin before remote checks for sanity purposes
 - RunAfterCommands can get executed when trapquit
