@@ -20,8 +20,7 @@ _DRYRUN=0
 _SILENT=0
 _LOGGER_PREFIX="date"
 _LOGGER_STDERR=0
-
-if [ $(isNumeric "$KEEP_LOGGING") -ne 1 ]; then
+if [ "$KEEP_LOGGING" == "" ]; then
         KEEP_LOGGING=1801
 fi
 
