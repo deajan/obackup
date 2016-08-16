@@ -10,6 +10,7 @@ CHANGELOG
 
 README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
 
+- Made keep logging value configurable and not mandatory
 - Fixed handling of processes in uninterruptible sleep state
 ! -preserve options
 - Code cleanup
