@@ -2,7 +2,7 @@
 
 ###### obackup - Local or Remote, push or pull backup script for files & mysql databases
 ###### (C) 2013-2016 by Orsiris de Jong (www.netpower.fr)
-###### obackup v2.x config file rev 2016081601
+###### obackup v2.1x config file rev 2016081601
 
 ###### GENERAL BACKUP OPTIONS
 
