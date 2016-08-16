@@ -202,6 +202,7 @@ function KillChilds {
 
 function KillAllChilds {
 	local pids="${1}" # List of parent pids to kill separated by semi-colon
+	local self="${2:-false}" # Should parent be killed too ?
 
 	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
@@ -209,7 +210,7 @@ function KillAllChilds {
 
 	IFS=';' read -a pidsArray <<< "$pids"
 	for pid in "${pidsArray[@]}"; do
-		KillChilds $pid
+		KillChilds $pid $self
 		if [ $? != 0 ]; then
 			errorcount=$((errorcount+1))
 			fi
