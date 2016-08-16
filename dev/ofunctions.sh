@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016081603
+## FUNC_BUILD=2016081605
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -21,6 +21,9 @@ _SILENT=0
 _LOGGER_PREFIX="date"
 _LOGGER_STDERR=0
 
+if [ $(isNumeric "$KEEP_LOGGING") -ne 1 ]; then
+        KEEP_LOGGING=1801
+fi
 
 # Initial error status, logging 'WARN', 'ERROR' or 'CRITICAL' will enable alerts flags
 ERROR_ALERT=0
@@ -168,8 +171,8 @@ function QuickLogger {
 
 # Portable child (and grandchild) kill function tester under Linux, BSD and MacOS X
 function KillChilds {
-	local pid="${1}" # Parent pid to kill
-	local self="${2:-false}"
+	local pid="${1}" # Parent pid to kill childs
+	local self="${2:-false}" # Should parent be killed too ?
 
 
 	if children="$(pgrep -P "$pid")"; then
@@ -646,7 +649,7 @@ function WaitForTaskCompletion {
 			if [ $exec_time -gt $hard_max_time ] && [ $hard_max_time -ne 0 ]; then
 				Logger "Max hard execution time exceeded for task [$caller_name] with pids [$(joinString , ${pidsArray[@]})]. Stopping task execution." "ERROR"
 				for pid in "${pidsArray[@]}"; do
-					KillChilds $pid
+					KillChilds $pid true
 					if [ $? == 0 ]; then
 						Logger "Task with pid [$pid] stopped successfully." "NOTICE"
 					else
@@ -800,19 +803,19 @@ function GetRemoteOS {
 		cmd=$SSH_CMD' "uname -spio" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
-		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-1" false true
+		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-1" false true $KEEP_LOGGING
 		retval=$?
 		if [ $retval != 0 ]; then
 			cmd=$SSH_CMD' "uname -v" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-2" false true
+			WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-2" false true $KEEP_LOGGING
 			retval=$?
 			if [ $retval != 0 ]; then
 				cmd=$SSH_CMD' "uname" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
-				WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-3" false true
+				WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-3" false true $KEEP_LOGGING
 				retval=$?
 				if [ $retval != 0 ]; then
 					Logger "Cannot Get remote OS type." "ERROR"
@@ -865,7 +868,7 @@ function RunLocalCommand {
 
 	Logger "Running command [$command] on local host." "NOTICE"
 	eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
-	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} false true
+	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} false true $KEEP_LOGGING
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -900,7 +903,7 @@ function RunRemoteCommand {
 	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
-	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} false true
+	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} false true $KEEP_LOGGING
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -934,7 +937,7 @@ function RunBeforeHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false true
+		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
 	fi
 }
 
@@ -953,7 +956,7 @@ function RunAfterHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false true
+		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
 	fi
 }
 
@@ -964,7 +967,7 @@ function CheckConnectivityRemoteHost {
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
-			WaitForTaskCompletion $! 10 180 ${FUNCNAME[0]} false true
+			WaitForTaskCompletion $! 10 180 ${FUNCNAME[0]} false true $KEEP_LOGGING
 			if [ $? != 0 ]; then
 				Logger "Cannot ping $REMOTE_HOST" "ERROR"
 				return 1
@@ -986,7 +989,7 @@ function CheckConnectivity3rdPartyHosts {
 			for i in $REMOTE_3RD_PARTY_HOSTS
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
-				WaitForTaskCompletion $! 10 360 ${FUNCNAME[0]} false true
+				WaitForTaskCompletion $! 10 360 ${FUNCNAME[0]} false true $KEEP_LOGGING
 				if [ $? != 0 ]; then
 					Logger "Cannot ping 3rd party host $i" "NOTICE"
 				else
