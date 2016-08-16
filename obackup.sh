@@ -4,8 +4,8 @@
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.0
-PROGRAM_BUILD=2016080601
+PROGRAM_VERSION=2.0.1
+PROGRAM_BUILD=2016081601
 IS_STABLE=yes
 
 ## FUNC_BUILD=2016071902-b
@@ -2531,4 +2531,3 @@ fi
 
 RunBeforeHook
 Main
-RunAfterHook
