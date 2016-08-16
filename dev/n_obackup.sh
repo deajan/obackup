@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081601
+PROGRAM_BUILD=2016081602
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1338,10 +1338,6 @@ if [ "$LOGFILE" == "" ]; then
 	fi
 else
 	LOG_FILE="$LOGFILE"
-fi
-
-if [ $(isNumeric "$KEEP_LOGGING") -ne 1 ]; then
-	KEEP_LOGGING=1801
 fi
 
 if [ "$IS_STABLE" != "yes" ]; then
