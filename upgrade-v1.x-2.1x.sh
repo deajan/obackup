@@ -180,6 +180,10 @@ function RewriteConfigFiles {
                 sed -i'.tmp' '/^DELTA_COPIES=*/a\'$'\n''BANDWIDTH=0\'$'\n''' "$config_file"
         fi
 
+	if ! grep "^KEEP_LOGGING=" "$config_file" > /dev/null; then
+                sed -i'.tmp' '/^HARD_MAX_EXEC_TIME_TOTAL=*/a\'$'\n''KEEP_LOGGING=1801\'$'\n''' "$config_file"
+        fi
+
 	if ! grep "^STOP_ON_CMD_ERROR=" "$config_file" > /dev/null; then
                 sed -i'.tmp' '/^MAX_EXEC_TIME_PER_CMD_AFTER=*/a\'$'\n''STOP_ON_CMD_ERROR=no\'$'\n''' "$config_file"
         fi
