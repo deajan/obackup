@@ -3,7 +3,7 @@ SUBPROGRAM=[prgname]
 PROGRAM="$SUBPROGRAM-batch" # Batch program to run osync / obackup instances sequentially and rerun failed ones
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr - ozy@netpower.fr"
-PROGRAM_BUILD=2016081702Xo
+PROGRAM_BUILD=2016081703
 
 ## Runs an osync /obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
@@ -84,15 +84,19 @@ function Batch {
 		## Get list of .conf files
 		for confFile in $CONF_FILE_PATH/*.conf
 		do
-			if [ "$runList" == "" ]; then
-				runList="$confFile"
-			else
-				runList=$runList" $confFile"
+			if [ -f "$confFile" ]; then
+				if [ "$runList" == "" ]; then
+					runList="$confFile"
+				else
+					runList=$runList" $confFile"
+				fi
 			fi
 		done
-	if [ -f "$CONF_FILE_PATH" ] && [ "${CONF_FILE_PATH##*.}" == "conf" ]; then
+	elif [ -f "$CONF_FILE_PATH" ] && [ "${CONF_FILE_PATH##*.}" == "conf" ]; then
 		runList="$CONF_FILE_PATH"
-	else
+	fi
+
+	if [ "$runList" == "" ]; then
 		Logger "Cannot find conf file path [$CONF_FILE_PATH]." "CRITICAL"
 		Usage
 	fi
