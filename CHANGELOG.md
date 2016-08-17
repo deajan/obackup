@@ -10,9 +10,16 @@ CHANGELOG
 
 README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
 
+- Improved batch runner
+	- Batch runner works for directories and direct paths
+	- Fixed batch runner does not rerun obackup on warnings only
+	- Code compliance
+	- More clear semantic
+	! doc reruns
+!- better explanation of max-reruns (is actually runs)
 - Made keep logging value configurable and not mandatory
 - Fixed handling of processes in uninterruptible sleep state
-! -preserve options
+! -preserve options (+preflight check)
 - Code cleanup
 - Refactored waiting functions
 
