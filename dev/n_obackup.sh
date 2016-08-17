@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 
 #TODO: test bad return of _GetDirectoriesSizeRemote
-#TODO(critical): fix double path in rotate functions (switching from ls to find)
+#TODO(critical): test RotateCopies remote
 #TODO(high): check paths with spaces (again)
-#TODO(low): investigate all exit codes and adapt depending on WARN / ERROR so obackup-batch won't rerun WARN runs
-#TODO(low): obackup-rerun is minimal 1 and not 0
+#TODO(low): doc obackup-rerun is minimal 1 and not 0
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081702
+PROGRAM_BUILD=2016081704
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -412,6 +411,7 @@ function _GetDirectoriesSizeLocal {
 	local cmd
 
 	# No sudo here, assuming you should have all the necessary rights
+	#TODO(low): render this more properly
 	cmd='echo "'$dir_list'" | xargs du -cs | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
@@ -977,20 +977,25 @@ function _RotateBackupsLocal {
 	local cmd
 	local path
 
-	find "$backup_path" -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	#TODO(low): check if mindepth / maxdepth is compatible BSD & MSYS
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
-				cmd="rm -rf \"$backup.$PROGRAM.$copy\""
-				Logger "cmd: $cmd" "DEBUG"
-				eval "$cmd" &
-				WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
-				if [ $? != 0 ]; then
-					Logger "Cannot delete oldest copy [$backup.$PROGRAM.$copy]." "ERROR"
+				path="$backup.$PROGRAM.$copy"
+				if [ -f "$path" ] || [ -d "$path" ]; then
+					cmd="rm -rf \"$path\""
+					Logger "cmd: $cmd" "DEBUG"
+					eval "$cmd" &
+					WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
+					if [ $? != 0 ]; then
+						Logger "Cannot delete oldest copy [$path]." "ERROR"
+					fi
 				fi
 			fi
+
 			path="$backup.$PROGRAM.$(($copy-1))"
-			if [[ -f $path || -d $path ]]; then
+			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
@@ -1081,19 +1086,22 @@ function RemoteLogger {
 }
 
 function _RotateBackupsRemoteSSH {
-	find "$backup_path" -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
-				cmd="$COMMAND_SUDO rm -rf \"$backup.$PROGRAM.$copy\""
-				RemoteLogger "cmd: $cmd" "DEBUG"
-				eval "$cmd"
-				if [ $? != 0 ]; then
-					RemoteLogger "Cannot delete oldest copy [$backup.$PROGRAM.$copy]." "ERROR"
+				path="$backup.$PROGRAM.$copy"
+				if [ -f "$path" ] || [ -d "$path" ]; then
+					cmd="$COMMAND_SUDO rm -rf \"$path\""
+					RemoteLogger "cmd: $cmd" "DEBUG"
+					eval "$cmd"
+					if [ $? != 0 ]; then
+						RemoteLogger "Cannot delete oldest copy [$path]." "ERROR"
+					fi
 				fi
 			fi
 			path="$backup.$PROGRAM.$(($copy-1))"
-			if [[ -f $path || -d $path ]]; then
+			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="$COMMAND_SUDO mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
 				eval "$cmd"
@@ -1154,7 +1162,7 @@ function RotateBackups {
 	local rotate_copies="${2}"
 	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	Logger "Rotating backups." "NOTICE"
+	Logger "Rotating backups in [$backup_path] for [$rotate_copies] copies." "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		_RotateBackupsLocal "$backup_path" "$rotate_copies"
