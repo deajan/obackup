@@ -2,7 +2,7 @@
 
 ###### obackup - Local or Remote, push or pull backup script for files & mysql databases
 ###### (C) 2013-2016 by Orsiris de Jong (www.netpower.fr)
-###### obackup v2.1x config file rev 2016081601
+###### obackup v2.1x config file rev 2016081701
 
 ###### GENERAL BACKUP OPTIONS
 
@@ -124,6 +124,13 @@ RSYNC_EXCLUDE_FROM=""
 
 ## List separator char. You may set an alternative separator char for your directories lists above.
 PATH_SEPARATOR_CHAR=";"
+
+## Preserve basic linux permissions
+PRESERVE_PERMISSIONS=yes
+PRESERVE_OWNER=yes
+PRESERVE_GROUP=yes
+## On MACOS X, does not work and will be ignored 
+PRESERVE_EXECUTABILITY=yes
 
 ## Preserve ACLS. Make sure source and target FS can hold same ACLs or you'll get loads of errors.
 PRESERVE_ACL=no

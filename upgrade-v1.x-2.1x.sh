@@ -2,11 +2,11 @@
 
 PROGRAM="obackup config file upgrade script"
 SUBPROGRAM="obackup"
-AUTHOR="(C) 2015 by Orsiris \"Ozy\" de Jong"
+AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
-NEW_PROGRAM_VERSION="v2.x"
-PROGRAM_BUILD=2016041201
+NEW_PROGRAM_VERSION="v2.1x"
+PROGRAM_BUILD=20160817.1
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always as$
 if ! type "$BASH" > /dev/null; then
@@ -160,8 +160,20 @@ function RewriteConfigFiles {
 	        sed -i'.tmp' '/^RSYNC_EXCLUDE_PATTERN=*/a\'$'\n''RSYNC_INCLUDE_PATTERN=""\'$'\n''' "$config_file"
 	fi
 
-	if ! grep "^RSYNC_INCLUDE_FROM=" "$config_file" > /dev/null; then
-	        sed -i'.tmp' '/^RSYNC_EXCLUDE_FROM=*/a\'$'\n''RSYNC_INCLUDE_FROM=""\'$'\n''' "$config_file"
+	if ! grep "^PRESERVE_PERMISSIONS=" "$config_file" > /dev/null; then
+	        sed -i'.tmp' '/^PATH_SEPARATOR_CHAR=*/a\'$'\n''PRESERVE_PERMISSIONS=yes\'$'\n''' "$config_file"
+	fi
+
+	if ! grep "^PRESERVE_OWNER=" "$config_file" > /dev/null; then
+	        sed -i'.tmp' '/^PRESERVE_PERMISSIONS=*/a\'$'\n''PRESERVE_OWNER=yes\'$'\n''' "$config_file"
+	fi
+
+	if ! grep "^PRESERVE_GROUP=" "$config_file" > /dev/null; then
+	        sed -i'.tmp' '/^PRESERVE_OWNER=*/a\'$'\n''PRESERVE_GROUP=yes\'$'\n''' "$config_file"
+	fi
+
+	if ! grep "^PRESERVE_EXECUTABILITY=" "$config_file" > /dev/null; then
+	        sed -i'.tmp' '/^PRESERVE_GROUP=*/a\'$'\n''PRESERVE_EXECUTABILITY=yes\'$'\n''' "$config_file"
 	fi
 
         if ! grep "^PARTIAL=" "$config_file" > /dev/null; then

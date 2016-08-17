@@ -10,6 +10,8 @@ CHANGELOG
 
 README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
 
+! update doc on sudoers paths
+- Added options to ignore permissions, ownership and groups
 - Improved batch runner
 	- Batch runner works for directories and direct paths
 	- Fixed batch runner does not rerun obackup on warnings only
