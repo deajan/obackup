@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016081605
+## FUNC_BUILD=2016081701
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -604,7 +604,7 @@ function WaitForTaskCompletion {
 			if kill -0 $pid > /dev/null 2>&1; then
 				# Handle uninterruptible sleep state or zombies by ommiting them from running process array
 				#TODO(high): have this tested on *BSD, Mac & Win
-				pidState=$(ps -p$pid -o state=)
+				pidState=$(ps -p$pid -o state= 2 > /dev/null)
 				if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
 					newPidsArray+=($pid)
 				fi
