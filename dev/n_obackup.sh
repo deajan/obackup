@@ -3,13 +3,15 @@
 #TODO: test bad return of _GetDirectoriesSizeRemote
 #TODO(critical): fix double path in rotate functions (switching from ls to find)
 #TODO(high): check paths with spaces (again)
+#TODO(low): investigate all exit codes and adapt depending on WARN / ERROR so obackup-batch won't rerun WARN runs
+#TODO(low): obackup-rerun is minimal 1 and not 0
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081701
+PROGRAM_BUILD=2016081702
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -34,7 +36,7 @@ CAN_BACKUP_FILES=1
 
 function TrapStop {
 	Logger "/!\ Manual exit of backup script. Backups may be in inconsistent state." "WARN"
-	exit 1
+	exit 2
 }
 
 function TrapQuit {
