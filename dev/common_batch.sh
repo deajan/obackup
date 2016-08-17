@@ -3,10 +3,15 @@ SUBPROGRAM=[prgname]
 PROGRAM="$SUBPROGRAM-batch" # Batch program to run osync / obackup instances sequentially and rerun failed ones
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr - ozy@netpower.fr"
-PROGRAM_BUILD=2016081703
+PROGRAM_BUILD=2016081704
 
 ## Runs an osync /obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
+
+if ! type "$BASH" > /dev/null; then
+        echo "Please run this script only with bash shell. Tested on bash >= 3.2"
+        exit 127
+fi
 
 ## Configuration file path. The path where all the osync / obackup conf files are, usually /etc/osync or /etc/obackup
 CONF_FILE_PATH=/etc/$SUBPROGRAM
@@ -110,7 +115,7 @@ function Batch {
 			wait $!
 			result=$?
 			if [ $result != 0 ]; then
-				if [ $result == 1 ] || [ $result == 120 ] || [ $result == 128 ]; then
+				if [ $result == 1 ] || [ $result == 128 ]; then # Do not handle exit code 127 because it is already handled here
 					Logger "Run instance $(basename $confFile) failed with exit code [$result]." "ERROR"
 					if [ "$runAgainList" == "" ]; then
 						runAgainList="$confFile"
