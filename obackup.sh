@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 
-#TODO: test bad return of _GetDirectoriesSizeLocal & Remote
+#TODO: test bad return of _GetDirectoriesSizeRemote
+#TODO(critical): fix double path in rotate functions (switching from ls to find)
+#TODO(high): check paths with spaces (again)
+#TODO(low): investigate all exit codes and adapt depending on WARN / ERROR so obackup-batch won't rerun WARN runs
+#TODO(low): obackup-rerun is minimal 1 and not 0
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081603
+PROGRAM_BUILD=2016081702
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
@@ -1270,7 +1274,7 @@ CAN_BACKUP_FILES=1
 
 function TrapStop {
 	Logger "/!\ Manual exit of backup script. Backups may be in inconsistent state." "WARN"
-	exit 1
+	exit 2
 }
 
 function TrapQuit {
@@ -1364,7 +1368,7 @@ function CheckCurrentConfig {
 	fi
 
 	# Check all variables that should contain a numerical value >= 0
-	declare -a num_vars=(BACKUP_SIZE_MINIMUM SQL_WARN_MIN_SPACE FILE_WARN_MIN_SPACE SOFT_MAX_EXEC_TIME_DB_TASK HARD_MAX_EXEC_TIME_DB_TASK COMPRESSION_LEVEL SOFT_MAX_EXEC_TIME_FILE_TASK HARD_MAX_EXEC_TIME_FILE_TASK BANDWIDTH SOFT_MAX_EXEC_TIME_TOTAL HARD_MAX_EXEC_TIME_TOTAL ROTATE_SQL_COPIES ROTATE_FILE_COPIES MAX_EXEC_TIME_PER_CMD_BEFORE MAX_EXEC_TIME_PER_CMD_AFTER)
+	declare -a num_vars=(BACKUP_SIZE_MINIMUM SQL_WARN_MIN_SPACE FILE_WARN_MIN_SPACE SOFT_MAX_EXEC_TIME_DB_TASK HARD_MAX_EXEC_TIME_DB_TASK COMPRESSION_LEVEL SOFT_MAX_EXEC_TIME_FILE_TASK HARD_MAX_EXEC_TIME_FILE_TASK BANDWIDTH SOFT_MAX_EXEC_TIME_TOTAL HARD_MAX_EXEC_TIME_TOTAL ROTATE_SQL_COPIES ROTATE_FILE_COPIES KEEP_LOGGING MAX_EXEC_TIME_PER_CMD_BEFORE MAX_EXEC_TIME_PER_CMD_AFTER)
 	for i in "${num_vars[@]}"; do
 		test="if [ $(IsNumeric \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
@@ -2187,22 +2191,22 @@ function _RotateBackupsLocal {
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
-				cmd="rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
+				cmd="rm -rf \"$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
 				WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
 				if [ $? != 0 ]; then
-					Logger "Cannot delete oldest copy [$backup_path/$backup.$PROGRAM.$copy]." "ERROR"
+					Logger "Cannot delete oldest copy [$backup.$PROGRAM.$copy]." "ERROR"
 				fi
 			fi
-			path="$backup_path/$backup.$PROGRAM.$(($copy-1))"
+			path="$backup.$PROGRAM.$(($copy-1))"
 			if [[ -f $path || -d $path ]]; then
-				cmd="mv \"$path\" \"$backup_path/$backup.$PROGRAM.$copy\""
+				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
 				WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
 				if [ $? != 0 ]; then
-					Logger "Cannot move [$path] to [$backup_path/$backup.$PROGRAM.$copy]." "ERROR"
+					Logger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
 				fi
 
 			fi
@@ -2211,30 +2215,30 @@ function _RotateBackupsLocal {
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]; then
-			cmd="mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
 			if [ $? != 0 ]; then
-				Logger "Cannot move [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
+				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
-			cmd="cp -R \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
 			if [ $? != 0 ]; then
-				Logger "Cannot copy [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
+				Logger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
 		else
-			cmd="mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
 			if [ $? != 0 ]; then
-				Logger "Cannot move [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
+				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 		fi
 	done
@@ -2285,20 +2289,20 @@ function _RotateBackupsRemoteSSH {
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
-				cmd="$COMMAND_SUDO rm -rf \"$backup_path/$backup.$PROGRAM.$copy\""
+				cmd="$COMMAND_SUDO rm -rf \"$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
 				eval "$cmd"
 				if [ $? != 0 ]; then
-					RemoteLogger "Cannot delete oldest copy [$backup_path/$backup.$PROGRAM.$copy]." "ERROR"
+					RemoteLogger "Cannot delete oldest copy [$backup.$PROGRAM.$copy]." "ERROR"
 				fi
 			fi
-			path="$backup_path/$backup.$PROGRAM.$(($copy-1))"
+			path="$backup.$PROGRAM.$(($copy-1))"
 			if [[ -f $path || -d $path ]]; then
-				cmd="$COMMAND_SUDO mv \"$path\" \"$backup_path/$backup.$PROGRAM.$copy\""
+				cmd="$COMMAND_SUDO mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
 				eval "$cmd"
 				if [ $? != 0 ]; then
-					RemoteLogger "Cannot move [$path] to [$backup_path/$backup.$PROGRAM.$copy]." "ERROR"
+					RemoteLogger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
 				fi
 
 			fi
@@ -2307,27 +2311,27 @@ function _RotateBackupsRemoteSSH {
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]; then
-			cmd="$COMMAND_SUDO mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="$COMMAND_SUDO mv \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "cmd: $cmd" "DEBUG"
 			eval "$cmd"
 			if [ $? != 0 ]; then
-				RemoteLogger "Cannot move [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
-			cmd="$COMMAND_SUDO cp -R \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="$COMMAND_SUDO cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "cmd: $cmd" "DEBUG"
 			eval "$cmd"
 			if [ $? != 0 ]; then
-				RemoteLogger "Cannot copy [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
 		else
-			cmd="$COMMAND_SUDO mv \"$backup_path/$backup\" \"$backup_path/$backup.$PROGRAM.1\""
+			cmd="$COMMAND_SUDO mv \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "cmd: $cmd" "DEBUG"
 			eval "$cmd"
 			if [ $? != 0 ]; then
-				RemoteLogger "Cannot move [$backup_path/$backup] to [$backup_path/$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 		fi
 	done

@@ -3,7 +3,7 @@ SUBPROGRAM=obackup
 PROGRAM="$SUBPROGRAM-batch" # Batch program to run osync / obackup instances sequentially and rerun failed ones
 AUTHOR="(L) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr - ozy@netpower.fr"
-PROGRAM_BUILD=2016052501
+PROGRAM_BUILD=2016081701
 
 ## Runs an osync /obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
@@ -14,8 +14,8 @@ CONF_FILE_PATH=/etc/$SUBPROGRAM
 ## If maximum execution time is not reached, failed instances will be rerun. Max exec time is in seconds. Example is set to 10 hours.
 MAX_EXECUTION_TIME=36000
 
-## Specifies the number of reruns an instance may get
-MAX_RERUNS=3
+## Specifies the number of total runs an instance may get
+MAX_RUNS=3
 
 ## Log file path
 if [ -w /var/log ]; then
@@ -78,38 +78,49 @@ function CheckEnvironment {
 }
 
 function Batch {
+	local runs=0 # Number of batch runs
+	local runList # Actual conf file list to run
+	local runAgainList # List of failed conf files sto run again
+
+	local confFile
+	local result
+
 	## Get list of .conf files
-	for i in $CONF_FILE_PATH/*.conf
+	for confFile in "$CONF_FILE_PATH/*.conf"
 	do
-		if [ "$RUN" == "" ]; then
-			RUN="$i"
+		if [ "$runList" == "" ]; then
+			runList="$confFile"
 		else
-			RUN=$RUN" $i"
+			runList=$runList" $confFile"
 		fi
 	done
 
-	RERUNS=0
-	while ([ $MAX_EXECUTION_TIME -gt $SECONDS ] || [ $MAX_EXECUTION_TIME -eq 0 ]) && [ "$RUN" != "" ] && [ $MAX_RERUNS -gt $RERUNS ]
+	while ([ $MAX_EXECUTION_TIME -gt $SECONDS ] || [ $MAX_EXECUTION_TIME -eq 0 ]) && [ "$runList" != "" ] && [ $MAX_RUNS -gt $runs ]
 	do
-		Logger "$SUBPROGRAM instances will be run for: $RUN" "NOTICE"
-		for i in $RUN
+		Logger "$SUBPROGRAM instances will be run for: $runList" "NOTICE"
+		for confFile in $runList
 		do
-			$SUBPROGRAM_EXECUTABLE "$i" $opts &
+			$SUBPROGRAM_EXECUTABLE "$confFile" $opts &
 			wait $!
-			if [ $? != 0 ]; then
-				Logger "Run instance $(basename $i) failed" "ERROR"
-				if [ "$RUN_AGAIN" == "" ]; then
-					RUN_AGAIN="$i"
-				else
-					RUN_AGAIN=$RUN_AGAIN" $i"
+			result=$?
+			if [ $result != 0 ]; then
+				if [ $result == 1 ] || [ $result == 120 ] || [ $result == 128 ]; then
+					Logger "Run instance $(basename $confFile) failed with exit code [$result]." "ERROR"
+					if [ "$runAgainList" == "" ]; then
+						runAgainList="$confFile"
+					else
+						runAgainList=$runAgainList" $confFile"
+					fi
+				elif [ $result == 2 ]; then
+					Logger "Run instance $(basename $confFile) finished with warnings." "WARN"
 				fi
 			else
-				Logger "Run instance $(basename $i) succeed." "NOTICE"
+				Logger "Run instance $(basename $confFile) succeed." "NOTICE"
 			fi
 		done
-		RUN="$RUN_AGAIN"
-		RUN_AGAIN=""
-		RERUNS=$(($RERUNS + 1))
+		runList="$runAgainList"
+		runAgainList=""
+		runs=$(($runs + 1))
 	done
 }
 
