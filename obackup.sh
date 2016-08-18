@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
 
 #TODO: test bad return of _GetDirectoriesSizeRemote
-#TODO(critical): fix double path in rotate functions (switching from ls to find)
-#TODO(high): check paths with spaces (again)
-#TODO(low): investigate all exit codes and adapt depending on WARN / ERROR so obackup-batch won't rerun WARN runs
-#TODO(low): obackup-rerun is minimal 1 and not 0
+#TODO(critical): test RotateCopies remote
+#TODO(high): check paths with spaces (again) - fails
+#TODO(low): doc obackup-rerun is minimal 1 and not 0
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081702
+PROGRAM_BUILD=2016081803
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016081605
+## FUNC_BUILD=2016081701
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -601,7 +600,7 @@ function WaitForTaskCompletion {
 			if kill -0 $pid > /dev/null 2>&1; then
 				# Handle uninterruptible sleep state or zombies by ommiting them from running process array
 				#TODO(high): have this tested on *BSD, Mac & Win
-				pidState=$(ps -p$pid -o state=)
+				pidState=$(ps -p$pid -o state= 2 > /dev/null)
 				if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
 					newPidsArray+=($pid)
 				fi
@@ -713,7 +712,7 @@ function EscapeSpaces {
 }
 
 function IsNumeric {
-	eval "local value=\"${1}\"" # Needed so variable variables can be processed
+	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
 
 	local re="^-?[0-9]+([.][0-9]+)?$"
 	if [[ $value =~ $re ]]; then
@@ -742,9 +741,9 @@ function urlEncode {
 }
 
 function urlDecode {
-    local url_encoded="${1//+/ }"
+	local url_encoded="${1//+/ }"
 
-    printf '%b' "${url_encoded//%/\\x}"
+	printf '%b' "${url_encoded//%/\\x}"
 }
 
 function GetLocalOS {
@@ -1267,7 +1266,8 @@ PARTIAL_DIR=".obackup_workdir_partial"
 # $FILE_BACKUP_TASKS list of directories to backup, found in config file
 # $FILE_RECURSIVE_BACKUP_TASKS, list of directories to backup, computed from config file recursive list
 # $FILE_RECURSIVE_EXCLUDED_TASKS, list of all directories excluded from recursive list
-# $FILE_SIZE_LIST, list of all directories to include in GetDirectoriesSize
+# $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes for local command
+# $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
 
 CAN_BACKUP_SQL=1
 CAN_BACKUP_FILES=1
@@ -1480,7 +1480,7 @@ function ListDatabases {
 
 			if [ "$DATABASES_ALL" == "yes" ]; then
 				dbBackup=1
-				IFs=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
+				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
 						dbBackup=0
@@ -1488,7 +1488,7 @@ function ListDatabases {
 				done
 			else
 				dbBackup=0
-				IFs=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
+				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
 						dbBackup=1
@@ -1611,11 +1611,13 @@ function ListRecursiveBackupDirectories {
 
 			if [ $file_exclude -eq 0 ]; then
 				if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
+					FILE_SIZE_LIST_LOCAL="\"$line\""
+					FILE_SIZE_LIST_REMOTE="\'$line\'"
 					FILE_RECURSIVE_BACKUP_TASKS="$line"
-					FILE_SIZE_LIST="$(EscapeSpaces $line)"
 				else
+					FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$line\""
+					FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$line\'"
 					FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
-					FILE_SIZE_LIST="$FILE_SIZE_LIST $(EscapeSpaces $line)"
 				fi
 			else
 				FILE_RECURSIVE_EXCLUDED_TASKS="$FILE_RECURSIVE_EXCLUDED_TASKS$PATH_SEPARATOR_CHAR$line"
@@ -1625,7 +1627,14 @@ function ListRecursiveBackupDirectories {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
 	for directory in "${fileArray[@]}"; do
-		FILE_SIZE_LIST="$FILE_SIZE_LIST $(EscapeSpaces $directory)"
+		if [ "$FILE_SIZE_LIST_LOCAL" == "" ]; then
+			FILE_SIZE_LIST_LOCAL="\"$directory\""
+			FILE_SIZE_LIST_REMOTE="\'$directory\'"
+		else
+			FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$directory\""
+			FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$directory\'"
+		fi
+
 		if [ "$FILE_BACKUP_TASKS" == "" ]; then
 			FILE_BACKUP_TASKS="$directory"
 		else
@@ -1640,7 +1649,8 @@ function _GetDirectoriesSizeLocal {
 	local cmd
 
 	# No sudo here, assuming you should have all the necessary rights
-	cmd='echo "'$dir_list'" | xargs du -cs | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+	# This is not pretty, but works with all supported systems
+	cmd="du -cs $dir_list | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} false true $KEEP_LOGGING
@@ -1670,7 +1680,7 @@ function _GetDirectoriesSizeRemote {
 	local cmd
 
 	# Error output is different from stdout because not all files in list may fail at once
-	cmd=$SSH_CMD' "echo '$dir_list' | xargs '$COMMAND_SUDO' du -cs | tail -n1 | cut -f1" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+	cmd=$SSH_CMD' '$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} false true $KEEP_LOGGING
@@ -1699,11 +1709,11 @@ function GetDirectoriesSize {
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST"
+			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST_LOCAL"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST"
+			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST_REMOTE"
 		fi
 	fi
 }
@@ -2187,20 +2197,25 @@ function _RotateBackupsLocal {
 	local cmd
 	local path
 
-	find "$backup_path" -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	#TODO(low): check if mindepth / maxdepth is compatible BSD & MSYS
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
-				cmd="rm -rf \"$backup.$PROGRAM.$copy\""
-				Logger "cmd: $cmd" "DEBUG"
-				eval "$cmd" &
-				WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
-				if [ $? != 0 ]; then
-					Logger "Cannot delete oldest copy [$backup.$PROGRAM.$copy]." "ERROR"
+				path="$backup.$PROGRAM.$copy"
+				if [ -f "$path" ] || [ -d "$path" ]; then
+					cmd="rm -rf \"$path\""
+					Logger "cmd: $cmd" "DEBUG"
+					eval "$cmd" &
+					WaitForTaskCompletion $! 3600 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
+					if [ $? != 0 ]; then
+						Logger "Cannot delete oldest copy [$path]." "ERROR"
+					fi
 				fi
 			fi
+
 			path="$backup.$PROGRAM.$(($copy-1))"
-			if [[ -f $path || -d $path ]]; then
+			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
@@ -2285,19 +2300,22 @@ function RemoteLogger {
 }
 
 function _RotateBackupsRemoteSSH {
-	find "$backup_path" -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
-				cmd="$COMMAND_SUDO rm -rf \"$backup.$PROGRAM.$copy\""
-				RemoteLogger "cmd: $cmd" "DEBUG"
-				eval "$cmd"
-				if [ $? != 0 ]; then
-					RemoteLogger "Cannot delete oldest copy [$backup.$PROGRAM.$copy]." "ERROR"
+				path="$backup.$PROGRAM.$copy"
+				if [ -f "$path" ] || [ -d "$path" ]; then
+					cmd="$COMMAND_SUDO rm -rf \"$path\""
+					RemoteLogger "cmd: $cmd" "DEBUG"
+					eval "$cmd"
+					if [ $? != 0 ]; then
+						RemoteLogger "Cannot delete oldest copy [$path]." "ERROR"
+					fi
 				fi
 			fi
 			path="$backup.$PROGRAM.$(($copy-1))"
-			if [[ -f $path || -d $path ]]; then
+			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="$COMMAND_SUDO mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
 				eval "$cmd"
@@ -2357,7 +2375,7 @@ function RotateBackups {
 	local backup_path="${1}"
 	local rotate_copies="${2}"
 
-	Logger "Rotating backups." "NOTICE"
+	Logger "Rotating backups in [$backup_path] for [$rotate_copies] copies." "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		_RotateBackupsLocal "$backup_path" "$rotate_copies"
