@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016081701
+## FUNC_BUILD=2016081801
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -718,7 +718,7 @@ function EscapeSpaces {
 }
 
 function IsNumeric {
-	eval "local value=\"${1}\"" # Needed so variable variables can be processed
+	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
 
 	local re="^-?[0-9]+([.][0-9]+)?$"
 	if [[ $value =~ $re ]]; then
@@ -747,9 +747,9 @@ function urlEncode {
 }
 
 function urlDecode {
-    local url_encoded="${1//+/ }"
+	local url_encoded="${1//+/ }"
 
-    printf '%b' "${url_encoded//%/\\x}"
+	printf '%b' "${url_encoded//%/\\x}"
 }
 
 function GetLocalOS {
@@ -1308,6 +1308,11 @@ function InitRemoteOSSettings {
 		REMOTE_STAT_CTIME_MTIME_CMD="stat -c \\\"%n;%Z;%Y\\\""
 	fi
 
+}
+
+## IFS debug function
+function PrintIFS {
+	printf "IFS is: %q" "$IFS"
 }
 
 ## END Generic functions
