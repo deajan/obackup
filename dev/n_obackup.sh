@@ -2,7 +2,7 @@
 
 #TODO: test bad return of _GetDirectoriesSizeRemote
 #TODO(critical): test RotateCopies remote
-#TODO(high): check paths with spaces (again)
+#TODO(high): check paths with spaces (again) - fails
 #TODO(low): doc obackup-rerun is minimal 1 and not 0
 
 ###### Remote push/pull (or local) backup script for files & databases
@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081704
+PROGRAM_BUILD=2016081801
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -381,11 +381,11 @@ function ListRecursiveBackupDirectories {
 
 			if [ $file_exclude -eq 0 ]; then
 				if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
+					FILE_SIZE_LIST="\"$line\""
 					FILE_RECURSIVE_BACKUP_TASKS="$line"
-					FILE_SIZE_LIST="$(EscapeSpaces $line)"
 				else
+					FILE_SIZE_LIST="$FILE_SIZE_LIST \"$line\""
 					FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
-					FILE_SIZE_LIST="$FILE_SIZE_LIST $(EscapeSpaces $line)"
 				fi
 			else
 				FILE_RECURSIVE_EXCLUDED_TASKS="$FILE_RECURSIVE_EXCLUDED_TASKS$PATH_SEPARATOR_CHAR$line"
@@ -395,7 +395,12 @@ function ListRecursiveBackupDirectories {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
 	for directory in "${fileArray[@]}"; do
-		FILE_SIZE_LIST="$FILE_SIZE_LIST $(EscapeSpaces $directory)"
+		if [ "$FILE_SIZE_LIST" == "" ]; then
+			FILE_SIZE_LIST="\"$directory\""
+		else
+			FILE_SIZE_LIST="$FILE_SIZE_LIST \"$directory\""
+		fi
+
 		if [ "$FILE_BACKUP_TASKS" == "" ]; then
 			FILE_BACKUP_TASKS="$directory"
 		else
@@ -411,8 +416,8 @@ function _GetDirectoriesSizeLocal {
 	local cmd
 
 	# No sudo here, assuming you should have all the necessary rights
-	#TODO(low): render this more properly
-	cmd='echo "'$dir_list'" | xargs du -cs | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+	# This is not pretty, but works with all supported systems
+	cmd="du -cs $dir_list | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} false true $KEEP_LOGGING
@@ -443,7 +448,7 @@ function _GetDirectoriesSizeRemote {
 	local cmd
 
 	# Error output is different from stdout because not all files in list may fail at once
-	cmd=$SSH_CMD' "echo '$dir_list' | xargs '$COMMAND_SUDO' du -cs | tail -n1 | cut -f1" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+	cmd=$SSH_CMD' "'$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} false true $KEEP_LOGGING
@@ -473,6 +478,7 @@ function GetDirectoriesSize {
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
+			Logger "2. $FILE_SIZE_LIST" "NOTICE"
 			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
