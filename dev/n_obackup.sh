@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081801
+PROGRAM_BUILD=2016081803
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -28,7 +28,8 @@ PARTIAL_DIR=".obackup_workdir_partial"
 # $FILE_BACKUP_TASKS list of directories to backup, found in config file
 # $FILE_RECURSIVE_BACKUP_TASKS, list of directories to backup, computed from config file recursive list
 # $FILE_RECURSIVE_EXCLUDED_TASKS, list of all directories excluded from recursive list
-# $FILE_SIZE_LIST, list of all directories to include in GetDirectoriesSize
+# $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes for local command
+# $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
 
 CAN_BACKUP_SQL=1
 CAN_BACKUP_FILES=1
@@ -247,7 +248,7 @@ function ListDatabases {
 
 			if [ "$DATABASES_ALL" == "yes" ]; then
 				dbBackup=1
-				IFs=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
+				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
 						dbBackup=0
@@ -255,7 +256,7 @@ function ListDatabases {
 				done
 			else
 				dbBackup=0
-				IFs=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
+				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
 						dbBackup=1
