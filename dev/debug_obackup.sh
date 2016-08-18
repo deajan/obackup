@@ -15,7 +15,7 @@ IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016081701
+## FUNC_BUILD=2016081801
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -1325,6 +1325,11 @@ function InitRemoteOSSettings {
 
 }
 
+## IFS debug function
+function PrintIFS {
+	printf "IFS is: %q" "$IFS"
+}
+
 ## END Generic functions
 
 _LOGGER_PREFIX="time"
@@ -1341,7 +1346,7 @@ PARTIAL_DIR=".obackup_workdir_partial"
 # $FILE_RECURSIVE_BACKUP_TASKS, list of directories to backup, computed from config file recursive list
 # $FILE_RECURSIVE_EXCLUDED_TASKS, list of all directories excluded from recursive list
 # $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes for local command
-# $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
+# $FILE_SIZE_LIST_REMOTE, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
 
 CAN_BACKUP_SQL=1
 CAN_BACKUP_FILES=1
@@ -2151,7 +2156,7 @@ function Rsync {
 	local rsync_cmd
 
 	if [ "$KEEP_ABSOLUTE_PATHS" == "yes" ]; then
-		file_storage_path="$(dirname $FILE_STORAGE/${backup_directory#/})"
+		file_storage_path=$(dirname "$FILE_STORAGE/${backup_directory#/}")
 	else
 		file_storage_path="$FILE_STORAGE"
 	fi
@@ -2172,10 +2177,12 @@ function Rsync {
 		_CreateDirectoryLocal "$file_storage_path"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
+		backup_directory=$(EscapeSpaces "$backup_directory")
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
+		file_storage_path=$(EscapeSpaces "$file_storage_path")
 		_CreateDirectoryRemote "$file_storage_path"
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	fi
