@@ -381,10 +381,12 @@ function ListRecursiveBackupDirectories {
 
 			if [ $file_exclude -eq 0 ]; then
 				if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
-					FILE_SIZE_LIST="\"$line\""
+					FILE_SIZE_LIST_LOCAL="\"$line\""
+					FILE_SIZE_LIST_REMOTE="\'$line\'"
 					FILE_RECURSIVE_BACKUP_TASKS="$line"
 				else
-					FILE_SIZE_LIST="$FILE_SIZE_LIST \"$line\""
+					FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$line\""
+					FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$line\'"
 					FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
 				fi
 			else
@@ -395,10 +397,12 @@ function ListRecursiveBackupDirectories {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
 	for directory in "${fileArray[@]}"; do
-		if [ "$FILE_SIZE_LIST" == "" ]; then
-			FILE_SIZE_LIST="\"$directory\""
+		if [ "$FILE_SIZE_LIST_LOCAL" == "" ]; then
+			FILE_SIZE_LIST_LOCAL="\"$directory\""
+			FILE_SIZE_LIST_REMOTE="\'$directory\'"
 		else
-			FILE_SIZE_LIST="$FILE_SIZE_LIST \"$directory\""
+			FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$directory\""
+			FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$directory\'"
 		fi
 
 		if [ "$FILE_BACKUP_TASKS" == "" ]; then
@@ -448,7 +452,7 @@ function _GetDirectoriesSizeRemote {
 	local cmd
 
 	# Error output is different from stdout because not all files in list may fail at once
-	cmd=$SSH_CMD' "'$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+	cmd=$SSH_CMD' '$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} false true $KEEP_LOGGING
@@ -478,12 +482,11 @@ function GetDirectoriesSize {
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			Logger "2. $FILE_SIZE_LIST" "NOTICE"
-			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST"
+			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST_LOCAL"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST"
+			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST_REMOTE"
 		fi
 	fi
 }
