@@ -5,12 +5,12 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081806
+PROGRAM_BUILD=2016082202
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016081802
+## FUNC_BUILD=2016082204
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -193,7 +193,7 @@ function KillChilds {
 		# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
 	if ( [ "$self" == true ] && kill -0 $pid > /dev/null 2>&1); then
 		Logger "Sending SIGTERM to process [$pid]." "DEBUG"
-		kill -s SIGTERM "$pid"
+		kill -s TERM "$pid"
 		if [ $? != 0 ]; then
 			sleep 15
 			Logger "Sending SIGTERM to process [$pid] failed." "DEBUG"
@@ -609,28 +609,6 @@ function WaitForTaskCompletion {
 
 	while [ ${#pidsArray[@]} -gt 0 ]; do
 		newPidsArray=()
-		for pid in "${pidsArray[@]}"; do
-			if kill -0 $pid > /dev/null 2>&1; then
-				# Handle uninterruptible sleep state or zombies by ommiting them from running process array
-				#TODO(high): have this tested on *BSD, Mac & Win
-				pidState=$(ps -p$pid -o state= 2 > /dev/null)
-				if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
-					newPidsArray+=($pid)
-				fi
-			else
-				wait $pid
-				result=$?
-				if [ $result -ne 0 ]; then
-					errorcount=$((errorcount+1))
-					Logger "${FUNCNAME[0]} called by [$caller_name] finished monitoring [$pid] with exitcode [$result]." "DEBUG"
-					if [ "$WAIT_FOR_TASK_COMPLETION" == "" ]; then
-						WAIT_FOR_TASK_COMPLETION="$pid:$result"
-					else
-						WAIT_FOR_TASK_COMPLETION=";$pid:$result"
-					fi
-				fi
-			fi
-		done
 
 		Spinner
 		if [ $counting == true ]; then
@@ -670,12 +648,42 @@ function WaitForTaskCompletion {
 			fi
 		fi
 
+		for pid in "${pidsArray[@]}"; do
+			if kill -0 $pid > /dev/null 2>&1; then
+				# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
+				#TODO(high): have this tested on *BSD, Mac & Win
+				pidState=$(ps -p$pid -o state= 2 > /dev/null)
+				if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
+					newPidsArray+=($pid)
+				fi
+			else
+				# pid is dead, get it's exit code from wait command
+				wait $pid
+				retval=$?
+				if [ $retval -ne 0 ]; then
+					errorcount=$((errorcount+1))
+					Logger "${FUNCNAME[0]} called by [$caller_name] finished monitoring [$pid] with exitcode [$result]." "DEBUG"
+					if [ "$WAIT_FOR_TASK_COMPLETION" == "" ]; then
+						WAIT_FOR_TASK_COMPLETION="$pid:$result"
+					else
+						WAIT_FOR_TASK_COMPLETION=";$pid:$result"
+					fi
+				fi
+			fi
+		done
+
 		pidsArray=("${newPidsArray[@]}")
 		sleep $SLEEP_TIME
 	done
 
 	Logger "${FUNCNAME[0]} ended for [$caller_name] using [$pidCount] subprocesses with [$errorcount] errors." "PARANOIA_DEBUG"	#__WITH_PARANOIA_DEBUG
-	return $errorcount
+
+	# Return exit code if only one process was monitored, else return number of errors
+	if [ $pidCount -eq 1 ] && [ $errorcount -eq 0 ]; then
+		return $errorcount
+	else
+		return $errorcount
+	fi
 }
 
 function CleanUp {
@@ -807,19 +815,19 @@ function GetRemoteOS {
 		cmd=$SSH_CMD' "uname -spio" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
-		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-1" false true $KEEP_LOGGING
+		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-1" true $KEEP_LOGGING
 		retval=$?
 		if [ $retval != 0 ]; then
 			cmd=$SSH_CMD' "uname -v" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-2" false true $KEEP_LOGGING
+			WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-2" true $KEEP_LOGGING
 			retval=$?
 			if [ $retval != 0 ]; then
 				cmd=$SSH_CMD' "uname" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
-				WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-3" false true $KEEP_LOGGING
+				WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-3" true $KEEP_LOGGING
 				retval=$?
 				if [ $retval != 0 ]; then
 					Logger "Cannot Get remote OS type." "ERROR"
@@ -872,7 +880,7 @@ function RunLocalCommand {
 
 	Logger "Running command [$command] on local host." "NOTICE"
 	eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
-	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} false true $KEEP_LOGGING
+	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -907,7 +915,7 @@ function RunRemoteCommand {
 	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
-	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} false true $KEEP_LOGGING
+	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -941,7 +949,7 @@ function RunBeforeHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
+		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} true $KEEP_LOGGING
 	fi
 }
 
@@ -960,7 +968,7 @@ function RunAfterHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} false true $KEEP_LOGGING
+		WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} true $KEEP_LOGGING
 	fi
 }
 
@@ -971,7 +979,7 @@ function CheckConnectivityRemoteHost {
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
-			WaitForTaskCompletion $! 10 180 ${FUNCNAME[0]} false true $KEEP_LOGGING
+			WaitForTaskCompletion $! 10 180 ${FUNCNAME[0]} true $KEEP_LOGGING
 			if [ $? != 0 ]; then
 				Logger "Cannot ping $REMOTE_HOST" "ERROR"
 				return 1
@@ -993,7 +1001,7 @@ function CheckConnectivity3rdPartyHosts {
 			for i in $REMOTE_3RD_PARTY_HOSTS
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
-				WaitForTaskCompletion $! 10 360 ${FUNCNAME[0]} false true $KEEP_LOGGING
+				WaitForTaskCompletion $! 180 360 ${FUNCNAME[0]} true $KEEP_LOGGING
 				if [ $? != 0 ]; then
 					Logger "Cannot ping 3rd party host $i" "NOTICE"
 				else
@@ -1365,9 +1373,7 @@ function TrapQuit {
 		Logger "Backup script finished with warnings." "WARN"
 		exitcode=2
 	else
-		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
-			RunAfterHook
-		fi
+		RunAfterHook
 		CleanUp
 		Logger "Backup script finshed." "NOTICE"
 		exitcode=0
@@ -2505,7 +2511,7 @@ function Init {
 	local hosturiandpath
 	local hosturi
 
-	trap TrapStop SIGINT SIGQUIT SIGTERM SIGHUP
+	trap TrapStop INT QUIT TERM HUP
 	trap TrapQuit EXIT
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
