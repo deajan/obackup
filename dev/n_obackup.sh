@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016081806
+PROGRAM_BUILD=2016082201
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -54,8 +54,7 @@ function TrapQuit {
 		Logger "Backup script finished with warnings." "WARN"
 		exitcode=2
 	else
-		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
-			RunAfterHook
+		RunAfterHook
 		fi
 		CleanUp
 		Logger "Backup script finshed." "NOTICE"
@@ -1194,7 +1193,7 @@ function Init {
 	local hosturiandpath
 	local hosturi
 
-	trap TrapStop SIGINT SIGQUIT SIGTERM SIGHUP
+	trap TrapStop INT QUIT TERM HUP
 	trap TrapQuit EXIT
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
