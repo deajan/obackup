@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016082201
+PROGRAM_BUILD=2016082202
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -55,7 +55,6 @@ function TrapQuit {
 		exitcode=2
 	else
 		RunAfterHook
-		fi
 		CleanUp
 		Logger "Backup script finshed." "NOTICE"
 		exitcode=0
