@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016082501
+PROGRAM_BUILD=2016082601
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -825,8 +825,7 @@ function BackupDatabases {
 	for database in $SQL_BACKUP_TASKS
 	do
 		Logger "Backing up database [$database]." "NOTICE"
-		BackupDatabase $database &
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
+		BackupDatabase $database
 		CheckTotalExecutionTime
 	done
 }
