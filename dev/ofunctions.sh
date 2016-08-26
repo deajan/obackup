@@ -265,10 +265,10 @@ function SendAlert {
 		subject="Alert for $INSTANCE_ID"
 	fi
 
-	if [ runAlert == true ]; then
+	if [ $runAlert == true ]; then
 		subject="Current run $subject"
 	else
-		subject="Fnished run Final $subject"
+		subject="Fnished run $subject"
 	fi
 
 	if [ "$mail_no_attachment" -eq 0 ]; then
