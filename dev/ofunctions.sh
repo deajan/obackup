@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016082604
+## FUNC_BUILD=2016082606
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -666,11 +666,11 @@ function WaitForTaskCompletion {
 				retval=$?
 				if [ $retval -ne 0 ]; then
 					errorcount=$((errorcount+1))
-					Logger "${FUNCNAME[0]} called by [$caller_name] finished monitoring [$pid] with exitcode [$result]." "DEBUG"
+					Logger "${FUNCNAME[0]} called by [$caller_name] finished monitoring [$pid] with exitcode [$retval]." "DEBUG"
 					if [ "$WAIT_FOR_TASK_COMPLETION" == "" ]; then
-						WAIT_FOR_TASK_COMPLETION="$pid:$result"
+						WAIT_FOR_TASK_COMPLETION="$pid:$retval"
 					else
-						WAIT_FOR_TASK_COMPLETION=";$pid:$result"
+						WAIT_FOR_TASK_COMPLETION=";$pid:$retval"
 					fi
 				fi
 			fi
