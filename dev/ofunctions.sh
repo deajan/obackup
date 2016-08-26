@@ -28,6 +28,9 @@ fi
 ERROR_ALERT=0
 WARN_ALERT=0
 
+# Current log
+CURRENT_LOG
+
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
 if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
 	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
@@ -89,6 +92,7 @@ function _Logger {
 	local evalue="${3}" # What to log to stderr
 
 	echo -e "$lvalue" >> "$LOG_FILE"
+	CURRENT_LOG="$CURRENT_LOG"$'\n'"$lvalue"
 
 	if [ "$_LOGGER_STDERR" -eq 1 ]; then
 		cat <<< "$evalue" 1>&2
@@ -256,8 +260,8 @@ function SendAlert {
 	else
 		mail_no_attachment=0
 	fi
-	#TODO(low): Change tail -n 50 to end of fil up to last script begin
-	body="$MAIL_ALERT_MSG"$'\n\n'$(tail -n 50 "$LOG_FILE")
+	body="$MAIL_ALERT_MSG"$'\n\n'"$CURRENT_LOG"
+
 	if [ $ERROR_ALERT -eq 1 ]; then
 		subject="Error alert for $INSTANCE_ID"
 	elif [ $WARN_ALERT -eq 1 ]; then
