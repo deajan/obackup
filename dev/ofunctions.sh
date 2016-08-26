@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016082603
+## FUNC_BUILD=2016082604
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -1024,15 +1024,15 @@ function __CheckArguments {
 	# Checks the number of arguments of a function and raises an error if some are missing
 
 	if [ "$_DEBUG" == "yes" ]; then
-		local number_of_arguments="${1}" # Number of arguments the tested function should have, can be a number of a range, eg 0-2 for zero to two arguments
-		local number_of_given_arguments="${2}" # Number of arguments that have been passed
-		local function_name="${3}" # Function name that called __CheckArguments
+		local numberOfArguments="${1}" # Number of arguments the tested function should have, can be a number of a range, eg 0-2 for zero to two arguments
+		local numberOfGivenArguments="${2}" # Number of arguments that have been passed
+		local functionName="${3}" # Function name that called __CheckArguments
 
 		local minArgs
 		local maxArgs
 
 		if [ "$_PARANOIA_DEBUG" == "yes" ]; then
-			Logger "Entering function [$function_name]." "DEBUG"
+			Logger "Entering function [$functionName]." "DEBUG"
 		fi
 
 		# All arguments of the function to check are passed as array in ${4} (the function call waits for $@)
@@ -1040,30 +1040,31 @@ function __CheckArguments {
 		# In order to avoid this, we need to iterate over ${4} and count
 
 		local iterate=4
-		local fetch_arguments=1
-		local arg_list=""
-		while [ $fetch_arguments -eq 1 ]; do
+		local fetchArguments=1
+		local argList=""
+		local countedArguments
+		while [ $fetchArguments -eq 1 ]; do
 			cmd='argument=${'$iterate'}'
 			eval $cmd
 			if [ "$argument" = "" ]; then
-				fetch_arguments=0
+				fetchArguments=0
 			else
-				arg_list="$arg_list [Argument $(($iterate-3)): $argument]"
+				argList="$arg_list [Argument $(($iterate-3)): $argument]"
 				iterate=$(($iterate+1))
 			fi
 		done
-		local counted_arguments=$((iterate-4))
+		countedArguments=$((iterate-4))
 
-		if [ $(isNumeric $number_of_arguments) == "1" ]; then
-			$minArgs = $number_of_arguments
-			$maxArgs = $number_of_arguments
+		if [ $(IsNumeric "$numberOfArguments") -eq 1 ]; then
+			minArgs=$numberOfArguments
+			maxArgs=$numberOfArguments
 		else
-			IFS='-' read minArgs maxArgs <<< "$pids"
+			IFS='-' read minArgs maxArgs <<< "$numberOfArguments"
 		fi
 
-		if ! ([ $counted_arguments -ge $minArgs ] && [ $counted_arguments -le $maxArgs ]); then
-			Logger "Function $function_name may have inconsistent number of arguments. Expected: $number_of_arguments, count: $counted_arguments, bash seen: $number_of_given_arguments. see log file." "ERROR"
-			Logger "Arguments passed: $arg_list" "ERROR"
+		if ! ([ $countedArguments -ge $minArgs ] && [ $countedArguments -le $maxArgs ]); then
+			Logger "Function $functionName may have inconsistent number of arguments. Expected min: $minArgs, max: $maxArgs, count: $countedArguments, bash seen: $numberOfGivenArguments. see log file." "ERROR"
+			Logger "Arguments passed: $argList" "ERROR"
 		fi
 	fi
 }
