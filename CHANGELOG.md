@@ -8,8 +8,22 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
-README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, sed missing (see if StripQuotes mandatory)
+README: FreeBSD execution needs mailer (not found), sudo missing, bash needed
 
+- Logs sent by mail are easier to read
+	- Better subject (currently running or finished run)
+	- Fixed bogus double log sent in alert mails
+	- Only current run log is now sent
+	- Alert sending is now triggered after last action
+- Made unix signals posix compliant
+- Config file upgrade script now updates header
+! Add encrpyt storage to upgrade script
+- Added basic unit tests for all three operation modes
+! add update log line in config file from upgrade script
+! check if freebsd macos & win are compatible with new find -mindepth -maxdepth
+! update doc for batch runs instead of reruns
+! update doc mysql use per host file + create encrypted my.cnf file if mysql >= 5.6
+- Fixed problem with spaces in directories to backup (again !)
 ! update doc on sudoers paths
 - Added options to ignore permissions, ownership and groups
 - Improved batch runner
@@ -18,14 +32,10 @@ README: FreeBSD execution needs mailer (not found), sudo missing, bash needed, s
 	- Code compliance
 	- More clear semantic
 	! doc reruns
-!- better explanation of max-reruns (is actually runs)
 - Made keep logging value configurable and not mandatory
 - Fixed handling of processes in uninterruptible sleep state
-! -preserve options (+preflight check)
 - Code cleanup
 - Refactored waiting functions
-
-XX xxx 2016: obackup v2.0.1 released
 - Fixed double RunAfterHook launch
 
 06 Aug 2016: obackup v2.0 released
