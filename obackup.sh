@@ -5,12 +5,12 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016082202
+PROGRAM_BUILD=2016082603
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016082204
+## FUNC_BUILD=2016082605
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -37,6 +37,9 @@ fi
 # Initial error status, logging 'WARN', 'ERROR' or 'CRITICAL' will enable alerts flags
 ERROR_ALERT=0
 WARN_ALERT=0
+
+# Current log
+CURRENT_LOG
 
 
 ## allow debugging from command line with _DEBUG=yes
@@ -94,6 +97,7 @@ function _Logger {
 	local evalue="${3}" # What to log to stderr
 
 	echo -e "$lvalue" >> "$LOG_FILE"
+	CURRENT_LOG="$CURRENT_LOG"$'\n'"$lvalue"
 
 	if [ "$_LOGGER_STDERR" -eq 1 ]; then
 		cat <<< "$evalue" 1>&2
@@ -216,10 +220,13 @@ function KillAllChilds {
 
 # osync/obackup/pmocr script specific mail alert function, use SendEmail function for generic mail sending
 function SendAlert {
+	local runAlert="${1:-false}" # Specifies if current message is sent while running or at the end of a run
+
 
 	local mail_no_attachment=
 	local attachment_command=
 	local subject=
+	local body=
 
 	# Windows specific settings
 	local encryption_string=
@@ -248,7 +255,8 @@ function SendAlert {
 	else
 		mail_no_attachment=0
 	fi
-	MAIL_ALERT_MSG="$MAIL_ALERT_MSG"$'\n\n'$(tail -n 50 "$LOG_FILE")
+	body="$MAIL_ALERT_MSG"$'\n\n'"$CURRENT_LOG"
+
 	if [ $ERROR_ALERT -eq 1 ]; then
 		subject="Error alert for $INSTANCE_ID"
 	elif [ $WARN_ALERT -eq 1 ]; then
@@ -257,11 +265,17 @@ function SendAlert {
 		subject="Alert for $INSTANCE_ID"
 	fi
 
+	if [ $runAlert == true ]; then
+		subject="Currently runing - $subject"
+	else
+		subject="Fnished run - $subject"
+	fi
+
 	if [ "$mail_no_attachment" -eq 0 ]; then
 		attachment_command="-a $ALERT_LOG_FILE"
 	fi
 	if type mutt > /dev/null 2>&1 ; then
-		echo "$MAIL_ALERT_MSG" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS $attachment_command
+		echo "$body" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS $attachment_command
 		if [ $? != 0 ]; then
 			Logger "Cannot send alert mail via $(type -p mutt) !!!" "WARN"
 		else
@@ -278,10 +292,10 @@ function SendAlert {
 		else
 			attachment_command=""
 		fi
-		echo "$MAIL_ALERT_MSG" | $(type -p mail) $attachment_command -s "$subject" $DESTINATION_MAILS
+		echo "$body" | $(type -p mail) $attachment_command -s "$subject" $DESTINATION_MAILS
 		if [ $? != 0 ]; then
 			Logger "Cannot send alert mail via $(type -p mail) with attachments !!!" "WARN"
-			echo "$MAIL_ALERT_MSG" | $(type -p mail) -s "$subject" $DESTINATION_MAILS
+			echo "$body" | $(type -p mail) -s "$subject" $DESTINATION_MAILS
 			if [ $? != 0 ]; then
 				Logger "Cannot send alert mail via $(type -p mail) without attachments !!!" "WARN"
 			else
@@ -295,7 +309,7 @@ function SendAlert {
 	fi
 
 	if type sendmail > /dev/null 2>&1 ; then
-		echo -e "Subject:$subject\r\n$MAIL_ALERT_MSG" | $(type -p sendmail) $DESTINATION_MAILS
+		echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) $DESTINATION_MAILS
 		if [ $? != 0 ]; then
 			Logger "Cannot send alert mail via $(type -p sendmail) !!!" "WARN"
 		else
@@ -318,7 +332,7 @@ function SendAlert {
 		if [ "$SMTP_USER" != "" ] && [ "$SMTP_USER" != "" ]; then
 			auth_string="-auth -user \"$SMTP_USER\" -pass \"$SMTP_PASSWORD\""
 		fi
-		$(type mailsend.exe) -f $SENDER_MAIL -t "$DESTINATION_MAILS" -sub "$subject" -M "$MAIL_ALERT_MSG" -attach "$attachment" -smtp "$SMTP_SERVER" -port "$SMTP_PORT" $encryption_string $auth_string
+		$(type mailsend.exe) -f $SENDER_MAIL -t "$DESTINATION_MAILS" -sub "$subject" -M "$body" -attach "$attachment" -smtp "$SMTP_SERVER" -port "$SMTP_PORT" $encryption_string $auth_string
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type mailsend.exe) !!!" "WARN"
 		else
@@ -334,7 +348,7 @@ function SendAlert {
 		else
 			SMTP_OPTIONS=""
 		fi
-		$(type -p sendemail) -f $SENDER_MAIL -t "$DESTINATION_MAILS" -u "$subject" -m "$MAIL_ALERT_MSG" -s $SMTP_SERVER $SMTP_OPTIONS > /dev/null 2>&1
+		$(type -p sendemail) -f $SENDER_MAIL -t "$DESTINATION_MAILS" -u "$subject" -m "$body" -s $SMTP_SERVER $SMTP_OPTIONS > /dev/null 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot send alert mail via $(type -p sendemail) !!!" "WARN"
 		else
@@ -345,7 +359,7 @@ function SendAlert {
 
 	# pfSense specific
 	if [ -f /usr/local/bin/mail.php ]; then
-		echo "$MAIL_ALERT_MSG" | /usr/local/bin/mail.php -s="$subject"
+		echo "$body" | /usr/local/bin/mail.php -s="$subject"
 		if [ $? != 0 ]; then
 			Logger "Cannot send alert mail via /usr/local/bin/mail.php (pfsense) !!!" "WARN"
 		else
@@ -611,7 +625,7 @@ function WaitForTaskCompletion {
 			if [ $soft_alert -eq 0 ] && [ $soft_max_time -ne 0 ]; then
 				Logger "Max soft execution time exceeded for task [$caller_name] with pids [$(joinString , ${pidsArray[@]})]." "WARN"
 				soft_alert=1
-				SendAlert
+				SendAlert true
 
 			fi
 			if [ $exec_time -gt $hard_max_time ] && [ $hard_max_time -ne 0 ]; then
@@ -624,7 +638,7 @@ function WaitForTaskCompletion {
 						Logger "Could not stop task with pid [$pid]." "ERROR"
 					fi
 				done
-				SendAlert
+				SendAlert true
 				errrorcount=$((errorcount+1))
 			fi
 		fi
@@ -951,7 +965,7 @@ function CheckConnectivityRemoteHost {
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
-			WaitForTaskCompletion $! 10 180 ${FUNCNAME[0]} true $KEEP_LOGGING
+			WaitForTaskCompletion $! 60 180 ${FUNCNAME[0]} true $KEEP_LOGGING
 			if [ $? != 0 ]; then
 				Logger "Cannot ping $REMOTE_HOST" "ERROR"
 				return 1
@@ -1223,7 +1237,6 @@ function InitLocalOSSettings {
 
 function InitRemoteOSSettings {
 
-	#TODO: fix add -E when both initiator and targets don't run MacOSX and PRESERVE_EXECUTABILITY=yes
 	## MacOSX does not use the -E parameter like Linux or BSD does (-E is mapped to extended attrs instead of preserve executability)
 	if [ "$PRESERVE_EXECUTABILITY" != "no" ];then
 		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
@@ -1283,20 +1296,20 @@ function TrapQuit {
 	local exitcode
 
 	if [ $ERROR_ALERT -ne 0 ]; then
-		SendAlert
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
 		CleanUp
 		Logger "Backup script finished with errors." "ERROR"
+		SendAlert
 		exitcode=1
 	elif [ $WARN_ALERT -ne 0 ]; then
-		SendAlert
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
 		CleanUp
 		Logger "Backup script finished with warnings." "WARN"
+		SendAlert
 		exitcode=2
 	else
 		RunAfterHook
@@ -1335,8 +1348,8 @@ function CheckEnvironment {
 
 	if [ "$FILE_BACKUP" != "no" ]; then
 		if [ "$ENCRYPTION" == "yes" ]; then
-			if ! type duplicity > /dev/null 2>&1 ; then
-				Logger "duplicity not present. Cannot backup encrypted files." "CRITICAL"
+			if ! type gpg > /dev/null 2>&1 ; then
+				Logger "gpg not present. Cannot encrypt backup files." "CRITICAL"
 				CAN_BACKUP_FILES=0
 			fi
 		else
@@ -1382,6 +1395,15 @@ function CheckCurrentConfig {
 	fi
 
 	#TODO-v2.1: Add runtime variable tests (RSYNC_ARGS etc)
+	if [ "$REMOTE_OPERATION" == "yes" ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
+		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY]. Cannot connect to remote system." "CRITICAL"
+		exit 1
+	fi
+
+	if [ -f "$ENCRYPT_GPG_PYUBKEY" ]; then
+		Logger "Cannot find gpg pubkey [$ENCRPYT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
+		exit 1
+	fi
 }
 
 function CheckRunningInstances {
@@ -2038,16 +2060,30 @@ function BackupDatabases {
 	for database in $SQL_BACKUP_TASKS
 	do
 		Logger "Backing up database [$database]." "NOTICE"
-		BackupDatabase $database &
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
+		BackupDatabase $database
 		CheckTotalExecutionTime
 	done
 }
 
-function EncryptFiles {
+function PrepareEncryptFiles {
+	local tmpPath="${2}"
+
+
+	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
+		_CreateDirsLocal "$tmpPath"
+	elif [ "$BACKUP_TYPE" == "pull" ]; then
+		Logger "Encryption only works with [local] or [push] backup types." "CRITICAL"
+		exit 1
+	fi
+	#WIP: check disk space in tmp dir and compare to backup size else error
+}
+
+function EncrpytFiles {
 	local filePath="${1}"	# Path of files to encrypt
 	local tmpPath="${2}"
 
+
+	#WIP: template code to split into local & remote code
 
 	#crypt_cmd source temp
 	# Send files to remote, rotate & copy
@@ -2191,7 +2227,7 @@ function CheckTotalExecutionTime {
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
 		Logger "Max soft execution time of the whole backup exceeded." "ERROR"
 		WARN_ALERT=1
-		SendAlert
+		SendAlert true
 		if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
 			Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
 			exit 1
