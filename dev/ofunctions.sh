@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016082602
+## FUNC_BUILD=2016082603
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -1024,9 +1024,12 @@ function __CheckArguments {
 	# Checks the number of arguments of a function and raises an error if some are missing
 
 	if [ "$_DEBUG" == "yes" ]; then
-		local number_of_arguments="${1}" # Number of arguments the tested function should have
+		local number_of_arguments="${1}" # Number of arguments the tested function should have, can be a number of a range, eg 0-2 for zero to two arguments
 		local number_of_given_arguments="${2}" # Number of arguments that have been passed
 		local function_name="${3}" # Function name that called __CheckArguments
+
+		local minArgs
+		local maxArgs
 
 		if [ "$_PARANOIA_DEBUG" == "yes" ]; then
 			Logger "Entering function [$function_name]." "DEBUG"
@@ -1051,7 +1054,14 @@ function __CheckArguments {
 		done
 		local counted_arguments=$((iterate-4))
 
-		if [ $counted_arguments -ne $number_of_arguments ]; then
+		if [ $(isNumeric $number_of_arguments) == "1" ]; then
+			$minArgs = $number_of_arguments
+			$maxArgs = $number_of_arguments
+		else
+			IFS='-' read minArgs maxArgs <<< "$pids"
+		fi
+
+		if ! ([ $counted_arguments -ge $minArgs ] && [ $counted_arguments -le $maxArgs ]); then
 			Logger "Function $function_name may have inconsistent number of arguments. Expected: $number_of_arguments, count: $counted_arguments, bash seen: $number_of_given_arguments. see log file." "ERROR"
 			Logger "Arguments passed: $arg_list" "ERROR"
 		fi
