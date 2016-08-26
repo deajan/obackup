@@ -267,9 +267,9 @@ function SendAlert {
 	fi
 
 	if [ $runAlert == true ]; then
-		subject="Current run $subject"
+		subject="Currently runing - $subject"
 	else
-		subject="Fnished run $subject"
+		subject="Fnished run - $subject"
 	fi
 
 	if [ "$mail_no_attachment" -eq 0 ]; then

@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016082601
+PROGRAM_BUILD=2016082602
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -38,18 +38,18 @@ function TrapQuit {
 	local exitcode
 
 	if [ $ERROR_ALERT -ne 0 ]; then
-		SendAlert
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
+		SendAlert
 		CleanUp
 		Logger "Backup script finished with errors." "ERROR"
 		exitcode=1
 	elif [ $WARN_ALERT -ne 0 ]; then
-		SendAlert
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
+		SendAlert
 		CleanUp
 		Logger "Backup script finished with warnings." "WARN"
 		exitcode=2
@@ -998,7 +998,7 @@ function CheckTotalExecutionTime {
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
 		Logger "Max soft execution time of the whole backup exceeded." "ERROR"
 		WARN_ALERT=1
-		SendAlert
+		SendAlert true
 		if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
 			Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
 			exit 1
