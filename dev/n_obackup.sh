@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016082202
+PROGRAM_BUILD=2016082501
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -91,8 +91,8 @@ function CheckEnvironment {
 
 	if [ "$FILE_BACKUP" != "no" ]; then
 		if [ "$ENCRYPTION" == "yes" ]; then
-			if ! type duplicity > /dev/null 2>&1 ; then
-				Logger "duplicity not present. Cannot backup encrypted files." "CRITICAL"
+			if ! type gpg > /dev/null 2>&1 ; then
+				Logger "gpg not present. Cannot encrypt backup files." "CRITICAL"
 				CAN_BACKUP_FILES=0
 			fi
 		else
@@ -139,6 +139,15 @@ function CheckCurrentConfig {
 	fi
 
 	#TODO-v2.1: Add runtime variable tests (RSYNC_ARGS etc)
+	if [ "$REMOTE_OPERATION" == "yes" ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
+		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY]. Cannot connect to remote system." "CRITICAL"
+		exit 1
+	fi
+
+	if [ -f "$ENCRYPT_GPG_PYUBKEY" ]; then
+		Logger "Cannot find gpg pubkey [$ENCRPYT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
+		exit 1
+	fi
 }
 
 function CheckRunningInstances {
@@ -822,11 +831,27 @@ function BackupDatabases {
 	done
 }
 
-function EncryptFiles {
+function PrepareEncryptFiles {
+	local tmpPath="${2}"
+
+	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+
+	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
+		_CreateDirsLocal "$tmpPath"
+	elif [ "$BACKUP_TYPE" == "pull" ]; then
+		Logger "Encryption only works with [local] or [push] backup types." "CRITICAL"
+		exit 1
+	fi
+	#WIP: check disk space in tmp dir and compare to backup size else error
+}
+
+function EncrpytFiles {
 	local filePath="${1}"	# Path of files to encrypt
 	local tmpPath="${2}"
 
 	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+
+	#WIP: template code to split into local & remote code
 
 	#crypt_cmd source temp
 	# Send files to remote, rotate & copy
