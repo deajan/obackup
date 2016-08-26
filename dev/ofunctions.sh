@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016082301
+## FUNC_BUILD=2016082601
 ## BEGIN Generic functions for osync & obackup written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always assume output is not a zero exitcode
@@ -220,6 +220,8 @@ function KillAllChilds {
 
 # osync/obackup/pmocr script specific mail alert function, use SendEmail function for generic mail sending
 function SendAlert {
+	local runAlert="${1:-false}" # Specifies if current message is sent while running or at the end of a run
+
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
 	local mail_no_attachment=
@@ -253,6 +255,7 @@ function SendAlert {
 	else
 		mail_no_attachment=0
 	fi
+	#TODO(low): Change tail -n 50 to end of fil up to last script begin
 	MAIL_ALERT_MSG="$MAIL_ALERT_MSG"$'\n\n'$(tail -n 50 "$LOG_FILE")
 	if [ $ERROR_ALERT -eq 1 ]; then
 		subject="Error alert for $INSTANCE_ID"
@@ -260,6 +263,12 @@ function SendAlert {
 		subject="Warning alert for $INSTANCE_ID"
 	else
 		subject="Alert for $INSTANCE_ID"
+	fi
+
+	if [ runAlert == true ]; then
+		subject="Current run $subject"
+	else
+		subject="Fnished run Final $subject"
 	fi
 
 	if [ "$mail_no_attachment" -eq 0 ]; then
@@ -620,7 +629,7 @@ function WaitForTaskCompletion {
 			if [ $soft_alert -eq 0 ] && [ $soft_max_time -ne 0 ]; then
 				Logger "Max soft execution time exceeded for task [$caller_name] with pids [$(joinString , ${pidsArray[@]})]." "WARN"
 				soft_alert=1
-				SendAlert
+				SendAlert true
 
 			fi
 			if [ $exec_time -gt $hard_max_time ] && [ $hard_max_time -ne 0 ]; then
@@ -633,7 +642,7 @@ function WaitForTaskCompletion {
 						Logger "Could not stop task with pid [$pid]." "ERROR"
 					fi
 				done
-				SendAlert
+				SendAlert true
 				errrorcount=$((errorcount+1))
 			fi
 		fi
