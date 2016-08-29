@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016082603
+PROGRAM_BUILD=2016082901
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -26,8 +26,8 @@ PARTIAL_DIR=".obackup_workdir_partial"
 # $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes for local command
 # $FILE_SIZE_LIST_REMOTE, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
 
-CAN_BACKUP_SQL=1
-CAN_BACKUP_FILES=1
+CAN_BACKUP_SQL=true
+CAN_BACKUP_FILES=true
 
 function TrapStop {
 	Logger "/!\ Manual exit of backup script. Backups may be in inconsistent state." "WARN"
@@ -37,7 +37,7 @@ function TrapStop {
 function TrapQuit {
 	local exitcode
 
-	if [ $ERROR_ALERT -ne 0 ]; then
+	if [ $ERROR_ALERT == true ]; then
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
@@ -45,7 +45,7 @@ function TrapQuit {
 		Logger "Backup script finished with errors." "ERROR"
 		SendAlert
 		exitcode=1
-	elif [ $WARN_ALERT -ne 0 ]; then
+	elif [ $WARN_ALERT == true ]; then
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
@@ -80,11 +80,11 @@ function CheckEnvironment {
 		if [ "$SQL_BACKUP" != "no" ]; then
 			if ! type mysqldump > /dev/null 2>&1 ; then
 				Logger "mysqldump not present. Cannot backup SQL." "CRITICAL"
-				CAN_BACKUP_SQL=0
+				CAN_BACKUP_SQL=false
 			fi
 			if ! type mysql > /dev/null 2>&1 ; then
 				Logger "mysql not present. Cannot backup SQL." "CRITICAL"
-				CAN_BACKUP_SQL=0
+				CAN_BACKUP_SQL=false
 			fi
 		fi
 	fi
@@ -93,12 +93,12 @@ function CheckEnvironment {
 		if [ "$ENCRYPTION" == "yes" ]; then
 			if ! type gpg > /dev/null 2>&1 ; then
 				Logger "gpg not present. Cannot encrypt backup files." "CRITICAL"
-				CAN_BACKUP_FILES=0
+				CAN_BACKUP_FILES=false
 			fi
 		else
 			if ! type rsync > /dev/null 2>&1 ; then
 				Logger "rsync not present. Cannot backup files." "CRITICAL"
-				CAN_BACKUP_FILES=0
+				CAN_BACKUP_FILES=false
 			fi
 		fi
 	fi
@@ -134,11 +134,11 @@ function CheckCurrentConfig {
 	if [ "$FILE_BACKUP" == "yes" ]; then
 		if [ "$DIRECTORY_LIST" == "" ] && [ "$RECURSIVE_DIRECTORY_LIST" == "" ]; then
 			Logger "No directories specified in config file, no files to backup." "ERROR"
-			CAN_BACKUP_FILES=0
+			CAN_BACKUP_FILES=false
 		fi
 	fi
 
-	#TODO-v2.1: Add runtime variable tests (RSYNC_ARGS etc)
+	#TODO-v2.1(ongoing WIP): Add runtime variable tests (RSYNC_ARGS etc)
 	if [ "$REMOTE_OPERATION" == "yes" ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
 		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY]. Cannot connect to remote system." "CRITICAL"
 		exit 1
@@ -217,7 +217,7 @@ function ListDatabases {
 
 	local dbArray
 
-	if [ $CAN_BACKUP_SQL -ne 1 ]; then
+	if [ $CAN_BACKUP_SQL == false ]; then
 		Logger "Cannot list databases." "ERROR"
 		return 1
 	fi
@@ -240,7 +240,7 @@ function ListDatabases {
 		fi
 	fi
 
-	if [ -f "$outputFile" ] && [ $CAN_BACKUP_SQL -eq 1 ]; then
+	if [ -f "$outputFile" ] && [ $CAN_BACKUP_SQL == true ]; then
 		while read -r line; do
 			while read -r name size; do dbName=$name; dbSize=$size; done <<< "$line"
 			#db_name="${line% *}"
@@ -282,7 +282,7 @@ function ListDatabases {
 		Logger "Database exclude list: $SQL_EXCLUDED_TASKS" "DEBUG"
 	else
 		Logger "Will not execute database backup." "ERROR"
-		CAN_BACKUP_SQL=0
+		CAN_BACKUP_SQL=false
 	fi
 }
 
@@ -537,26 +537,26 @@ function CreateStorageDirectories {
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryLocal "$SQL_STORAGE"
 			if [ $? != 0 ]; then
-				CAN_BACKUP_SQL=0
+				CAN_BACKUP_SQL=false
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateDirectoryLocal "$FILE_STORAGE"
 			if [ $? != 0 ]; then
-				CAN_BACKUP_FILES=0
+				CAN_BACKUP_FILES=false
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$SQL_STORAGE"
 			if [ $? != 0 ]; then
-				CAN_BACKUP_SQL=0
+				CAN_BACKUP_SQL=false
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$FILE_STORAGE"
 			if [ $? != 0 ]; then
-				CAN_BACKUP_FILES=0
+				CAN_BACKUP_FILES=false
 			fi
 		fi
 	fi
@@ -618,7 +618,7 @@ function CheckDiskSpace {
 			GetDiskSpaceLocal "$SQL_STORAGE"
 			if [ $? != 0 ]; then
 				SQL_DISK_SPACE=0
-				CAN_BACKUP_SQL=0
+				CAN_BACKUP_SQL=false
 			else
 				SQL_DISK_SPACE=$DISK_SPACE
 				SQL_DRIVE=$DRIVE
@@ -628,7 +628,7 @@ function CheckDiskSpace {
 			GetDiskSpaceLocal "$FILE_STORAGE"
 			if [ $? != 0 ]; then
 				FILE_DISK_SPACE=0
-				CAN_BACKUP_FILES=0
+				CAN_BACKUP_FILES=false
 			else
 				FILE_DISK_SPACE=$DISK_SPACE
 				FILE_DRIVE=$DRIVE
@@ -662,7 +662,7 @@ function CheckDiskSpace {
 		TOTAL_FILES_SIZE=-1
 	fi
 
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL -eq 1 ]; then
+	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
 		if [ $SQL_DISK_SPACE -eq 0 ]; then
 			Logger "Storage space in [$SQL_STORAGE] reported to be 0Ko." "WARN"
 		fi
@@ -675,7 +675,7 @@ function CheckDiskSpace {
 		Logger "SQL storage Space: $SQL_DISK_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko" "NOTICE"
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES -eq 1 ]; then
+	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
 		if [ $FILE_DISK_SPACE -eq 0 ]; then
 			Logger "Storage space in [$FILE_STORAGE] reported to be 0 Ko." "WARN"
 		fi
@@ -706,7 +706,7 @@ function _BackupDatabaseLocalToLocal {
 	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 	local sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
-	if [ $_DRYRUN -ne 1 ]; then
+	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sql_cmd" "DEBUG"
 		eval "$sql_cmd" &
 	else
@@ -739,7 +739,7 @@ function _BackupDatabaseLocalToRemote {
 	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 	local sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
-	if [ $_DRYRUN -ne 1 ]; then
+	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sql_cmd" "DEBUG"
 		eval "$sql_cmd" &
 	else
@@ -772,7 +772,7 @@ function _BackupDatabaseRemoteToLocal {
 	local dry_sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --database '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
 	local sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --database '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
 
-	if [ $_DRYRUN -ne 1 ]; then
+	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sql_cmd" "DEBUG"
 		eval "$sql_cmd" &
 	else
@@ -850,8 +850,7 @@ function EncrpytFiles {
 
 	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	#WIP: template code to split into local & remote code
-
+	#gpg here ?
 	#crypt_cmd source temp
 	# Send files to remote, rotate & copy
 }
@@ -882,19 +881,19 @@ function Rsync {
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
 		_CreateDirectoryLocal "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_CreateDirectoryLocal "$file_storage_path"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		backup_directory=$(EscapeSpaces "$backup_directory")
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		file_storage_path=$(EscapeSpaces "$file_storage_path")
 		_CreateDirectoryRemote "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS --stats $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	fi
 
 	Logger "cmd: $rsync_cmd" "DEBUG"
@@ -908,48 +907,6 @@ function Rsync {
 	fi
 }
 
-function Duplicity {
-	local backup_directory="${1}"	# Which directory to backup
-	local is_recursive="${2}"	# Backup only files at toplevel of directory
-
-        __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
-
-	local file_storage_path
-	local duplicity_cmd
-
-	Logger "Encrpytion not supported yet ! No backup done." "CRITICAL"
-	return 1
-
-	if [ "$KEEP_ABSOLUTE_PATHS" == "yes" ]; then
-		file_storage_path="$(dirname $FILE_STORAGE$backup_directory)"
-	else
-		file_storage_path="$FILE_STORAGE"
-	fi
-
-	if [ "$BACKUP_TYPE" == "local" ]; then
-		duplicity_cmd=""
-	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		CheckConnectivity3rdPartyHosts
-		CheckConnectivityRemoteHost
-		duplicity_cmd=""
-	elif [ "$BACKUP_TYPE" == "push" ]; then
-		CheckConnectivity3rdPartyHosts
-		CheckConnectivityRemoteHost
-		duplicity_cmd=""
-	fi
-
-	Logger "cmd: $duplicity_cmd" "DEBUG"
-	eval "$duplicity_cmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
-	if [ $? != 0 ]; then
-		Logger "Failed to backup [$backup_directory] to [$file_storage_path]." "ERROR"
-		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
-	else
-		Logger "File backup succeed." "NOTICE"
-	fi
-
-}
-
 function FilesBackup {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
@@ -960,7 +917,9 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Duplicity "$backupTask" "recurse"
+			Dummy
+			#Encrpyt files recursively
+			#Rsync encrypted files instead of original ones
 		else
 			Rsync "$backupTask" "recurse"
 		fi
@@ -971,7 +930,9 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Duplicity "$backupTask" "no-recurse"
+			Dummy
+			#Encrpyt files non recursively
+			#Rsync encrypted files instead of original ones
 		else
 			Rsync "$backupTask" "no-recurse"
 		fi
@@ -983,7 +944,9 @@ function FilesBackup {
 	# Backup sub directories of recursive directories
 		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Duplicity "$backupTask" "recurse"
+			Dummy
+			#Encrpyt files recursively
+			#Rsync encrypted files instead of original ones
 		else
 			Rsync "$backupTask" "recurse"
 		fi
@@ -1251,7 +1214,7 @@ function Init {
 	## Add update to default RSYNC_ARGS
 	RSYNC_ARGS=$RSYNC_ARGS" -u"
 
-	if [ $_VERBOSE -eq 1 ]; then
+	if [ $_VERBOSE == true ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" -i"
 	fi
 
@@ -1259,7 +1222,7 @@ function Init {
 		RSYNC_ARGS=$RSYNC_ARGS" --delete"
 	fi
 
-	if [ $stats -eq 1 ]; then
+	if [ $stats == true ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" --stats"
 	fi
 
@@ -1270,10 +1233,10 @@ function Init {
 function Main {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL -eq 1 ]; then
+	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
 		ListDatabases
 	fi
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES -eq 1 ]; then
+	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
 		ListRecursiveBackupDirectories
 		if [ "$GET_BACKUP_SIZE" != "no" ]; then
 			GetDirectoriesSize
@@ -1288,15 +1251,15 @@ function Main {
 	CheckDiskSpace
 
 	# Actual backup process
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL -eq 1 ]; then
-		if [ $_DRYRUN -ne 1 ] && [ "$ROTATE_SQL_BACKUPS" == "yes" ]; then
+	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
+		if [ $_DRYRUN == false ] && [ "$ROTATE_SQL_BACKUPS" == "yes" ]; then
 			RotateBackups "$SQL_STORAGE" "$ROTATE_SQL_COPIES"
 		fi
 		BackupDatabases
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES -eq 1 ]; then
-		if [ $_DRYRUN -ne 1 ] && [ "$ROTATE_FILE_BACKUPS" == "yes" ]; then
+	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
+		if [ $_DRYRUN == false ] && [ "$ROTATE_FILE_BACKUPS" == "yes" ]; then
 			RotateBackups "$FILE_STORAGE" "$ROTATE_FILE_COPIES"
 		fi
 	        ## Add Rsync include / exclude patterns
@@ -1332,11 +1295,11 @@ function Usage {
 }
 
 # Command line argument flags
-_DRYRUN=0
-_SILENT=0
-no_maxtime=0
-stats=0
-PARTIAL=0
+_DRYRUN=false
+_SILENT=false
+no_maxtime=false
+stats=false
+PARTIAL=no
 
 function GetCommandlineArguments {
 	if [ $# -eq 0 ]; then
@@ -1346,22 +1309,22 @@ function GetCommandlineArguments {
 	for i in "$@"; do
 		case $i in
 			--dry)
-			_DRYRUN=1
+			_DRYRUN=true
 			;;
 			--silent)
-			_SILENT=1
+			_SILENT=true
 			;;
 			--verbose)
-			_VERBOSE=1
+			_VERBOSE=true
 			;;
 			--stats)
-			stats=1
+			stats=false
 			;;
 			--partial)
 			PARTIAL="yes"
 			;;
 			--no-maxtime)
-			no_maxtime=1
+			no_maxtime=true
 			;;
 			--delete)
 			DELETE_VANISHED_FILES="yes"
@@ -1414,7 +1377,7 @@ if [ "$REMOTE_OPERATION" == "yes" ]; then
 	InitRemoteOSSettings
 fi
 
-if [ $no_maxtime -eq 1 ]; then
+if [ $no_maxtime == true ]; then
 	SOFT_MAX_EXEC_TIME_DB_TASK=0
 	SOFT_MAX_EXEC_TIME_FILE_TASK=0
 	HARD_MAX_EXEC_TIME_DB_TASK=0
