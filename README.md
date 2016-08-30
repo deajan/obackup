@@ -1,5 +1,5 @@
-obackup
-=======
+# obackup [![Build Status](https://travis-ci.org/deajan/obackup.svg?branch=master)](https://travis-ci.org/deajan/obackup) [![GitHub Release](https://img.shields.io/github/release/deajan/obackup.svg?label=Latest)](https://github.com/deajan/obackup/releases/latest)
+
 
 A robust file & database backup script that works for local and remote push or pull backups via ssh.
 
