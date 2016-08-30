@@ -43,7 +43,7 @@ DATABASE_EXCLUDED="information_schema.sql.xz"
 function oneTimeSetUp () {
 	source "$DEV_DIR/ofunctions.sh"
 
-	if grep "^IS_STABLE=YES" "$DEV_DIR/n_obackup.sh" > /dev/null; then
+	if grep "^IS_STABLE=YES" "$DEV_DIR/n_obackup.sh"; then
 		IS_STABLE=yes
 	else
 		IS_STABLE=no
@@ -100,10 +100,16 @@ function oneTimeTearDown () {
 }
 
 
+function test_Merge () {
+	cd "$DEV_DIR"
+	./merge.sh
+	asserEquals "Merging" "0" $?
+}
+
 function test_FirstLocalRun () {
 	# Basic return code tests. Need to go deep into file presence testing
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/local.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dev/tests/conf/local.conf
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -134,8 +140,8 @@ function test_FirstLocalRun () {
 
 function test_SecondLocalRun () {
 	# Only tests presence of rotated files
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/local.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dev/tests/conf/local.conf > /dev/null
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
