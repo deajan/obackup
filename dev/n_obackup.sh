@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016083001
+PROGRAM_BUILD=2016083002
 IS_STABLE=yes
 
 source "./ofunctions.sh"
@@ -327,6 +327,7 @@ function _ListRecursiveBackupDirectoriesRemote {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
+		#TODO(med): Uses local home directory for remote lookup...
 		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
@@ -353,6 +354,8 @@ function ListRecursiveBackupDirectories {
 	local output_file
 	local file_exclude
 
+	local excluded
+
 	local fileArray
 
 	Logger "Listing directories to backup." "NOTICE"
@@ -376,8 +379,8 @@ function ListRecursiveBackupDirectories {
 		while read -r line; do
 			file_exclude=0
 			IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$RECURSIVE_EXCLUDE_LIST"
-			for k in "${fileArray[@]}"; do
-				if [ "$k" == "$line" ]; then
+			for excluded in "${fileArray[@]}"; do
+				if [ "$excluded" == "$line" ]; then
 					file_exclude=1
 				fi
 			done
@@ -1350,8 +1353,8 @@ LoadConfigFile "$1"
 if [ "$LOGFILE" == "" ]; then
 	if [ -w /var/log ]; then
 		LOG_FILE="/var/log/$PROGRAM.$INSTANCE_ID.log"
-	elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
-		LOG_FILE="$HOME/$PROGRAM.$INSTANCE_ID.log"
+	elif ([ "${HOME}" != "" ] && [ -w "{$HOME}" ]); then
+		LOG_FILE="${HOME}/$PROGRAM.$INSTANCE_ID.log"
 	else
 		LOG_FILE=./$PROGRAM.$INSTANCE_ID.log
 	fi
