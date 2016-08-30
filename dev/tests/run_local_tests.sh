@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup test suite 2016083003
-# Stupid and very basic tests v0.0000003-alpha-dev-pre-everything
+## obackup basic tests suite 2016083004
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -298,5 +297,23 @@ function test_WaitForTaskCompletion () {
 	WaitForTaskCompletion $pids 8 15 ${FUNCNAME[0]} false 0
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
+
+function test_ParallelExec () {
+	# Test if parallelExec works correctly
+
+	cmd="sleep 10;sleep 10;sleep 10;sleep 10"
+	ParallelExec 4 "$cmd"
+	assertEquals "ParallelExec test 1" "0" $?
+
+	cmd="sleep 10;du /none;sleep 5"
+	ParallelExec 2 "$cmd"
+	assertEquals "ParallelExec test 2" "1" $?
+
+	cmd="sleep 19;du /none;sleep 10;du /none;sleep 4"
+	ParallelExec 3 "$cmd"
+	assertEquals "ParallelExec test 3" "2" $?
+}
+
+echo "$CURRENT_LOG"
 
 . "$TESTS_DIR/shunit2/shunit2"
