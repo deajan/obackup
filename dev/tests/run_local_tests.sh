@@ -99,11 +99,16 @@ function oneTimeTearDown () {
 	#rm -rf $TARGET_DIR
 }
 
+function test_Merge () {
+	cd "$DEV_DIR"
+	./merge.sh
+	assertEquals "Merging code" "0" $?
+}
 
 function test_FirstLocalRun () {
 	# Basic return code tests. Need to go deep into file presence testing
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/local.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dir/tests/conf/local.conf > /dev/null
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -134,8 +139,8 @@ function test_FirstLocalRun () {
 
 function test_SecondLocalRun () {
 	# Only tests presence of rotated files
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/local.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dev/test/conf/local.conf > /dev/null
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -148,8 +153,8 @@ function test_SecondLocalRun () {
 }
 function test_FirstPullRun () {
 	# Basic return code tests. Need to go deep into file presence testing
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/pull.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dev/test/conf/pull.conf > /dev/null
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -180,8 +185,8 @@ function test_FirstPullRun () {
 
 function test_SecondPullRun () {
 	# Only tests presence of rotated files
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/pull.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dev/test/conf/pull.conf > /dev/null
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -195,8 +200,8 @@ function test_SecondPullRun () {
 
 function test_FirstPushRun () {
 	# Basic return code tests. Need to go deep into file presence testing
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/push.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dev/test/conf/push.conf > /dev/null
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -227,8 +232,8 @@ function test_FirstPushRun () {
 
 function test_SecondPushRun () {
 	# Only tests presence of rotated files
-	cd "$DEV_DIR"
-	./n_obackup.sh tests/conf/push.conf > /dev/null
+	cd "$OBACKUP_DIR"
+	./obackup.sh dev/test/conf/push.conf > /dev/null
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
