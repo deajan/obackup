@@ -5,7 +5,7 @@
 ## Merges ofunctions.sh and n_program.sh into program.sh
 ## Adds installer
 
-PROGRAM=osync
+PROGRAM=obackup
 VERSION=$(grep "PROGRAM_VERSION=" n_$PROGRAM.sh)
 VERSION=${VERSION#*=}
 
