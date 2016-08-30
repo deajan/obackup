@@ -13,6 +13,9 @@ OBACKUP_EXECUTABLE=obackup.sh
 SOURCE_DIR="${HOME}/obackup-testdata"
 TARGET_DIR="${HOME}/obackup-storage"
 
+echo "$(dirname $SOURCE_DIR)"
+exit
+
 TARGET_DIR_SQL_LOCAL="${HOME}/obackup-storage/sql"
 TARGET_DIR_FILE_LOCAL="${HOME}/obackup-storage/files"
 
@@ -154,7 +157,8 @@ function test_SecondLocalRun () {
 	done
 
 	[ -d "$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR).obackup.1" ]
-	assertEquals "File rotated Presence" "0" $?
+	assertEquals "File rotated Presence [$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR).obackup.1]" "0" $?
+	ls -alh "$TARGET_DIR_FILE_LOCAL"
 }
 
 function test_WaitForTaskCompletion () {
