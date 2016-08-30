@@ -1,0 +1,11 @@
+language:
+    bash
+
+services:
+    mysql
+
+before_script:
+    mysql -e 'CREATE DATABASE travistest;'
+
+script:
+    dev/tests/run_travis_tests.sh
