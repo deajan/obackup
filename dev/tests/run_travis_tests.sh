@@ -155,7 +155,6 @@ function test_SecondLocalRun () {
 
 	[ -d "$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR).obackup.1" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR).obackup.1]" "0" $?
-	ls $TARGET_DIR_FILE_LOCAL -alh
 }
 
 function test_WaitForTaskCompletion () {
