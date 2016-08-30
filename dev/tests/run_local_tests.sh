@@ -8,6 +8,8 @@ OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
 DEV_DIR="$OBACKUP_DIR/dev"
 TESTS_DIR="$DEV_DIR/tests"
 
+OBACKUP_EXECUTABLE=obackup.sh
+
 SOURCE_DIR="${HOME}/obackup-testdata"
 TARGET_DIR="${HOME}/obackup-storage"
 
@@ -42,13 +44,6 @@ DATABASE_EXCLUDED="information_schema.sql.xz"
 
 function oneTimeSetUp () {
 	source "$DEV_DIR/ofunctions.sh"
-
-	if grep "^IS_STABLE=YES" "$DEV_DIR/n_obackup.sh" > /dev/null; then
-		IS_STABLE=yes
-	else
-		IS_STABLE=no
-		sed -i 's/^IS_STABLE=no/IS_STABLE=yes/' "$DEV_DIR/n_obackup.sh"
-	fi
 
 	mkdir -p "$SOURCE_DIR/$SIMPLE_DIR/$S_DIR_1"
 	mkdir -p "$SOURCE_DIR/$RECURSIVE_DIR/$R_EXCLUDED_DIR"
@@ -92,7 +87,7 @@ function oneTimeSetUp () {
 
 function oneTimeTearDown () {
 	if [ "$IS_STABLE" == "no" ]; then
-		sed -i 's/^IS_STABLE=yes/IS_STABLE=no/' "$DEV_DIR/n_obackup.sh"
+		sed -i 's/^IS_STABLE=yes/IS_STABLE=no/' "$OBACKUP_DIR/$OBACKUP_EXECUTABLE"
 	fi
 
 	#rm -rf $SOURCE_DIR
@@ -105,10 +100,20 @@ function test_Merge () {
 	assertEquals "Merging code" "0" $?
 }
 
+function test_SetStable () {
+	if grep "^IS_STABLE=YES" "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" > /dev/null; then
+		IS_STABLE=yes
+	else
+		IS_STABLE=no
+		sed -i 's/^IS_STABLE=no/IS_STABLE=yes/' "$OBACKUP_DIR/$OBACKUP_EXECUTABLE"
+		assertEquals "Set as stable" "0" $?
+	fi
+}
+
 function test_FirstLocalRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
-	./obackup.sh dir/tests/conf/local.conf > /dev/null
+	./$OBACKUP_EXECUTABLE dev/tests/conf/local.conf
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -140,7 +145,7 @@ function test_FirstLocalRun () {
 function test_SecondLocalRun () {
 	# Only tests presence of rotated files
 	cd "$OBACKUP_DIR"
-	./obackup.sh dev/test/conf/local.conf > /dev/null
+	./$OBACKUP_EXECUTABLE dev/tests/conf/local.conf
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -154,7 +159,7 @@ function test_SecondLocalRun () {
 function test_FirstPullRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
-	./obackup.sh dev/test/conf/pull.conf > /dev/null
+	./$OBACKUP_EXECUTABLE dev/tests/conf/pull.conf
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -186,7 +191,7 @@ function test_FirstPullRun () {
 function test_SecondPullRun () {
 	# Only tests presence of rotated files
 	cd "$OBACKUP_DIR"
-	./obackup.sh dev/test/conf/pull.conf > /dev/null
+	./$OBACKUP_EXECUTABLE dev/tests/conf/pull.conf
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -201,7 +206,7 @@ function test_SecondPullRun () {
 function test_FirstPushRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
-	./obackup.sh dev/test/conf/push.conf > /dev/null
+	./$OBACKUP_EXECUTABLE dev/tests/conf/push.conf
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -233,7 +238,7 @@ function test_FirstPushRun () {
 function test_SecondPushRun () {
 	# Only tests presence of rotated files
 	cd "$OBACKUP_DIR"
-	./obackup.sh dev/test/conf/push.conf > /dev/null
+	./$OBACKUP_EXECUTABLE dev/tests/conf/push.conf
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
