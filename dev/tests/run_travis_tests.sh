@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup test suite 2016083002
+## obackup test suite 2016083003
 # Stupid and very basic tests v0.0000003-alpha-dev-pre-everything
 
 OBACKUP_DIR="$(pwd)"
@@ -13,17 +13,14 @@ OBACKUP_EXECUTABLE=obackup.sh
 SOURCE_DIR="${HOME}/obackup-testdata"
 TARGET_DIR="${HOME}/obackup-storage"
 
-echo "$(dirname $SOURCE_DIR)"
-exit
+TARGET_DIR_SQL_LOCAL="$TARGET_DIR/sql"
+TARGET_DIR_FILE_LOCAL="$TARGET_DIR/files"
 
-TARGET_DIR_SQL_LOCAL="${HOME}/obackup-storage/sql"
-TARGET_DIR_FILE_LOCAL="${HOME}/obackup-storage/files"
+TARGET_DIR_SQL_PULL="$TARGET_DIR/sql-pull"
+TARGET_DIR_FILE_PULL="$TARGET_DIR/files-pull"
 
-TARGET_DIR_SQL_PULL="${HOME}/obackup-storage/sql-pull"
-TARGET_DIR_FILE_PULL="${HOME}/obackup-storage/files-pull"
-
-TARGET_DIR_SQL_PUSH="${HOME}/obackup-storage/sql-push"
-TARGET_DIR_FILE_PUSH="${HOME}/obackup-storage/files-push"
+TARGET_DIR_SQL_PUSH="$TARGET_DIR/sql-push"
+TARGET_DIR_FILE_PUSH="$TARGET_DIR/files-push"
 
 SIMPLE_DIR="testData"
 RECURSIVE_DIR="testDataRecursive"
@@ -158,7 +155,7 @@ function test_SecondLocalRun () {
 
 	[ -d "$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR).obackup.1" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR).obackup.1]" "0" $?
-	ls -alh "$TARGET_DIR_FILE_LOCAL"
+	ls $TARGET_DIR_FILE_LOCAL -alh
 }
 
 function test_WaitForTaskCompletion () {
