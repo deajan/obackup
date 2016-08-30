@@ -5,8 +5,8 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016082901
-IS_STABLE=no
+PROGRAM_BUILD=2016083001
+IS_STABLE=yes
 
 source "./ofunctions.sh"
 
@@ -1244,6 +1244,12 @@ function Main {
 			TOTAL_FILES_SIZE=-1
 		fi
 	fi
+
+	# Expand ~ if exists
+	FILE_STORAGE="${FILE_STORAGE/#\~/$HOME}"
+	SQL_STORAGE="${SQL_STORAGE/#\~/$HOME}"
+	SSH_RSA_PRIVATE_KEY="${SSH_RSA_PRIVATE_KEY/#\~/$HOME}"
+	ENCRYPT_PUBKEY="${ENCRPYT_PUBKEY/#\~/$HOME}"
 
 	if [ "$CREATE_DIRS" != "no" ]; then
 		CreateStorageDirectories
