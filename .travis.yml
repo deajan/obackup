@@ -4,6 +4,10 @@ language:
 services:
     mysql
 
+os:
+    linux
+    osx
+
 before_script:
     mysql -e 'CREATE DATABASE travistest;'
 
