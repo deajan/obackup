@@ -134,6 +134,10 @@ function RewriteConfigFiles {
 		sed -i'.tmp' '/^BACKUP_SIZE_MINIMUM=*/a\'$'\n''GET_BACKUP_SIZE=yes\'$'\n''' "$config_file"
 	fi
 
+	if ! grep "^MYSQLDUMP_OPTIONS=" "$config_file" > /dev/null; then
+		sed -i'.tmp' '/^HARD_MAX_EXEC_TIME_DB_TASK=*/a\'$'\n''MYSQLDUMP_OPTIONS="--opt --single-transaction"\'$'\n''' "$config_file"
+	fi
+
 	if ! grep "^RSYNC_REMOTE_PATH=" "$config_file" > /dev/null; then
 		sed -i'.tmp' '/^SSH_COMPRESSION=*/a\'$'\n''RSYNC_REMOTE_PATH=\'$'\n''' "$config_file"
 	fi
