@@ -5,8 +5,8 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016083002
-IS_STABLE=yes
+PROGRAM_BUILD=2016083003
+IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
@@ -2151,8 +2151,8 @@ function _BackupDatabaseLocalToLocal {
 
 	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
 	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sql_cmd" "DEBUG"
@@ -2184,8 +2184,8 @@ function _BackupDatabaseLocalToRemote {
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
 
-	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sql_cmd="mysqldump -u $SQL_USER $export_options --database $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
 	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sql_cmd" "DEBUG"
@@ -2217,8 +2217,8 @@ function _BackupDatabaseRemoteToLocal {
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
 
-	local dry_sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --database '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
-	local sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --database '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+	local dry_sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+	local sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
 
 	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sql_cmd" "DEBUG"
