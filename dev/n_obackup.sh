@@ -800,9 +800,9 @@ function BackupDatabase {
 
 	# Hack to prevent warning on table mysql.events, some mysql versions don't support --skip-events, prefer using --ignore-table
 	if [ "$database" == "mysql" ]; then
-		mysql_options='--skip-lock-tables --single-transaction --ignore-table=mysql.event'
+		mysql_options="$MYSQLDUMP_OPTIONS --ignore-table=mysql.event"
 	else
-		mysql_options='--skip-lock-tables --single-transaction'
+		mysql_options="$MYSQLDUMP_OPTIONS"
 	fi
 
 	if [ "$BACKUP_TYPE" == "local" ]; then

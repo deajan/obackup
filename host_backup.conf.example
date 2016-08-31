@@ -2,7 +2,7 @@
 
 ###### obackup - Local or Remote, push or pull backup script for files & mysql databases
 ###### (C) 2013-2016 by Orsiris de Jong (www.netpower.fr)
-###### obackup v2.1x config file rev 2016083001
+###### obackup v2.1x config file rev 2016083101
 
 ###### GENERAL BACKUP OPTIONS
 
@@ -95,6 +95,10 @@ DATABASES_ALL_EXCLUDE_LIST="test;mysql"
 ## If a task gets stopped, next one in the task list gets executed. Time is specified in seconds.
 SOFT_MAX_EXEC_TIME_DB_TASK=3600
 HARD_MAX_EXEC_TIME_DB_TASK=7200
+
+## mysqldump options (ex: --extended-insert, --single-transaction, --quick...). See MySQL / MariaDB manual
+## default option: --opt
+MYSQLDUMP_OPTIONS="--opt --single-transaction"
 
 ## Preferred SQL dump compression. Compression methods can be xz, lzma, pigz or gzip (will fallback from xz to gzip depending if available)
 ## Generally, level 5 is a good compromise between cpu, memory hunger and compress ratio. Gzipped files are set to be rsyncable.
