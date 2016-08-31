@@ -5,7 +5,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016083003
+PROGRAM_BUILD=2016083102
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -90,17 +90,28 @@ function CheckEnvironment {
 	fi
 
 	if [ "$FILE_BACKUP" != "no" ]; then
-		if [ "$ENCRYPTION" == "yes" ]; then
-			if ! type gpg > /dev/null 2>&1 ; then
-				Logger "gpg not present. Cannot encrypt backup files." "CRITICAL"
-				CAN_BACKUP_FILES=false
-			fi
-		else
-			if ! type rsync > /dev/null 2>&1 ; then
-				Logger "rsync not present. Cannot backup files." "CRITICAL"
-				CAN_BACKUP_FILES=false
-			fi
+		if ! type rsync > /dev/null 2>&1 ; then
+			Logger "rsync not present. Cannot backup files." "CRITICAL"
+			CAN_BACKUP_FILES=false
 		fi
+	fi
+
+	if [ "$ENCRYPTION" == "yes" ]; then
+		CheckDecrpytEnvironnment
+	fi
+}
+
+function CheckDecryptEnvironnment {
+	if ! type gpg2 > /dev/null 2>&1 ; then
+		if ! type gpg > /dev/null 2>&1; then
+			Logger "gpg2 nor gpg not present. Cannot encrypt backup files." "CRITICAL"
+			CAN_BACKUP_FILES=false
+		else
+			Logger "gpg2 not present, falling back to gpg." "NOTICE"
+			ENCRYPT_TOOL=gpg
+		fi
+	else
+		ENCRYPT_TOOL=gpg2
 	fi
 }
 
@@ -836,6 +847,8 @@ function BackupDatabases {
 function PrepareEncryptFiles {
 	local tmpPath="${2}"
 
+	#TODO: handle dryrun, do we need to create temp dir ?
+
 	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
@@ -856,6 +869,51 @@ function EncrpytFiles {
 	#gpg here ?
 	#crypt_cmd source temp
 	# Send files to remote, rotate & copy
+}
+
+function DecryptFiles {
+	local filePath="${1}"	 # Path to files to decrypt
+	local passphraseFile="${2}"  # Passphrase file to decrypt files
+	local passphrase="${3}"	# Passphrase to decrypt files
+
+	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+
+	local secret
+	local successCounter=0
+	local errorCounter=0
+	local cryptFileExtension=".obackup.gpg"
+
+	if [ ! -w "$filePath" ]; then
+		Logger "Directory [$filePath] is not writable. Cannot decrypt files." "CRITICAL"
+		exit 1
+	fi
+
+	if [ -f "$passphraseFile" ]; then
+		secret="--passphrase-file $passphraseFile"
+	elif [ "$passphrase" != "" ]; then
+		secret="--passphrase $passphrase"
+	else
+		Logger "Invalid passphrase file or passphrase." "CRITICAL"
+		exit 1
+	fi
+
+	find "$filePath" -type f -iname "*$cryptFileExtension" -print0 | while IFS= read -r -d $'\0' encryptedFile; do
+		Logger "Decrypting [$encryptedFile]." "VERBOSE"
+		$ENCRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension*}" --batch $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
+		if [ $? != 0 ]; then
+			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
+			errorCounter=$((errorCounter+1))
+		else
+			succesCounter=$((successCounter+1))
+			rm -f "$encryptedFile"
+			if [ $? != 0 ]; then
+				Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
+				Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID)" "ERROR"
+			fi
+		fi
+	done
+	Logger "Decrypted [$successCounter] files successfully. Failed to decrypt [$errorCounter] files." "NOTICE"
+	exit 0
 }
 
 function Rsync {
@@ -892,10 +950,10 @@ function Rsync {
 		backup_directory=$(EscapeSpaces "$backup_directory")
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		CheckConnectivity3rdPartyHosts
-		CheckConnectivityRemoteHost
 		file_storage_path=$(EscapeSpaces "$file_storage_path")
 		_CreateDirectoryRemote "$file_storage_path"
+		CheckConnectivity3rdPartyHosts
+		CheckConnectivityRemoteHost
 		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	fi
 
@@ -1175,15 +1233,17 @@ function RotateBackups {
 	fi
 }
 
+function SetTraps {
+	trap TrapStop INT QUIT TERM HUP
+	trap TrapQuit EXIT
+}
+
 function Init {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local uri
 	local hosturiandpath
 	local hosturi
-
-	trap TrapStop INT QUIT TERM HUP
-	trap TrapQuit EXIT
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
         if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
@@ -1289,7 +1349,7 @@ function Usage {
 	echo "$AUTHOR"
 	echo "$CONTACT"
 	echo ""
-	echo "usage: obackup.sh /path/to/backup.conf [OPTIONS]"
+	echo "usage: $0 /path/to/backup.conf [OPTIONS]"
 	echo ""
 	echo "OPTIONS:"
 	echo "--dry             will run obackup without actually doing anything, just testing"
@@ -1300,6 +1360,10 @@ function Usage {
 	echo "--no-maxtime      disables any soft and hard execution time checks"
 	echo "--delete          Deletes files on destination that vanished on source"
 	echo "--dontgetsize     Does not try to evaluate backup size"
+	echo ""
+	echo -e "$PROGRAM may also be used to \e[93mdecrypt\e[0m a backup encrypted with $PROGRAM."
+	echo  "usage: $0 --decrypt=/path/to/encrypted_backup --passphrase-file=/path/to/passphrase"
+	echo  "usage: $0 --decrypt=/path/to/encrypted_backup --passphrase=MySecretPassPhrase (security risk)"
 	exit 128
 }
 
@@ -1309,6 +1373,9 @@ _SILENT=false
 no_maxtime=false
 stats=false
 PARTIAL=no
+_DECRYPT_MODE=false
+DECRYPT_PATH=""
+
 
 function GetCommandlineArguments {
 	if [ $# -eq 0 ]; then
@@ -1344,11 +1411,26 @@ function GetCommandlineArguments {
 			--help|-h|--version|-v)
 			Usage
 			;;
+			--decrypt=*)
+			_DECRYPT_MODE=true
+			DECRYPT_PATH="${i##*=}"
+			;;
+			--passphrase=*)
+			PASSPHRASE="${i##*=}"
+			;;
+			--passphrase-file=*)
+			PASSPHRASE_FILE="${i##*=}"
+			;;
 		esac
 	done
 }
 
+SetTraps
 GetCommandlineArguments "$@"
+if [ "$_DECRYPT_MODE" == true ]; then
+	CheckDecryptEnvironnment
+	DecryptFiles "$DECRYPT_PATH" "$PASSPHRASE_FILE" "$PASSPHRASE"
+fi
 LoadConfigFile "$1"
 if [ "$LOGFILE" == "" ]; then
 	if [ -w /var/log ]; then
