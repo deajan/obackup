@@ -64,9 +64,19 @@ function RewriteConfigFiles {
 	sed -i'.tmp' 's/^BACKUP_FILES=/FILE_BACKUP=/g' "$config_file"
 	sed -i'.tmp' 's/^LOCAL_SQL_STORAGE=/SQL_STORAGE=/g' "$config_file"
 	sed -i'.tmp' 's/^LOCAL_FILE_STORAGE=/FILE_STORAGE=/g' "$config_file"
+
 	if ! grep "^ENCRYPTION=" "$config_file" > /dev/null; then
 		sed -i'.tmp' '/^FILE_STORAGE=*/a\'$'\n''ENCRYPTION=no\'$'\n''' "$config_file"
 	fi
+
+	if ! grep "^ENCRYPT_STORAGE=" "$config_file" > /dev/null; then
+		sed -i'.tmp' '/^ENCRYPTION=*/a\'$'\n''ENCRYPT_STORAGE=/home/storage/backup/crypt\'$'\n''' "$config_file"
+	fi
+
+	if ! grep "^ENCRYPT_PUBKEY=" "$config_file" > /dev/null; then
+		sed -i'.tmp' '/^ENCRYPT_STORAGE=*/a\'$'\n''ENCRYPTION='${HOME}/.gpg/pubkey'\'$'\n''' "$config_file"
+	fi
+
 	sed -i'.tmp' 's/^DISABLE_GET_BACKUP_FILE_SIZE=no/GET_BACKUP_SIZE=yes/g' "$config_file"
 	sed -i'.tmp' 's/^DISABLE_GET_BACKUP_FILE_SIZE=yes/GET_BACKUP_SIZE=no/g' "$config_file"
 	sed -i'.tmp' 's/^LOCAL_STORAGE_KEEP_ABSOLUTE_PATHS=/KEEP_ABSOLUTE_PATHS=/g' "$config_file"
@@ -116,10 +126,6 @@ function RewriteConfigFiles {
 	fi
 
 	# Add new config values from v1.1 if they don't exist
-	if ! grep "^ENCRYPTION=" "$config_file" > /dev/null; then
-		sed -i'.tmp' '/^FILE_STORAGE=*/a\'$'\n''ENCRYPTION=no\'$'\n''' "$config_file"
-	fi
-
 	if ! grep "^CREATE_DIRS=" "$config_file" > /dev/null; then
 		sed -i'.tmp' '/^ENCRYPTION=*/a\'$'\n''CREATE_DIRS=yes\'$'\n''' "$config_file"
 	fi
@@ -153,7 +159,7 @@ function RewriteConfigFiles {
 	fi
 
 	if ! grep "^RSYNC_PATTERN_FIRST=" "$config_file" > /dev/null; then
-		sed -i'.tmp' '/^LOGFILE=*/a\'$'\n''RSYNC_PATTERN_FIRST=include\'$'\n''' "$config_file"
+		sed -i'.tmp' '/^RECURSIVE_EXCLUDE_LIST=*/a\'$'\n''RSYNC_PATTERN_FIRST=include\'$'\n''' "$config_file"
 	fi
 
 	if ! grep "^RSYNC_INCLUDE_PATTERN=" "$config_file" > /dev/null; then
