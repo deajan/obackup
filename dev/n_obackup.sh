@@ -8,7 +8,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080103
+PROGRAM_BUILD=2016090104
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -684,6 +684,18 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
+		if [ "$ENCRYPTION" != "no" ]; then
+			GetDiskSpaceRemote "$CRYPT_STORAGE"
+			if [ $? != 0 ]; then
+				CRYPT_DISK_SPACE=0
+				CAN_BACKUP_FILES=false
+				CAN_BACKUP_SQL=false
+			else
+				CRYPT_DISK_SPACE=$DISK_SPACE
+				CRYPT_DRIVE=$DRIVE
+			fi
+		fi
+
 	fi
 
 	if [ "$TOTAL_DATABASES_SIZE" == "" ]; then
@@ -926,13 +938,11 @@ function PrepareEncryptFiles {
 
 	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
+	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		_CreateDirectoryLocal "$tmpPath"
-	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		Logger "Encryption only works with [local] or [push] backup types." "CRITICAL"
-		exit 1
+	elif [ "$BACKUP_TYPE" == "push" ]; then
+		_CreateDirectoryRemote "$tmpPath"
 	fi
-	#WIP: check disk space in tmp dir and compare to backup size else error
 }
 
 #TODO: add ParallelExec here ? Also rework ParallelExec to use files or variables, vars are max 4M, if cannot be combined, create ParallelExecFromFile
@@ -1043,6 +1053,7 @@ function Rsync {
 
 	local fileStoragePath
 	local rsyncCmd
+	local retval
 
 	if [ "$KEEP_ABSOLUTE_PATHS" == "yes" ]; then
 		fileStoragePath=$(dirname "$FILE_STORAGE/${backupDirectory#/}")
@@ -1079,12 +1090,15 @@ function Rsync {
 	Logger "cmd: $rsyncCmd" "DEBUG"
 	eval "$rsyncCmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
-	if [ $? != 0 ]; then
+	retval=$?
+	if [ $retval != 0 ]; then
 		Logger "Failed to backup [$backupDirectory] to [$fileStoragePath]." "ERROR"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
 	fi
+
+	return $retval
 }
 
 function FilesBackup {
@@ -1096,15 +1110,20 @@ function FilesBackup {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning file backup of [$backupTask]." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
 			if [ $? == 0 ]; then
 				Rsync "$CRYPT_STORAGE" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		else
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" "pull" ]; then
 			Rsync "$backupTask" true
+			if [ $? == 0 ]; then
+				EncryptFiles "$backupTask" true
+			fi
+		else
+			Rsync "$backuptask" true
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1112,15 +1131,20 @@ function FilesBackup {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false
 			if [ $? == 0 ]; then
 				Rsync "$CRYPT_STORAGE" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		else
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" "pull" ]; then
 			Rsync "$backupTask" false
+			if [ $? == 0 ]; then
+				EncryptFiles "$backupTask" false
+			fi
+		else
+			Rsync "$backuptask" false
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1129,15 +1153,20 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup sub directories of recursive directories
 		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
 			if [ $? == 0 ]; then
 				Rsync "$CRYPT_STORAGE" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		else
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" "pull" ]; then
 			Rsync "$backupTask" true
+			if [ $? == 0 ]; then
+				EncryptFiles "$backupTask" true
+			fi
+		else
+			Rsync "$backuptask" true
 		fi
 		CheckTotalExecutionTime
 	done
