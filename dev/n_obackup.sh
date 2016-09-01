@@ -8,7 +8,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016080102
+PROGRAM_BUILD=2016080103
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -114,10 +114,10 @@ function CheckCryptEnvironnment {
 			CAN_BACKUP_FILES=false
 		else
 			Logger "gpg2 not present, falling back to gpg." "NOTICE"
-			ENCRYPT_TOOL=gpg
+			CRYPT_TOOL=gpg
 		fi
 	else
-		ENCRYPT_TOOL=gpg2
+		CRYPT_TOOL=gpg2
 	fi
 }
 
@@ -184,11 +184,11 @@ function CheckRunningInstances {
 function _ListDatabasesLocal {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sql_cmd=
+	local sqlCmd=
 
-        sql_cmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
-        Logger "cmd: $sql_cmd" "DEBUG"
-        eval "$sql_cmd" &
+        sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+        Logger "cmd: $sqlCmd" "DEBUG"
+        eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
         if [ $? -eq 0 ]; then
                 Logger "Listing databases succeeded." "NOTICE"
@@ -205,13 +205,13 @@ function _ListDatabasesLocal {
 function _ListDatabasesRemote {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sql_cmd=
+	local sqlCmd=
 
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
-        sql_cmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID\" 2>&1"
-        Logger "cmd: $sql_cmd" "DEBUG"
-        eval "$sql_cmd" &
+        sqlCmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID\" 2>&1"
+        Logger "cmd: $sqlCmd" "DEBUG"
+        eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
         if [ $? -eq 0 ]; then
                 Logger "Listing databases succeeded." "NOTICE"
@@ -754,23 +754,30 @@ function CheckDiskSpace {
 
 function _BackupDatabaseLocalToLocal {
 	local database="${1}" # Database to backup
-	local export_options="${2}" # export options
+	local exportOptions="${2}" # export options
+	local encrypt="${3:-false}" # Does the file need to be encrypted ?
 
-	local dry_sql_cmd
-	local sql_cmd
+	local encryptOptions
+	local drySqlCmd
+	local sqlCmd
 	local retval
 
-        __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	if [ $encrypt == true ]; then
+		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
+		encryptExtension="$CRYPT_FILE_EXTENSION"
+	fi
+
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sql_cmd" "DEBUG"
-		eval "$sql_cmd" &
+		Logger "cmd: $sqlCmd" "DEBUG"
+		eval "$sqlCmd" &
 	else
-		Logger "cmd: $dry_sql_cmd" "DEBUG"
-		eval "$dry_sql_cmd" &
+		Logger "cmd: $drySqlCmd" "DEBUG"
+		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
@@ -784,26 +791,35 @@ function _BackupDatabaseLocalToLocal {
 
 function _BackupDatabaseLocalToRemote {
 	local database="${1}" # Database to backup
-	local export_options="${2}" # export options
+	local exportOptions="${2}" # export options
+	local encrypt="${3:-false}" # Does the file need to be encrypted
 
-        __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local dry_sql_cmd
-	local sql_cmd
+	local encryptOptions
+	local encryptExtension
+	local drySqlCmd
+	local sqlCmd
 	local retval
 
 	CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
 
-	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+
+	if [ $encrypt == true ]; then
+		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
+		encryptExtension="$CRYPT_FILE_EXTENSION"
+	fi
+
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sql_cmd" "DEBUG"
-		eval "$sql_cmd" &
+		Logger "cmd: $sqlCmd" "DEBUG"
+		eval "$sqlCmd" &
 	else
-		Logger "cmd: $dry_sql_cmd" "DEBUG"
-		eval "$dry_sql_cmd" &
+		Logger "cmd: $drySqlCmd" "DEBUG"
+		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
@@ -817,26 +833,35 @@ function _BackupDatabaseLocalToRemote {
 
 function _BackupDatabaseRemoteToLocal {
 	local database="${1}" # Database to backup
-	local export_options="${2}" # export options
+	local exportOptions="${2}" # export options
+	local encrypt="${3:-false}" # Does the file need to be encrypted ?
 
         __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local dry_sql_cmd
-	local sql_cmd
+	local encryptOptions
+	local encryptExtension
+	local drySqlCmd
+	local sqlCmd
 	local retval
 
 	CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
 
-	local dry_sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
-	local sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+
+	if [ $encrypt == true ]; then
+		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
+		encryptExtension="$CRYPT_FILE_EXTENSION"
+	fi
+
+	local drySqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+	local sqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sql_cmd" "DEBUG"
-		eval "$sql_cmd" &
+		Logger "cmd: $sqlCmd" "DEBUG"
+		eval "$sqlCmd" &
 	else
-		Logger "cmd: $dry_sql_cmd" "DEBUG"
-		eval "$dry_sql_cmd" &
+		Logger "cmd: $drySqlCmd" "DEBUG"
+		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
@@ -852,21 +877,26 @@ function BackupDatabase {
 	local database="${1}"
         __CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local mysql_options
+	local mysqlOptions
+	local encrypt=false
 
 	# Hack to prevent warning on table mysql.events, some mysql versions don't support --skip-events, prefer using --ignore-table
 	if [ "$database" == "mysql" ]; then
-		mysql_options="$MYSQLDUMP_OPTIONS --ignore-table=mysql.event"
+		mysqlOptions="$MYSQLDUMP_OPTIONS --ignore-table=mysql.event"
 	else
-		mysql_options="$MYSQLDUMP_OPTIONS"
+		mysqlOptions="$MYSQLDUMP_OPTIONS"
+	fi
+
+	if [ "$ENCRYPTION" == "yes" ]; then
+		encrypt=true
 	fi
 
 	if [ "$BACKUP_TYPE" == "local" ]; then
-		_BackupDatabaseLocalToLocal "$database" "$mysql_options"
+		_BackupDatabaseLocalToLocal "$database" "$mysqlOptions" $encrypt
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_BackupDatabaseRemoteToLocal "$database" "$mysql_options"
+		_BackupDatabaseRemoteToLocal "$database" "$mysqlOptions" $encrypt
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		_BackupDatabaseLocalToRemote "$database" "$mysql_options"
+		_BackupDatabaseLocalToRemote "$database" "$mysqlOptions" $encrypt
 	fi
 
 	if [ $? -ne 0 ]; then
@@ -938,7 +968,7 @@ function EncryptFiles {
 		fi
 
 		Logger "Encrypting file [$sourceFile] to [$path$/file$cryptFileExtension]." "VERBOSE"
-		$ENCRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot encrypt [$sourceFile]." "ERROR"
 			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "VERBOSE"
@@ -980,7 +1010,7 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		$ENCRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension*}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
+		$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension*}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
 			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID)" "DEBUG"
