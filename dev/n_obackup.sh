@@ -889,6 +889,9 @@ function BackupDatabase {
 
 	if [ "$ENCRYPTION" == "yes" ]; then
 		encrypt=true
+		Logger "Backing up encrypted database [$database]." "NOTICE"
+	else
+		Logger "Backing up database [$database]." "NOTICE"
 	fi
 
 	if [ "$BACKUP_TYPE" == "local" ]; then
@@ -913,7 +916,6 @@ function BackupDatabases {
 
 	for database in $SQL_BACKUP_TASKS
 	do
-		Logger "Backing up database [$database]." "NOTICE"
 		BackupDatabase $database
 		CheckTotalExecutionTime
 	done
@@ -978,7 +980,10 @@ function EncryptFiles {
 			Logger "Encrypted file [$file$cryptFileExtnesion]." "VERBOSE"
 		fi
 	done < <(find "$filePath" $recursiveArgs -type f -print0)
-	Logger "Encrypted [$successCounter] files successfully. Failed to encrypt [$errorCounter] files." "NOTICE"
+	Logger "Encrypted [$successCounter] files successfully." "NOTICE"
+	if [ $errorCounter -gt 0 ]; then
+		Logger "Failed to encrypt [$errorCounter] files." "CRITICAL"
+	fi
 	return $errorCounter
 }
 
@@ -1023,23 +1028,26 @@ function DecryptFiles {
 			fi
 		fi
 	done < <(find "$filePath" -type f -iname "*$cryptFileExtension" -print0)
-	Logger "Decrypted [$successCounter] files successfully. Failed to decrypt [$errorCounter] files." "NOTICE"
+	Logger "Decrypted [$successCounter] files successfully." "NOTICE"
+	if [ $errorCounter -gt 0 ]; then
+		Logger "Failed to decrypt [$errorCounter] files." "CRITICAL"
+	fi
 	return $errorCounter
 }
 
 function Rsync {
-	local backup_directory="${1}"	# Which directory to backup
+	local backupDirectory="${1}"	# Which directory to backup
 	local Recursive="${2:-true}"	# Backup only files at toplevel of directory
 
         __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local file_storage_path
-	local rsync_cmd
+	local fileStoragePath
+	local rsyncCmd
 
 	if [ "$KEEP_ABSOLUTE_PATHS" == "yes" ]; then
-		file_storage_path=$(dirname "$FILE_STORAGE/${backup_directory#/}")
+		fileStoragePath=$(dirname "$FILE_STORAGE/${backupDirectory#/}")
 	else
-		file_storage_path="$FILE_STORAGE"
+		fileStoragePath="$FILE_STORAGE"
 	fi
 
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
@@ -1052,27 +1060,27 @@ function Rsync {
 
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
-		_CreateDirectoryLocal "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		_CreateDirectoryLocal "$fileStoragePath"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_CreateDirectoryLocal "$file_storage_path"
+		_CreateDirectoryLocal "$fileStoragePath"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		backup_directory=$(EscapeSpaces "$backup_directory")
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		backupDirectory=$(EscapeSpaces "$backupDirectory")
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		file_storage_path=$(EscapeSpaces "$file_storage_path")
-		_CreateDirectoryRemote "$file_storage_path"
+		fileStoragePath=$(EscapeSpaces "$fileStoragePath")
+		_CreateDirectoryRemote "$fileStoragePath"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backupDirectory\" \"$REMOTE_USER@$REMOTE_HOST:$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	fi
 
-	Logger "cmd: $rsync_cmd" "DEBUG"
-	eval "$rsync_cmd" &
+	Logger "cmd: $rsyncCmd" "DEBUG"
+	eval "$rsyncCmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	if [ $? != 0 ]; then
-		Logger "Failed to backup [$backup_directory] to [$file_storage_path]." "ERROR"
+		Logger "Failed to backup [$backupDirectory] to [$fileStoragePath]." "ERROR"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
