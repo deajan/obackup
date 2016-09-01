@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 #TODO: missing files says Backup succeed
-#TODO: ABSOLUTE PATH=no doesn't work with encrypted files
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
@@ -165,6 +164,23 @@ function CheckCurrentConfig {
 		Logger "Cannot find gpg pubkey [$ENCRYPT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
 		exit 1
 	fi
+
+	if [ "$SQL_BACKUP" == "yes" ] && [ "$SQL_STORAGE" == "" ]; then
+		Logger "SQL_STORAGE not defined." "CRITICAL"
+		exit 1
+	fi
+
+	if [ "$FILE_BACKUP" == "yes" ] && [ "$FILE_STORAGE" == "" ]; then
+		Logger "FILE_STORAGE not defined." "CRITICAL"
+		exit 1
+	fi
+
+	if [ "$ENCRYPTION" == "yes" ] && [ "$CRYPT_STORAGE" == "" ]; then
+		Logger "CRYPT_STORAGE not defined." "CRITICAL"
+		exit 1
+	fi
+
+
 }
 
 function CheckRunningInstances {
@@ -939,6 +955,7 @@ function BackupDatabases {
 	done
 }
 
+#TODO: exclusions don't work for encrypted files
 #TODO: add ParallelExec here ? Also rework ParallelExec to use files or variables, vars are max 4M, if cannot be combined, create ParallelExecFromFile
 function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
@@ -1043,11 +1060,17 @@ function Rsync {
         __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local fileStoragePath
+	local withoutCryptPath
 	local rsyncCmd
 	local retval
 
-	if [ "$KEEP_ABSOLUTE_PATHS" == "yes" ]; then
-		fileStoragePath=$(dirname "$FILE_STORAGE/${backupDirectory#/}")
+	if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$ENCRYPTION" == "yes" ]; then
+			withoutCryptPath="${backupDirectory#$CRYPT_STORAGE}"
+			fileStoragePath=$(dirname "$FILE_STORAGE/${withoutCryptPath#/}")
+		else
+			fileStoragePath=$(dirname "$FILE_STORAGE/${backupDirectory#/}")
+		fi
 	else
 		fileStoragePath="$FILE_STORAGE"
 	fi
@@ -1104,7 +1127,7 @@ function FilesBackup {
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE" true
+				Rsync "$CRYPT_STORAGE/$backupTask" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
@@ -1125,7 +1148,7 @@ function FilesBackup {
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE" false
+				Rsync "$CRYPT_STORAGE/$backupTask" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
@@ -1147,7 +1170,7 @@ function FilesBackup {
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE" true
+				Rsync "$CRYPT_STORAGE/$backupTask" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
