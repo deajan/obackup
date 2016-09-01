@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+#TODO: missing files says Backup succeed
+
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
@@ -14,6 +16,9 @@ _LOGGER_PREFIX="time"
 
 ## Working directory for partial downloads
 PARTIAL_DIR=".obackup_workdir_partial"
+
+## File extension for encrypted files
+CRYPT_FILE_EXTENSION=".$PROGRAM.gpg"
 
 # List of runtime created global variables
 # $SQL_DISK_SPACE, disk space available on target for sql backups
@@ -42,7 +47,7 @@ function TrapQuit {
 			RunAfterHook
 		fi
 		CleanUp
-		Logger "Backup script finished with errors." "ERROR"
+		Logger "$PROGRAM finished with errors." "ERROR"
 		SendAlert
 		exitcode=1
 	elif [ $WARN_ALERT == true ]; then
@@ -50,13 +55,13 @@ function TrapQuit {
 			RunAfterHook
 		fi
 		CleanUp
-		Logger "Backup script finished with warnings." "WARN"
+		Logger "$PROGRAM finished with warnings." "WARN"
 		SendAlert
 		exitcode=2
 	else
 		RunAfterHook
 		CleanUp
-		Logger "Backup script finshed." "NOTICE"
+		Logger "$PROGRAM finshed without errors." "NOTICE"
 		exitcode=0
 	fi
 
@@ -97,11 +102,11 @@ function CheckEnvironment {
 	fi
 
 	if [ "$ENCRYPTION" == "yes" ]; then
-		CheckDecrpytEnvironnment
+		CheckCryptEnvironnment
 	fi
 }
 
-function CheckDecryptEnvironnment {
+function CheckCryptEnvironnment {
 	if ! type gpg2 > /dev/null 2>&1 ; then
 		if ! type gpg > /dev/null 2>&1; then
 			Logger "gpg2 nor gpg not present. Cannot encrypt backup files." "CRITICAL"
@@ -156,7 +161,7 @@ function CheckCurrentConfig {
 	fi
 
 	if [ -f "$ENCRYPT_GPG_PYUBKEY" ]; then
-		Logger "Cannot find gpg pubkey [$ENCRPYT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
+		Logger "Cannot find gpg pubkey [$ENCRYPT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
 		exit 1
 	fi
 }
@@ -845,14 +850,12 @@ function BackupDatabases {
 }
 
 function PrepareEncryptFiles {
-	local tmpPath="${2}"
-
-	#TODO: handle dryrun, do we need to create temp dir ?
+	local tmpPath="${1}"
 
 	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		_CreateDirsLocal "$tmpPath"
+		_CreateDirectoryLocal "$tmpPath"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		Logger "Encryption only works with [local] or [push] backup types." "CRITICAL"
 		exit 1
@@ -860,15 +863,53 @@ function PrepareEncryptFiles {
 	#WIP: check disk space in tmp dir and compare to backup size else error
 }
 
-function EncrpytFiles {
+#TODO: add ParallelExec here ? Also rework ParallelExec to use files or variables, vars are max 4M, if cannot be combined, create ParallelExecFromFile
+function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
-	local tmpPath="${2}"
+	local tmpPath="${2}"    # Path to store encrypted files
+	local recipient="${3}"  # GPG recipient
+	local recursive="${4:-true}" # Is recursive ?
 
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 4 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	#gpg here ?
-	#crypt_cmd source temp
-	# Send files to remote, rotate & copy
+	#TOOD: move this to prior checks
+	PrepareEncryptFiles "$tmpPath"
+
+	local successCounter=0
+	local errorCounter=0
+	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
+	local recursiveArgs=""
+
+	if [ ! -w "$tmpPath" ]; then
+		Logger "Cannot write to crypt storage path [$tmpPath]." "ERROR"
+		return 1
+	fi
+
+	if [ $recursive == false ]; then
+		recursiveArgs="-mindepth 1 -maxdepth 1"
+	fi
+
+	while IFS= read -r -d $'\0' sourceFile; do
+		path="$tmpPath/$(dirname "$sourceFile")"
+		path="${path%/}"
+		file="$(basename "$sourceFile")"
+		if [ ! -d "$path" ]; then
+			mkdir -p "$path"
+		fi
+
+		Logger "Encrypting file [$sourceFile] to [$path$/file$cryptFileExtension]." "VERBOSE"
+		$ENCRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		if [ $? != 0 ]; then
+			Logger "Cannot encrypt [$sourceFile]." "ERROR"
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "VERBOSE"
+			errorCounter=$((errorCounter+1))
+		else
+			successCounter=$((successCounter+1))
+			Logger "Encrypted file [$file$cryptFileExtnesion]." "VERBOSE"
+		fi
+	done < <(find "$filePath" $recursiveArgs -type f -print0)
+	Logger "Encrypted [$successCounter] files successfully. Failed to encrypt [$errorCounter] files." "NOTICE"
+	return $errorCounter
 }
 
 function DecryptFiles {
@@ -881,7 +922,7 @@ function DecryptFiles {
 	local secret
 	local successCounter=0
 	local errorCounter=0
-	local cryptFileExtension=".obackup.gpg"
+	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
 
 	if [ ! -w "$filePath" ]; then
 		Logger "Directory [$filePath] is not writable. Cannot decrypt files." "CRITICAL"
@@ -897,28 +938,28 @@ function DecryptFiles {
 		exit 1
 	fi
 
-	find "$filePath" -type f -iname "*$cryptFileExtension" -print0 | while IFS= read -r -d $'\0' encryptedFile; do
+	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		$ENCRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension*}" --batch $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
+		$ENCRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension*}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
+			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID)" "DEBUG"
 			errorCounter=$((errorCounter+1))
 		else
-			succesCounter=$((successCounter+1))
+			successCounter=$((successCounter+1))
 			rm -f "$encryptedFile"
 			if [ $? != 0 ]; then
 				Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
-				Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID)" "ERROR"
 			fi
 		fi
-	done
+	done < <(find "$filePath" -type f -iname "*$cryptFileExtension" -print0)
 	Logger "Decrypted [$successCounter] files successfully. Failed to decrypt [$errorCounter] files." "NOTICE"
-	exit 0
+	return $errorCounter
 }
 
 function Rsync {
 	local backup_directory="${1}"	# Which directory to backup
-	local is_recursive="${2}"	# Backup only files at toplevel of directory
+	local Recursive="${2:-true}"	# Backup only files at toplevel of directory
 
         __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
@@ -932,7 +973,7 @@ function Rsync {
 	fi
 
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
-	if [ "$is_recursive" == "no-recurse" ]; then
+	if [ $Recursive == false ]; then
 		# Fixes symlinks to directories in target cannot be deleted when backing up root directory without recursion, and excludes subdirectories
 		RSYNC_NO_RECURSE_ARGS=" -k  --exclude=*/*/"
 	else
@@ -978,11 +1019,14 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Dummy
-			#Encrpyt files recursively
-			#Rsync encrypted files instead of original ones
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
+			if [ $? == 0 ]; then
+				Rsync "$CRYPT_STORAGE" true
+			else
+				Logger "backup failed." "ERROR"
+			fi
 		else
-			Rsync "$backupTask" "recurse"
+			Rsync "$backupTask" true
 		fi
 		CheckTotalExecutionTime
 	done
@@ -991,11 +1035,14 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Dummy
-			#Encrpyt files non recursively
-			#Rsync encrypted files instead of original ones
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false
+			if [ $? == 0 ]; then
+				Rsync "$CRYPT_STORAGE" false
+			else
+				Logger "backup failed." "ERROR"
+			fi
 		else
-			Rsync "$backupTask" "no-recurse"
+			Rsync "$backupTask" false
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1005,11 +1052,14 @@ function FilesBackup {
 	# Backup sub directories of recursive directories
 		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ]; then
-			Dummy
-			#Encrpyt files recursively
-			#Rsync encrypted files instead of original ones
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
+			if [ $? == 0 ]; then
+				Rsync "$CRYPT_STORAGE" true
+			else
+				Logger "backup failed." "ERROR"
+			fi
 		else
-			Rsync "$backupTask" "recurse"
+			Rsync "$backupTask" true
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1312,7 +1362,7 @@ function Main {
 	FILE_STORAGE="${FILE_STORAGE/#\~/$HOME}"
 	SQL_STORAGE="${SQL_STORAGE/#\~/$HOME}"
 	SSH_RSA_PRIVATE_KEY="${SSH_RSA_PRIVATE_KEY/#\~/$HOME}"
-	ENCRYPT_PUBKEY="${ENCRPYT_PUBKEY/#\~/$HOME}"
+	ENCRYPT_PUBKEY="${ENCRYPT_PUBKEY/#\~/$HOME}"
 
 	if [ "$CREATE_DIRS" != "no" ]; then
 		CreateStorageDirectories
@@ -1349,7 +1399,7 @@ function Usage {
 	echo "$AUTHOR"
 	echo "$CONTACT"
 	echo ""
-	echo "usage: $0 /path/to/backup.conf [OPTIONS]"
+	echo "General usage: $0 /path/to/backup.conf [OPTIONS]"
 	echo ""
 	echo "OPTIONS:"
 	echo "--dry             will run obackup without actually doing anything, just testing"
@@ -1361,9 +1411,13 @@ function Usage {
 	echo "--delete          Deletes files on destination that vanished on source"
 	echo "--dontgetsize     Does not try to evaluate backup size"
 	echo ""
-	echo -e "$PROGRAM may also be used to \e[93mdecrypt\e[0m a backup encrypted with $PROGRAM."
-	echo  "usage: $0 --decrypt=/path/to/encrypted_backup --passphrase-file=/path/to/passphrase"
-	echo  "usage: $0 --decrypt=/path/to/encrypted_backup --passphrase=MySecretPassPhrase (security risk)"
+	echo "Batch processing usage:"
+	echo -e "\e[93mDecrypt\e[0m a backup encrypted with $PROGRAM"
+	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase-file=/path/to/passphrase"
+	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase=MySecretPassPhrase (security risk)"
+	echo ""
+	echo "Batch encrypt a directory in separate gpg files"
+	echo "$0 --encrypt=/path/to/files --destination=/path/to/encrypted/files --recipient=\"Your Name\""
 	exit 128
 }
 
@@ -1375,7 +1429,7 @@ stats=false
 PARTIAL=no
 _DECRYPT_MODE=false
 DECRYPT_PATH=""
-
+_ENCRYPT_MODe=false
 
 function GetCommandlineArguments {
 	if [ $# -eq 0 ]; then
@@ -1421,6 +1475,16 @@ function GetCommandlineArguments {
 			--passphrase-file=*)
 			PASSPHRASE_FILE="${i##*=}"
 			;;
+			--encrypt=*)
+			_ENCRYPT_MODE=true
+			CRYPT_SOURCE="${i##*=}"
+			;;
+			--destination=*)
+			CRYPT_STORAGE="${i##*=}"
+			;;
+			--recipient=*)
+			GPG_RECIPIENT="${i##*=}"
+			;;
 		esac
 	done
 }
@@ -1428,9 +1492,17 @@ function GetCommandlineArguments {
 SetTraps
 GetCommandlineArguments "$@"
 if [ "$_DECRYPT_MODE" == true ]; then
-	CheckDecryptEnvironnment
+	CheckCryptEnvironnment
 	DecryptFiles "$DECRYPT_PATH" "$PASSPHRASE_FILE" "$PASSPHRASE"
+	exit $?
 fi
+
+if [ "$_ENCRYPT_MODE" == true ]; then
+	CheckCryptEnvironnment
+	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
+	exit $?
+fi
+
 LoadConfigFile "$1"
 if [ "$LOGFILE" == "" ]; then
 	if [ -w /var/log ]; then
