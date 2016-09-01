@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090104
+PROGRAM_BUILD=2016090106
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -18,7 +18,7 @@ _LOGGER_PREFIX="time"
 PARTIAL_DIR=".obackup_workdir_partial"
 
 ## File extension for encrypted files
-CRYPT_FILE_EXTENSION=".$PROGRAM.gpg"
+CRYPT_FILE_EXTENSION=".obackup.gpg"
 
 # List of runtime created global variables
 # $SQL_DISK_SPACE, disk space available on target for sql backups
@@ -769,7 +769,7 @@ function CheckDiskSpace {
 		if [ "$FILE_BACKUP" != "no" ]; then
 			if [ "$FILE_DRIVE" == "$CRYPT_DRIVE" ]; then
 				if [ $((FILE_DISK_SPACE/2)) -lt $((TOTAL_FILES_SIZE)) ]; then
-					Logger "Disk space in [$FILES_STORAGE] and [$CRYPT_STORAGE] may be insufficient to encrypt Sfiles ($FILE_DISK_SPACE Ko available in $FILE_DRIVE)." "WARN"
+					Logger "Disk space in [$FILE_STORAGE] and [$CRYPT_STORAGE] may be insufficient to encrypt Sfiles ($FILE_DISK_SPACE Ko available in $FILE_DRIVE)." "WARN"
 				fi
 			else
 				if [ $((CRYPT_DISK_SPACE)) -lt $((TOTAL_FILES_SIZE)) ]; then
@@ -883,7 +883,7 @@ function _BackupDatabaseRemoteToLocal {
 
 
 	if [ $encrypt == true ]; then
-		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
+		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\\\"$GPG_RECIPIENT\\\""
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
@@ -995,7 +995,7 @@ function EncryptFiles {
 			errorCounter=$((errorCounter+1))
 		else
 			successCounter=$((successCounter+1))
-			Logger "Encrypted file [$file$cryptFileExtnesion]." "VERBOSE"
+			Logger "Encrypted file [$sourceFile]." "VERBOSE"
 		fi
 	done < <(find "$filePath" $recursiveArgs -type f -print0)
 	Logger "Encrypted [$successCounter] files successfully." "NOTICE"
@@ -1131,7 +1131,7 @@ function FilesBackup {
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" "pull" ]; then
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
 				EncryptFiles "$backupTask" true
@@ -1152,7 +1152,7 @@ function FilesBackup {
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" "pull" ]; then
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" false
 			if [ $? == 0 ]; then
 				EncryptFiles "$backupTask" false
@@ -1174,7 +1174,7 @@ function FilesBackup {
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" "pull" ]; then
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
 				EncryptFiles "$backupTask" true
@@ -1211,7 +1211,8 @@ function _RotateBackupsLocal {
 	local cmd
 	local path
 
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	#TODO: Replace this iname with regex .*$PROGRAM\.[1-9][0-9]+
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
@@ -1319,7 +1320,7 @@ function RemoteLogger {
 }
 
 function _RotateBackupsRemoteSSH {
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
@@ -1550,7 +1551,7 @@ stats=false
 PARTIAL=no
 _DECRYPT_MODE=false
 DECRYPT_PATH=""
-_ENCRYPT_MODe=false
+_ENCRYPT_MODE=false
 
 function GetCommandlineArguments {
 	if [ $# -eq 0 ]; then
