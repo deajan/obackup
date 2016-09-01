@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
 #TODO: missing files says Backup succeed
+#TODO: ABSOLUTE PATH=no doesn't work with encrypted files
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016083102
+PROGRAM_BUILD=2016080102
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -653,6 +654,17 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
+		if [ "$ENCRYPTION" != "no" ]; then
+			GetDiskSpaceLocal "$CRYPT_STORAGE"
+			if [ $? != 0 ]; then
+				CRYPT_DISK_SPACE=0
+				CAN_BACKUP_FILES=false
+				CAN_BACKUP_SQL=false
+			else
+				CRYPT_DISK_SPACE=$DISK_SPACE
+				CRYPT_DRIVE=$DRIVE
+			fi
+		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			GetDiskSpaceRemote "$SQL_STORAGE"
@@ -705,6 +717,34 @@ function CheckDiskSpace {
 			Logger "Disk space in [$FILE_STORAGE] is lower than warning value [$FILE_WARN_MIN_SPACE Ko]." "WARN"
 		fi
 		Logger "File storage space: $FILE_DISK_SPACE Ko - Files size: $TOTAL_FILES_SIZE Ko" "NOTICE"
+	fi
+
+	if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$SQL_BACKUP" != "no" ]; then
+			if [ "$SQL_DRIVE" == "$CRYPT_DRIVE" ]; then
+				if [ $((SQL_DISK_SPACE/2)) -lt $((TOTAL_DATABASES_SIZE)) ]; then
+					Logger "Disk space in [$SQL_STORAGE] and [$CRYPT_STORAGE] may be insufficient to backup SQL ($SQL_DISK_SPACE Ko available in $SQL_DRIVE) (non compressed databases calculation + crypt storage space)." "WARN"
+				fi
+			else
+				if [ $((CRYPT_DISK_SPACE)) -lt $((TOTAL_DATABASES_SIZE)) ]; then
+					Logger "Disk spae in [$CRYPT_STORAGE] may be insufficient to encrypt SQL ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE) (non compressed databases calculation)." "WARN"
+				fi
+			fi
+		fi
+
+		if [ "$FILE_BACKUP" != "no" ]; then
+			if [ "$FILE_DRIVE" == "$CRYPT_DRIVE" ]; then
+				if [ $((FILE_DISK_SPACE/2)) -lt $((TOTAL_FILES_SIZE)) ]; then
+					Logger "Disk space in [$FILES_STORAGE] and [$CRYPT_STORAGE] may be insufficient to encrypt Sfiles ($FILE_DISK_SPACE Ko available in $FILE_DRIVE)." "WARN"
+				fi
+			else
+				if [ $((CRYPT_DISK_SPACE)) -lt $((TOTAL_FILES_SIZE)) ]; then
+					Logger "Disk spae in [$CRYPT_STORAGE] may be insufficient to encrypt files ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE)." "WARN"
+				fi
+			fi
+		fi
+
+		Logger "Crypt storage space: $CRYPT_DISK_SPACE Ko" "NOTICE"
 	fi
 
 	if [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
