@@ -997,7 +997,7 @@ function EncryptFiles {
 			successCounter=$((successCounter+1))
 			Logger "Encrypted file [$sourceFile]." "VERBOSE"
 		fi
-	done < <(find "$filePath" $recursiveArgs -type f -print0)
+	done < <(find "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
 	Logger "Encrypted [$successCounter] files successfully." "NOTICE"
 	if [ $errorCounter -gt 0 ]; then
 		Logger "Failed to encrypt [$errorCounter] files." "CRITICAL"
@@ -1045,7 +1045,7 @@ function DecryptFiles {
 				Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
 			fi
 		fi
-	done < <(find "$filePath" -type f -iname "*$cryptFileExtension" -print0)
+	done < <(find "$filePath" -type f -name "*$cryptFileExtension" -print0)
 	Logger "Decrypted [$successCounter] files successfully." "NOTICE"
 	if [ $errorCounter -gt 0 ]; then
 		Logger "Failed to decrypt [$errorCounter] files." "CRITICAL"
@@ -1120,6 +1120,7 @@ function FilesBackup {
 
 	local backupTask
 	local backupTasks
+	local path
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
@@ -1134,7 +1135,13 @@ function FilesBackup {
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
-				EncryptFiles "$backupTask" true
+				#TODO: Test KEEP_ABSOLUTE_PATH=no
+				if [ "$KEEP_ABSOLUTE_PATH" != "no" ]; then
+					path="$FILE_STORAGE/$backupTask"
+				else
+					path="$FILE_STORAGE/$(basename "$backupTask")"
+				fi
+				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true
 			fi
 		else
 			Rsync "$backupTask" true
@@ -1155,7 +1162,12 @@ function FilesBackup {
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" false
 			if [ $? == 0 ]; then
-				EncryptFiles "$backupTask" false
+				if [ "$KEEP_ABSOLUTE_PATH" != "no" ]; then
+					path="$FILE_STORAGE/$backupTask"
+				else
+					path="$FILE_STORAGE/$(basename "$backupTask")"
+				fi
+				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" false
 			fi
 		else
 			Rsync "$backupTask" false
@@ -1177,7 +1189,12 @@ function FilesBackup {
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
-				EncryptFiles "$backupTask" true
+				if [ "$KEEP_ABSOLUTE_PATH" != "no" ]; then
+					path="$FILE_STORAGE/$backupTask"
+				else
+					path="$FILE_STORAGE/$(basename "$backupTask")"
+				fi
+				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true
 			fi
 		else
 			Rsync "$backupTask" true
