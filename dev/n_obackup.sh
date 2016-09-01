@@ -566,6 +566,12 @@ function CreateStorageDirectories {
 				CAN_BACKUP_FILES=false
 			fi
 		fi
+		if [ "$ENCRYPTION" == "yes" ]; then
+			_CreateDirectoryLocal "$CRYPT_STORAGE"
+			if [ $? != 0 ]; then
+				CAN_BACKUP_FILES=false
+			fi
+		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$SQL_STORAGE"
@@ -739,7 +745,7 @@ function CheckDiskSpace {
 				fi
 			else
 				if [ $((CRYPT_DISK_SPACE)) -lt $((TOTAL_DATABASES_SIZE)) ]; then
-					Logger "Disk spae in [$CRYPT_STORAGE] may be insufficient to encrypt SQL ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE) (non compressed databases calculation)." "WARN"
+					Logger "Disk space in [$CRYPT_STORAGE] may be insufficient to encrypt SQL ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE) (non compressed databases calculation)." "WARN"
 				fi
 			fi
 		fi
@@ -751,7 +757,7 @@ function CheckDiskSpace {
 				fi
 			else
 				if [ $((CRYPT_DISK_SPACE)) -lt $((TOTAL_FILES_SIZE)) ]; then
-					Logger "Disk spae in [$CRYPT_STORAGE] may be insufficient to encrypt files ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE)." "WARN"
+					Logger "Disk space in [$CRYPT_STORAGE] may be insufficient to encrypt files ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE)." "WARN"
 				fi
 			fi
 		fi
@@ -933,18 +939,6 @@ function BackupDatabases {
 	done
 }
 
-function PrepareEncryptFiles {
-	local tmpPath="${1}"
-
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
-
-	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		_CreateDirectoryLocal "$tmpPath"
-	elif [ "$BACKUP_TYPE" == "push" ]; then
-		_CreateDirectoryRemote "$tmpPath"
-	fi
-}
-
 #TODO: add ParallelExec here ? Also rework ParallelExec to use files or variables, vars are max 4M, if cannot be combined, create ParallelExecFromFile
 function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
@@ -953,9 +947,6 @@ function EncryptFiles {
 	local recursive="${4:-true}" # Is recursive ?
 
 	__CheckArguments 4 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
-
-	#TOOD: move this to prior checks
-	PrepareEncryptFiles "$tmpPath"
 
 	local successCounter=0
 	local errorCounter=0
@@ -1047,7 +1038,7 @@ function DecryptFiles {
 
 function Rsync {
 	local backupDirectory="${1}"	# Which directory to backup
-	local Recursive="${2:-true}"	# Backup only files at toplevel of directory
+	local recursive="${2:-true}"	# Backup only files at toplevel of directory
 
         __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
@@ -1062,7 +1053,7 @@ function Rsync {
 	fi
 
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
-	if [ $Recursive == false ]; then
+	if [ $recursive == false ]; then
 		# Fixes symlinks to directories in target cannot be deleted when backing up root directory without recursion, and excludes subdirectories
 		RSYNC_NO_RECURSE_ARGS=" -k  --exclude=*/*/"
 	else
@@ -1123,7 +1114,7 @@ function FilesBackup {
 				EncryptFiles "$backupTask" true
 			fi
 		else
-			Rsync "$backuptask" true
+			Rsync "$backupTask" true
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1144,7 +1135,7 @@ function FilesBackup {
 				EncryptFiles "$backupTask" false
 			fi
 		else
-			Rsync "$backuptask" false
+			Rsync "$backupTask" false
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1166,7 +1157,7 @@ function FilesBackup {
 				EncryptFiles "$backupTask" true
 			fi
 		else
-			Rsync "$backuptask" true
+			Rsync "$backupTask" true
 		fi
 		CheckTotalExecutionTime
 	done
