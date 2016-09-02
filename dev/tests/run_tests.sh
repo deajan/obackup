@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090202
+## obackup basic tests suite 2016090203
 
 #TODO: Must recreate files before each test set
 
@@ -121,6 +121,10 @@ Passphrase: PassPhrase123
 %commit
 %echo done
 EOF
+
+		if type apt-get > /dev/null 2>&1; then
+			apt-get install rng-tools
+		fi
 
 		# Setup fast entropy
 		if type rndg > /dev/null 2>&1; then
