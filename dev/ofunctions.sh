@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016090201
+## FUNC_BUILD=2016090202
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -1083,14 +1083,17 @@ function RunAfterHook {
 function CheckConnectivityRemoteHost {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
+	local retval
+
 	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
 			WaitForTaskCompletion $! 60 180 ${FUNCNAME[0]} true $KEEP_LOGGING
-			if [ $? != 0 ]; then
-				Logger "Cannot ping [$REMOTE_HOST]. Return code [$?]." "ERROR"
-				return 1
+			retval=$?
+			if [ $retval != 0 ]; then
+				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "ERROR"
+				return $retval
 			fi
 		fi
 	fi
@@ -1100,7 +1103,7 @@ function CheckConnectivity3rdPartyHosts {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
 	local remote_3rd_party_success
-	local pids
+	local retval
 
 	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug
 
@@ -1110,8 +1113,9 @@ function CheckConnectivity3rdPartyHosts {
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
 				WaitForTaskCompletion $! 180 360 ${FUNCNAME[0]} true $KEEP_LOGGING
-				if [ $? != 0 ]; then
-					Logger "Cannot ping 3rd party host [$i]. Return code [$?]." "NOTICE"
+				reval=$?
+				if [ $retval != 0 ]; then
+					Logger "Cannot ping 3rd party host [$i]. Return code [$retval]." "NOTICE"
 				else
 					remote_3rd_party_success=true
 				fi
