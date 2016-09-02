@@ -12,4 +12,4 @@ before_script:
     mysql -e 'CREATE DATABASE travistest;'
 
 script:
-    dev/tests/run_tests.sh travis
+    TRAVIS_RUN=true dev/tests/run_tests.sh

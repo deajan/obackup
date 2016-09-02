@@ -9,10 +9,10 @@ OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
 DEV_DIR="$OBACKUP_DIR/dev"
 TESTS_DIR="$DEV_DIR/tests"
 
-if [ "$1" == "travis" ]; then
-	CONF_DIR="$TESTS_DIR/conf-travis"
-else
+if [ $TRAVIS_RUN == false ]; then
 	CONF_DIR="$TESTS_DIR/conf-local"
+else
+	CONF_DIR="$TESTS_DIR/conf-travis"
 fi
 
 LOCAL_CONF="local.conf"
