@@ -4,15 +4,20 @@
 
 #TODO: Must recreate files before each test set
 
+ping localhost
+gpg --help
+
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
 DEV_DIR="$OBACKUP_DIR/dev"
 TESTS_DIR="$DEV_DIR/tests"
 
-if [ $TRAVIS_RUN == false ]; then
-	CONF_DIR="$TESTS_DIR/conf-local"
-else
+if [ "$TRAVIS_RUN" == true ]; then
+	echo "Running with travis settings"
 	CONF_DIR="$TESTS_DIR/conf-travis"
+else
+	echo "Running with local settings"
+	CONF_DIR="$TESTS_DIR/conf-local"
 fi
 
 LOCAL_CONF="local.conf"
@@ -407,12 +412,12 @@ function test_EncryptPullRun () {
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
-		[ -f "$TARGET_DIR_FILE_PULL/$file$CRYPT_EXTENSION" ]
-		assertEquals "File Presence [$TARGET_DIR_FILE_PULL/$file$CRYPT_EXTENSION]" "0" $?
+		[ -f "$TARGET_DIR_FILE_CRYPT/$file$CRYPT_EXTENSION" ]
+		assertEquals "File Presence [$TARGET_DIR_FILE_CRYPT/$file$CRYPT_EXTENSION]" "0" $?
 	done
 
 #	for file in "${FileExcluded[@]}"; do
-#		[ -f "$TARGET_DIR_FILE_PULL/$file$CRYPT_EXTENSION" ]
+#		[ -f "$TARGET_DIR_FILE_CRYPT/$file$CRYPT_EXTENSION" ]
 #		assertEquals "File Excluded [$TARGET_DIR_FILE_PULL/$file$CRYPT_EXTENSION]" "1" $?
 #	done
 
@@ -442,15 +447,15 @@ function test_EncryptPullRun () {
 		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PULL/$file$CRYPT_EXTENSION]" "0" $?
 	done
 
-	[ -d "$TARGET_DIR_FILE_PULL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
-	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PULL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
+	[ -d "$TARGET_DIR_FILE_CRYPT/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
+	assertEquals "File rotated Presence [$TARGET_DIR_FILE_CRYPT/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
 	SetEncryption "$CONF_DIR/$PULL_CONF" false
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage" "0" $?
 
 }
@@ -504,10 +509,10 @@ function test_EncryptPushRun () {
 
 	SetEncryption "$CONF_DIR/$PUSH_CONF" false
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage" "0" $?
 }
 
