@@ -35,8 +35,7 @@ TARGET_DIR_FILE_PULL="$TARGET_DIR/files-pull"
 TARGET_DIR_SQL_PUSH="$TARGET_DIR/sql-push"
 TARGET_DIR_FILE_PUSH="$TARGET_DIR/files-push"
 
-TARGET_DIR_SQL_CRYPT="$TARGET_DIR/sql-crypt"
-TARGET_DIR_FILE_CRYPT="$TARGET_DIR/files-crypt"
+TARGET_DIR_FILE_CRYPT="$TARGET_DIR/crypt"
 
 SIMPLE_DIR="testData"
 RECURSIVE_DIR="testDataRecursive"
@@ -158,7 +157,7 @@ function oneTimeSetUp () {
 
 function setUp () {
 	rm -rf "$SOURCE_DIR"
-	rm -rf "$TARGET_DIR"
+	#rm -rf "$TARGET_DIR"
 
 	mkdir -p "$SOURCE_DIR/$SIMPLE_DIR/$S_DIR_1"
 	mkdir -p "$SOURCE_DIR/$RECURSIVE_DIR/$R_EXCLUDED_DIR"
@@ -212,7 +211,7 @@ function test_Merge () {
 	SetStableToYes
 }
 
-function test_LocalRun () {
+function nope_test_LocalRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
@@ -258,7 +257,7 @@ function test_LocalRun () {
 
 }
 
-function test_PullRun () {
+function nope_test_PullRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
@@ -305,7 +304,7 @@ function test_PullRun () {
 
 }
 
-function test_PushRun () {
+function nope_test_PushRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
@@ -351,7 +350,7 @@ function test_PushRun () {
 
 }
 
-function test_EncryptLocalRun () {
+function nope_test_EncryptLocalRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" true
 
 	cd "$OBACKUP_DIR"
@@ -401,10 +400,10 @@ function test_EncryptLocalRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt sql storage" "0" $?
+	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_LOCAL]" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt file storage" "0" $?
+	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
 
 }
 
@@ -458,14 +457,14 @@ function test_EncryptPullRun () {
 	SetEncryption "$CONF_DIR/$PULL_CONF" false
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt sql storage" "0" $?
+	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PULL]" "0" $?
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt file storage" "0" $?
+	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
 
 }
 
-function test_EncryptPushRun () {
+function nope_test_EncryptPushRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	SetEncryption "$CONF_DIR/$PUSH_CONF" true
 
@@ -515,13 +514,13 @@ function test_EncryptPushRun () {
 	SetEncryption "$CONF_DIR/$PUSH_CONF" false
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt sql storage" "0" $?
+	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PUSH]" "0" $?
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt file storage" "0" $?
+	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
 }
 
-function test_WaitForTaskCompletion () {
+function nope_test_WaitForTaskCompletion () {
 	# Tests if wait for task completion works correctly
 
 	# Standard wait
@@ -569,7 +568,7 @@ function test_WaitForTaskCompletion () {
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
 
-function test_ParallelExec () {
+function nope_test_ParallelExec () {
 	# Test if parallelExec works correctly
 
 	cmd="sleep 2;sleep 2;sleep 2;sleep 2"
@@ -584,7 +583,5 @@ function test_ParallelExec () {
 	ParallelExec 3 "$cmd"
 	assertEquals "ParallelExec test 3" "2" $?
 }
-
-echo "$CURRENT_LOG"
 
 . "$TESTS_DIR/shunit2/shunit2"
