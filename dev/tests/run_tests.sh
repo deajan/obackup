@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090101
+## obackup basic tests suite 2016090201
 
 #TODO: Must recreate files before each test set
 
@@ -8,7 +8,12 @@ OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
 DEV_DIR="$OBACKUP_DIR/dev"
 TESTS_DIR="$DEV_DIR/tests"
-CONF_DIR="$TESTS_DIR/conf"
+
+if [ "$1" == "travis" ]; then
+	CONF_DIR="$TESTS_DIR/conf-travis"
+else
+	CONF_DIR="$TESTS_DIR/conf-local"
+fi
 
 LOCAL_CONF="local.conf"
 PULL_CONF="pull.conf"
@@ -88,7 +93,15 @@ function SetEncryption () {
 }
 
 function SetupGPG {
-	if ! gpg2 --list-keys | grep "John Doe" ; then
+	if type gpg2 > /dev/null; then
+		GPG=gpg2
+	elif type gpg > /dev/null; then
+		GPG=gpg
+	else
+		echo "No gpg support"
+	fi
+
+	if ! $GPG --list-keys | grep "John Doe" ; then
 
 		cat >gpgcommand <<EOF
 %echo Generating a GPG Key
@@ -107,10 +120,12 @@ EOF
 		# Setup fast entropy
 		if type rndg > /dev/null 2>&1; then
 			rndg -r /dev/urandom
+		else
+			echo "No rndg support"
 		fi
 
-		gpg2 --batch --gen-key gpgcommand
-		echo $(gpg2 --list-keys)
+		$GPG --batch --gen-key gpgcommand
+		echo $($GPG --list-keys)
 		rm -f gpgcommand
 
 	fi
