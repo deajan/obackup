@@ -2,6 +2,7 @@
 
 #TODO: missing files says Backup succeed
 #TODO: add new encryption variable checks, also upgrade script
+#TODO: ListingDatabases fail succeed
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
@@ -1040,8 +1041,11 @@ function DecryptFiles {
 		exit 1
 	fi
 
-	if [ -f "$passphraseFile" ]; then
+	#TODO: This is an Fix: gpg 1.4.11 fails with passphrase-file but not with passphrase $(cat file)
+	if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
 		secret="--passphrase-file $passphraseFile"
+	elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
+		secert="$$passphrase $(cat "$passphraseFile")"
 	elif [ "$passphrase" != "" ]; then
 		secret="--passphrase $passphrase"
 	else
