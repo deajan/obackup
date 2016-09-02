@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090203
+## obackup basic tests suite 2016090204
 
 #TODO: Must recreate files before each test set
-
-ping localhost
-gpg --help
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -146,7 +143,11 @@ function SetupSSH {
 	echo -e  'y\n'| ssh-keygen -t rsa -b 2048 -N "" -f "${HOME}/.ssh/id_rsa_local"
 	cat "${HOME}/.ssh/id_rsa_local.pub" >> "${HOME}/.ssh/authorized_keys"
 	chmod 600 "${HOME}/.ssh/authorized_keys"
-	ls ${HOME}/.ssh -lah
+
+	# Add localhost to known hosts so self connect works
+	if [ -z $(ssh-keygen -F localhost) ]; then
+		ssh-keyscan -H localhost >> ~/.ssh/known_hosts
+	fi
 }
 
 function oneTimeSetUp () {
