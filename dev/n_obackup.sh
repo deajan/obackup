@@ -602,6 +602,12 @@ function CreateStorageDirectories {
 				CAN_BACKUP_FILES=false
 			fi
 		fi
+		if [ "$ENCRYPTION" == "yes" ]; then
+			_CreateDirectoryLocal "$CRYPT_STORAGE"
+			if [ $? != 0 ]; then
+				CAN_BACKUP_FILES=false
+			fi
+		fi
 	fi
 }
 
@@ -708,7 +714,7 @@ function CheckDiskSpace {
 			fi
 		fi
 		if [ "$ENCRYPTION" != "no" ]; then
-			GetDiskSpaceRemote "$CRYPT_STORAGE"
+			GetDiskSpaceLocal "$CRYPT_STORAGE"
 			if [ $? != 0 ]; then
 				CRYPT_DISK_SPACE=0
 				CAN_BACKUP_FILES=false
@@ -1132,7 +1138,6 @@ function FilesBackup {
 
 	local backupTask
 	local backupTasks
-	local path
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
@@ -1147,13 +1152,7 @@ function FilesBackup {
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
-				#TODO: Test KEEP_ABSOLUTE_PATH=no
-				if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
-					path="$FILE_STORAGE/$backupTask"
-				else
-					path="$FILE_STORAGE/$(basename "$backupTask")"
-				fi
-				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true false
+				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 			fi
 		else
 			Rsync "$backupTask" true
@@ -1174,12 +1173,7 @@ function FilesBackup {
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" false
 			if [ $? == 0 ]; then
-				if [ "$KEEP_ABSOLUTE_PATH" != "no" ]; then
-					path="$FILE_STORAGE/$backupTask"
-				else
-					path="$FILE_STORAGE/$(basename "$backupTask")"
-				fi
-				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" false false
+				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false false
 			fi
 		else
 			Rsync "$backupTask" false
@@ -1201,12 +1195,7 @@ function FilesBackup {
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
-				if [ "$KEEP_ABSOLUTE_PATH" != "no" ]; then
-					path="$FILE_STORAGE/$backupTask"
-				else
-					path="$FILE_STORAGE/$(basename "$backupTask")"
-				fi
-				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true false
+				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 			fi
 		else
 			Rsync "$backupTask" true
