@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016090203
+## FUNC_BUILD=2016090204
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -831,9 +831,10 @@ function StripQuotes {
 	echo "$(StripSingleQuotes $(StripDoubleQuotes $string))"
 }
 
+# Usage var=$(EscapeSpaces "$var") or var="$(EscapeSpaces "$var")"
 function EscapeSpaces {
 	local string="${1}" # String on which spaces will be escaped
-	echo "${string// /\ }"
+	echo "${string// /\\ }"
 }
 
 function IsNumeric {
