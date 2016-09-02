@@ -3,6 +3,7 @@
 #TODO: missing files says Backup succeed
 #TODO: add new encryption variable checks, also upgrade script
 #TODO: ListingDatabases fail succeed
+#TODO: Add .gpg extesion to RotateFiles ?
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
@@ -854,7 +855,7 @@ function _BackupDatabaseLocalToRemote {
 	fi
 
 	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee > \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
 	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sqlCmd" "DEBUG"
