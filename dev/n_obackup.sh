@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 #TODO: missing files says Backup succeed
+#TODO: add new encryption variable checks, also upgrade script
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
@@ -959,19 +960,20 @@ function BackupDatabases {
 #TODO: add ParallelExec here ? Also rework ParallelExec to use files or variables, vars are max 4M, if cannot be combined, create ParallelExecFromFile
 function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
-	local tmpPath="${2}"    # Path to store encrypted files
+	local destPath="${2}"    # Path to store encrypted files
 	local recipient="${3}"  # GPG recipient
 	local recursive="${4:-true}" # Is recursive ?
+	local keepFullPath="${5:-false}" # Should destpath become destpath + sourcepath ?
 
-	__CheckArguments 4 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 5 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local successCounter=0
 	local errorCounter=0
 	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
 	local recursiveArgs=""
 
-	if [ ! -w "$tmpPath" ]; then
-		Logger "Cannot write to crypt storage path [$tmpPath]." "ERROR"
+	if [ ! -w "$destPath" ]; then
+		Logger "Cannot write to crypt storage path [$destPath]." "ERROR"
 		return 1
 	fi
 
@@ -980,14 +982,24 @@ function EncryptFiles {
 	fi
 
 	while IFS= read -r -d $'\0' sourceFile; do
-		path="$tmpPath/$(dirname "$sourceFile")"
+		# Get path of sourcefile
+		path="$(dirname "$sourceFile")"
+		if [ $keepFullPath == false ]; then
+			# Remove source path part
+			path="${path#$filePath}"
+		fi
+		# Remove ending slash if there is one
 		path="${path%/}"
+		# Add new path
+		path="$destPath/$path"
+
+		# Get filename
 		file="$(basename "$sourceFile")"
 		if [ ! -d "$path" ]; then
 			mkdir -p "$path"
 		fi
 
-		Logger "Encrypting file [$sourceFile] to [$path$/file$cryptFileExtension]." "VERBOSE"
+		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
 		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot encrypt [$sourceFile]." "ERROR"
@@ -1126,7 +1138,7 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
-			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? == 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" true
 			else
@@ -1136,12 +1148,12 @@ function FilesBackup {
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
 				#TODO: Test KEEP_ABSOLUTE_PATH=no
-				if [ "$KEEP_ABSOLUTE_PATH" != "no" ]; then
+				if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 					path="$FILE_STORAGE/$backupTask"
 				else
 					path="$FILE_STORAGE/$(basename "$backupTask")"
 				fi
-				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true
+				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true false
 			fi
 		else
 			Rsync "$backupTask" true
@@ -1153,9 +1165,9 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
-			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" false
+				Rsync "$CRYPT_STORAGE/$backupTask" false true
 			else
 				Logger "backup failed." "ERROR"
 			fi
@@ -1167,7 +1179,7 @@ function FilesBackup {
 				else
 					path="$FILE_STORAGE/$(basename "$backupTask")"
 				fi
-				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" false
+				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" false false
 			fi
 		else
 			Rsync "$backupTask" false
@@ -1180,9 +1192,9 @@ function FilesBackup {
 	# Backup sub directories of recursive directories
 		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
-			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" true
+				Rsync "$CRYPT_STORAGE/$backupTask" true true
 			else
 				Logger "backup failed." "ERROR"
 			fi
@@ -1194,7 +1206,7 @@ function FilesBackup {
 				else
 					path="$FILE_STORAGE/$(basename "$backupTask")"
 				fi
-				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true
+				EncryptFiles "$path" "$path" "$GPG_RECIPIENT" true false
 			fi
 		else
 			Rsync "$backupTask" true
@@ -1638,7 +1650,7 @@ fi
 
 if [ "$_ENCRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
-	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true
+	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 	exit $?
 fi
 
