@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016090202
+## FUNC_BUILD=2016090203
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -675,7 +675,7 @@ function WaitForTaskCompletion {
 					fi
 				done
 				SendAlert true
-				errrorcount=$((errorcount+1))
+				errorcount=$((errorcount+1))
 			fi
 		fi
 
@@ -732,7 +732,6 @@ function ParallelExec {
 	local commandsArg="${2}" # Semi-colon separated list of commands
 
 	local pid
-	local runningPids=0
 	local counter=0
 	local commandsArray
 	local pidsArray
@@ -1113,7 +1112,7 @@ function CheckConnectivity3rdPartyHosts {
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
 				WaitForTaskCompletion $! 180 360 ${FUNCNAME[0]} true $KEEP_LOGGING
-				reval=$?
+				retval=$?
 				if [ $retval != 0 ]; then
 					Logger "Cannot ping 3rd party host [$i]. Return code [$retval]." "NOTICE"
 				else
