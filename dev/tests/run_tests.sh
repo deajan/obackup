@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090201
+## obackup basic tests suite 2016090202
 
 #TODO: Must recreate files before each test set
 
@@ -146,7 +146,7 @@ function oneTimeSetUp () {
 	SetupSSH
 }
 
-function SetUp () {
+function setUp () {
 	rm -rf "$SOURCE_DIR"
 	rm -rf "$TARGET_DIR"
 
