@@ -211,7 +211,7 @@ function test_Merge () {
 	SetStableToYes
 }
 
-function nope_test_LocalRun () {
+function test_LocalRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
@@ -257,7 +257,7 @@ function nope_test_LocalRun () {
 
 }
 
-function nope_test_PullRun () {
+function test_PullRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
@@ -304,7 +304,7 @@ function nope_test_PullRun () {
 
 }
 
-function nope_test_PushRun () {
+function test_PushRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
@@ -350,7 +350,7 @@ function nope_test_PushRun () {
 
 }
 
-function nope_test_EncryptLocalRun () {
+function test_EncryptLocalRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" true
 
 	cd "$OBACKUP_DIR"
@@ -464,7 +464,7 @@ function test_EncryptPullRun () {
 
 }
 
-function nope_test_EncryptPushRun () {
+function test_EncryptPushRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	SetEncryption "$CONF_DIR/$PUSH_CONF" true
 
@@ -520,7 +520,7 @@ function nope_test_EncryptPushRun () {
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
 }
 
-function nope_test_WaitForTaskCompletion () {
+function test_WaitForTaskCompletion () {
 	# Tests if wait for task completion works correctly
 
 	# Standard wait
@@ -568,7 +568,7 @@ function nope_test_WaitForTaskCompletion () {
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
 
-function nope_test_ParallelExec () {
+function test_ParallelExec () {
 	# Test if parallelExec works correctly
 
 	cmd="sleep 2;sleep 2;sleep 2;sleep 2"
