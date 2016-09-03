@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016090204
+## FUNC_BUILD=2016090301
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -680,7 +680,7 @@ function WaitForTaskCompletion {
 		fi
 
 		for pid in "${pidsArray[@]}"; do
-			if [ $(IsNumeric $pid) -eq 1 ]; then
+			if [ $(IsInteger $pid) -eq 1 ]; then
 				if kill -0 $pid > /dev/null 2>&1; then
 					# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
 					#TODO(high): have this tested on *BSD, Mac & Win
@@ -761,7 +761,7 @@ function ParallelExec {
 
 		newPidsArray=()
 		for pid in "${pidsArray[@]}"; do
-			if [ $(IsNumeric $pid) -eq 1 ]; then
+			if [ $(IsInteger $pid) -eq 1 ]; then
 				# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
 				if kill -0 $pid > /dev/null 2>&1; then
 					pidState=$(ps -p$pid -o state= 2 > /dev/null)
@@ -837,11 +837,31 @@ function EscapeSpaces {
 	echo "${string// /\\ }"
 }
 
-function IsNumeric {
+function IsNumericOld {
 	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
 
 	local re="^-?[0-9]+([.][0-9]+)?$"
 	if [[ $value =~ $re ]]; then
+		echo 1
+	else
+		echo 0
+	fi
+}
+
+function IsNumeric {
+	local value="${1}"
+
+	if [[ $value =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+		echo 1
+	else
+		echo 0
+	fi
+}
+
+function IsInteger {
+	local value="${1}"
+
+	if [[ $value =~ ^[0-9]?$ ]]; then
 		echo 1
 	else
 		echo 0
