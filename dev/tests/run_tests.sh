@@ -448,7 +448,7 @@ function test_EncryptPullRun () {
 
 	for file in "${DatabasePresence[@]}"; do
 		[ -f "$TARGET_DIR_SQL_PULL/$file$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
-		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PULL/$file$CRYPT_EXTENSION]" "0" $?
+		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PULL/$file$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 	done
 
 	[ -d "$TARGET_DIR_FILE_CRYPT/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
@@ -585,3 +585,4 @@ function test_ParallelExec () {
 }
 
 . "$TESTS_DIR/shunit2/shunit2"
+
