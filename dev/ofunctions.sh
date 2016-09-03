@@ -837,7 +837,7 @@ function EscapeSpaces {
 	echo "${string// /\\ }"
 }
 
-function IsNumericOld {
+function IsNumericExpand {
 	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
 
 	local re="^-?[0-9]+([.][0-9]+)?$"
@@ -861,7 +861,7 @@ function IsNumeric {
 function IsInteger {
 	local value="${1}"
 
-	if [[ $value =~ ^[0-9]?$ ]]; then
+	if [[ $value =~ ^[0-9]+$ ]]; then
 		echo 1
 	else
 		echo 0
