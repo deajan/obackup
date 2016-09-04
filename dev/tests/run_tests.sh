@@ -220,7 +220,7 @@ function test_GPG () {
 	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passfile" "0" $?
 
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase=PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 }
 
