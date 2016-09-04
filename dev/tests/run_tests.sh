@@ -214,13 +214,32 @@ function test_Merge () {
 }
 
 function test_GPG () {
+	echo "Encrypting file"
 	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION" --recipient "John Doe" --batch --yes --encrypt "$TESTS_DIR/$PASSFILE"
 	assertEquals "Encrypt file" "0" $?
 
+	echo "Decrypt using passphrase file"
 	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passfile" "0" $?
 
+	echo "Decrypt using passphrase"
 	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	assertEquals "Decrypt file using passphrase" "0" $?
+
+	echo "Decrypt using passphrase file with cat"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	assertEquals "Decrypt file using passphrase" "0" $?
+
+	echo "Decrypt using passphrase file --no-use-agent"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase-file="TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	assertEquals "Decrypt file using passphrase" "0" $?
+
+	echo "Decrypt using passphrase --no-use-agent"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	assertEquals "Decrypt file using passphrase" "0" $?
+
+	echo "Decrypt using passphrase file with cat --no-use-agent"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 }
 
