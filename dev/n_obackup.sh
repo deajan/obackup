@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090402
+PROGRAM_BUILD=2016090403
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1008,11 +1008,10 @@ function EncryptFiles {
 		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot encrypt [$sourceFile]." "ERROR"
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "VERBOSE"
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
 			errorCounter=$((errorCounter+1))
 		else
 			successCounter=$((successCounter+1))
-			Logger "Encrypted file [$sourceFile]." "VERBOSE"
 		fi
 	done < <(find "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
 	Logger "Encrypted [$successCounter] files successfully." "NOTICE"
