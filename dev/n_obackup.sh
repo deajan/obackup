@@ -1038,12 +1038,11 @@ function DecryptFiles {
 		exit 1
 	fi
 
-	TODO: ugly fix : gpg 1.4.x fails with passphrase-file but not with passphrase (error is: can't query passphrase in batch mode)
+	#TODO: ugly fix : gpg 1.4.x fails with passphrase-file but not with passphrase (error is: can't query passphrase in batch mode)
 	if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
 		secret="--passphrase-file $passphraseFile"
 	elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
 		secret="$$passphrase $(cat "$passphraseFile")"
-
 	#if [ -f "$passphraseFile" ]; then
 	#	secret="--passphrase-file $passphraseFile"
 	elif [ "$passphrase" != "" ]; then
