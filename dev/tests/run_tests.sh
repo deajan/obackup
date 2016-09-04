@@ -517,7 +517,7 @@ function test_EncryptPushRun () {
 	[ -d "$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	_DEBUG=yes ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE" --verbose
+	_PARANOIA_DEBUG=yes ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE" --verbose
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PUSH]" "0" $?
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
