@@ -213,7 +213,8 @@ function test_Merge () {
 	SetStableToYes
 }
 
-function test_GPG () {
+# Keep this function to check Travis environment GPG behavior
+function disabled_test_GPG () {
 	echo "Encrypting file"
 	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION" --recipient "John Doe" --batch --yes --encrypt "$TESTS_DIR/$PASSFILE"
 	assertEquals "Encrypt file" "0" $?

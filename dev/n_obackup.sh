@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090404
+PROGRAM_BUILD=2016090405
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1039,11 +1039,6 @@ function DecryptFiles {
 		exit 1
 	fi
 
-	#TODO: ugly fix : gpg 1.4.x fails with passphrase-file but not with passphrase (error is: can't query passphrase in batch mode)
-	#if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
-	#	secret="--passphrase-file $passphraseFile"
-	#elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
-	#	secret="$$passphrase $(cat "$passphraseFile")"
 	if [ -f "$passphraseFile" ]; then
 		secret="--passphrase-file $passphraseFile"
 	elif [ "$passphrase" != "" ]; then
@@ -1061,9 +1056,7 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		#$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
-		#WIP trying to resolve travis GPG mystery
-		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile"
+		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
 			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
