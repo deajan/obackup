@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090204
+## obackup basic tests suite 2016090401
 
 #TODO: Must recreate files before each test set
 
