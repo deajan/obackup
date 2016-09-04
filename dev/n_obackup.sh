@@ -1028,6 +1028,7 @@ function DecryptFiles {
 
 	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
+	local options
 	local secret
 	local successCounter=0
 	local errorCounter=0
@@ -1039,12 +1040,12 @@ function DecryptFiles {
 	fi
 
 	#TODO: ugly fix : gpg 1.4.x fails with passphrase-file but not with passphrase (error is: can't query passphrase in batch mode)
-	if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
-		secret="--passphrase-file $passphraseFile"
-	elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
-		secret="$$passphrase $(cat "$passphraseFile")"
-	#if [ -f "$passphraseFile" ]; then
+	#if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
 	#	secret="--passphrase-file $passphraseFile"
+	#elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
+	#	secret="$$passphrase $(cat "$passphraseFile")"
+	if [ -f "$passphraseFile" ]; then
+		secret="--passphrase-file $passphraseFile"
 	elif [ "$passphrase" != "" ]; then
 		secret="--passphrase $passphrase"
 	else
@@ -1052,11 +1053,17 @@ function DecryptFiles {
 		exit 1
 	fi
 
+	if [ "$CRYPT_TOOL" == "gpg2" ]; then
+		options="--batch --yes"
+	elif [ "$CRYPT_TOOL" == "gpg" ]; then
+		options="--no-use-agent --batch"
+	fi
+
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
 		#$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
 		#WIP trying to resolve travis GPG mystery
-		$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension}" --batch --yes $secret --decrypt "$encryptedFile"
+		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile"
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
 			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
