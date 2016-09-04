@@ -123,10 +123,10 @@ EOF
 		fi
 
 		# Setup fast entropy
-		if type rndg > /dev/null 2>&1; then
-			rndg -r /dev/urandom
+		if type rngd > /dev/null 2>&1; then
+			rngd -r /dev/urandom
 		else
-			echo "No rndg support"
+			echo "No rngd support"
 		fi
 
 		$GPG --batch --gen-key gpgcommand
