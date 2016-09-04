@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090402
+## obackup basic tests suite 2016090403
 
 #TODO: Must recreate files before each test set
 
@@ -62,6 +62,7 @@ CRYPT_EXTENSION=".obackup.gpg"
 ROTATE_1_EXTENSION=".obackup.1"
 
 PASSFILE="passfile"
+CRYPT_TEST_FILE="testfile"
 
 function SetStableToYes () {
 	if grep "^IS_STABLE=YES" "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" > /dev/null; then
@@ -95,16 +96,14 @@ function SetEncryption () {
 
 function SetupGPG {
 	if type gpg2 > /dev/null; then
-		GPG=gpg2
-		echo "USING GPG2"
+		CRYPT_TOOL=gpg2
 	elif type gpg > /dev/null; then
-		echo "USING GPG"
-		GPG=gpg
+		CRYPT_TOOL=gpg
 	else
 		echo "No gpg support"
 	fi
 
-	if ! $GPG --list-keys | grep "John Doe" ; then
+	if ! $CRYPT_TOOL --list-keys | grep "John Doe" > /dev/null; then
 
 		cat >gpgcommand <<EOF
 %echo Generating a GPG Key
@@ -131,8 +130,9 @@ EOF
 			echo "No rngd support"
 		fi
 
-		$GPG --batch --gen-key gpgcommand
-		echo $($GPG --list-keys)
+		$CRYPT_TOOL --batch --gen-key gpgcommand
+		echo "Currently owned $CRYPT_TOOL keys"
+		echo $($CRYPT_TOOL --list-keys)
 		rm -f gpgcommand
 
 	fi
@@ -211,6 +211,17 @@ function test_Merge () {
 	./merge.sh
 	assertEquals "Merging code" "0" $?
 	SetStableToYes
+}
+
+function test_GPG () {
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION" --recipient "John Doe" --batch --yes --encrypt "$TESTS_DIR/$PASSFILE"
+	assertEquals "Encrypt file" "0" $?
+
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	assertEquals "Decrypt file using passfile" "0" $?
+
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase=PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	assertEquals "Decrypt file using passphrase" "0" $?
 }
 
 function test_LocalRun () {
