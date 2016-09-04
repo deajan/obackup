@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090401
+## obackup basic tests suite 2016090402
 
 #TODO: Must recreate files before each test set
 
@@ -159,7 +159,7 @@ function oneTimeSetUp () {
 
 function setUp () {
 	rm -rf "$SOURCE_DIR"
-	#rm -rf "$TARGET_DIR"
+	rm -rf "$TARGET_DIR"
 
 	mkdir -p "$SOURCE_DIR/$SIMPLE_DIR/$S_DIR_1"
 	mkdir -p "$SOURCE_DIR/$RECURSIVE_DIR/$R_EXCLUDED_DIR"
@@ -302,11 +302,11 @@ function test_PullRun () {
 
 	for file in "${DatabasePresence[@]}"; do
 		[ -f "$TARGET_DIR_SQL_PULL/$file$ROTATE_1_EXTENSION" ]
-		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PULL/$file]" "0" $?
+		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PULL/$file$ROTATE_1_EXTENSION]" "0" $?
 	done
 
 	[ -d "$TARGET_DIR_FILE_PULL/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION" ]
-	assertEquals "File rotated Presence" "0" $?
+	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PULL/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION]" "0" $?
 
 }
 
@@ -350,11 +350,11 @@ function test_PushRun () {
 
 	for file in "${DatabasePresence[@]}"; do
 		[ -f "$TARGET_DIR_SQL_PUSH/$file$ROTATE_1_EXTENSION" ]
-		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PUSH/$file]" "0" $?
+		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PUSH/$file$ROTATE_1_EXTENSION]" "0" $?
 	done
 
 	[ -d "$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION" ]
-	assertEquals "File rotated Presence" "0" $?
+	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION]" "0" $?
 
 }
 
@@ -517,7 +517,7 @@ function test_EncryptPushRun () {
 	[ -d "$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE" --verbose
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PUSH]" "0" $?
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
