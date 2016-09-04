@@ -524,47 +524,47 @@ function test_WaitForTaskCompletion () {
 	# Tests if wait for task completion works correctly
 
 	# Standard wait
-	sleep 3 &
+	sleep 1 &
 	pids="$!"
-	sleep 5 &
+	sleep 2 &
 	pids="$pids;$!"
 	WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} true 0
 	assertEquals "WaitForTaskCompletion test 1" "0" $?
 
 	# Standard wait with warning
-	sleep 5 &
+	sleep 2 &
 	pids="$!"
-	sleep 8 &
+	sleep 5 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 6 0 ${FUNCNAME[0]} true 0
+	WaitForTaskCompletion $pids 3 0 ${FUNCNAME[0]} true 0
 	assertEquals "WaitForTaskCompletion test 2" "0" $?
 
 	# Both pids are killed
-	sleep 7 &
+	sleep 5 &
 	pids="$!"
-	sleep 9 &
+	sleep 5 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 0 5 ${FUNCNAME[0]} true 0
+	WaitForTaskCompletion $pids 0 2 ${FUNCNAME[0]} true 0
 	assertEquals "WaitForTaskCompletion test 3" "2" $?
 
 	# One of two pids are killed
-	sleep 3 &
+	sleep 2 &
 	pids="$!"
 	sleep 10 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 0 7 ${FUNCNAME[0]} true 0
+	WaitForTaskCompletion $pids 0 3 ${FUNCNAME[0]} true 0
 	assertEquals "WaitForTaskCompletion test 4" "1" $?
 
 	# Count since script begin, the following should output two warnings and both pids should get killed
-	sleep 5 &
+	sleep 20 &
 	pids="$!"
-	sleep 10 &
+	sleep 20 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 8 15 ${FUNCNAME[0]} false 0
+	WaitForTaskCompletion $pids 3 5 ${FUNCNAME[0]} false 0
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
 
