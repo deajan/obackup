@@ -96,7 +96,9 @@ function SetEncryption () {
 function SetupGPG {
 	if type gpg2 > /dev/null; then
 		GPG=gpg2
+		echo "USING GPG2"
 	elif type gpg > /dev/null; then
+		echo "USING GPG"
 		GPG=gpg
 	else
 		echo "No gpg support"
@@ -119,7 +121,7 @@ Passphrase: PassPhrase123
 EOF
 
 		if type apt-get > /dev/null 2>&1; then
-			apt-get install rng-tools
+			sudo apt-get install rng-tools
 		fi
 
 		# Setup fast entropy
@@ -212,6 +214,8 @@ function test_Merge () {
 }
 
 function test_LocalRun () {
+	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
+
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
@@ -258,6 +262,8 @@ function test_LocalRun () {
 }
 
 function test_PullRun () {
+	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
+
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
@@ -305,6 +311,8 @@ function test_PullRun () {
 }
 
 function test_PushRun () {
+	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
+
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
@@ -397,14 +405,13 @@ function test_EncryptLocalRun () {
 	[ -d "$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
-
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_LOCAL]" "0" $?
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
 
+	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
 }
 
 function test_EncryptPullRun () {
@@ -454,14 +461,13 @@ function test_EncryptPullRun () {
 	[ -d "$TARGET_DIR_FILE_CRYPT/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_CRYPT/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	SetEncryption "$CONF_DIR/$PULL_CONF" false
-
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PULL]" "0" $?
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
 
+	SetEncryption "$CONF_DIR/$PULL_CONF" false
 }
 
 function test_EncryptPushRun () {
@@ -511,13 +517,13 @@ function test_EncryptPushRun () {
 	[ -d "$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	SetEncryption "$CONF_DIR/$PUSH_CONF" false
-
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PUSH]" "0" $?
 
 	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
+
+	SetEncryption "$CONF_DIR/$PUSH_CONF" false
 }
 
 function test_WaitForTaskCompletion () {
