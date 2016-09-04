@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016090301
+## FUNC_BUILD=2016090401
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -675,7 +675,7 @@ function WaitForTaskCompletion {
 					fi
 				done
 				SendAlert true
-				errorcount=$((errorcount+1))
+				#errorcount=$((errorcount+1))
 			fi
 		fi
 
@@ -737,7 +737,7 @@ function ParallelExec {
 	local pidsArray
 	local newPidsArray
 	local retval
-	local retvalAll=0
+	local errorCount=0
 	local pidState
 	local commandsArrayPid
 
@@ -774,7 +774,7 @@ function ParallelExec {
 					retval=$?
 					if [ $retval -ne 0 ]; then
 						Logger "Command [${commandsArrayPid[$pid]}] failed with exit code [$retval]." "ERROR"
-						retvalAll=$((retvalAll+1))
+						errorCount=$((errorCount+1))
 					fi
 				fi
 				hasPids=true					##__WITH_PARANOIA_DEBUG
@@ -790,7 +790,7 @@ function ParallelExec {
 		sleep $SLEEP_TIME
 	done
 
-	return $retvalAll
+	return $errorCount
 }
 
 function CleanUp {
