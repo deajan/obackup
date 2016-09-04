@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090201
+PROGRAM_BUILD=2016090401
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -163,10 +163,11 @@ function CheckCurrentConfig {
 		exit 1
 	fi
 
-	if [ -f "$ENCRYPT_GPG_PYUBKEY" ]; then
-		Logger "Cannot find gpg pubkey [$ENCRYPT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
-		exit 1
-	fi
+	#WIP: Encryption use key file instead of recipient ?
+	#if [ ! -f "$ENCRYPT_GPG_PYUBKEY" ]; then
+	#	Logger "Cannot find gpg pubkey [$ENCRYPT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
+	#	exit 1
+	#fi
 
 	if [ "$SQL_BACKUP" == "yes" ] && [ "$SQL_STORAGE" == "" ]; then
 		Logger "SQL_STORAGE not defined." "CRITICAL"
@@ -1039,10 +1040,12 @@ function DecryptFiles {
 	fi
 
 	#TODO: This is an Fix: gpg 1.4.11 fails with passphrase-file but not with passphrase $(cat file)
-	if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
+	#if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
+	#	secret="--passphrase-file $passphraseFile"
+	#elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
+	#	secert="$$passphrase $(cat "$passphraseFile")"
+	if [ -f "$passphraseFile" ]; then
 		secret="--passphrase-file $passphraseFile"
-	elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
-		secert="$$passphrase $(cat "$passphraseFile")"
 	elif [ "$passphrase" != "" ]; then
 		secret="--passphrase $passphrase"
 	else
