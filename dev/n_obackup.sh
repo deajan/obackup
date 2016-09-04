@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090401
+PROGRAM_BUILD=2016090402
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1055,7 +1055,7 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension*}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
+		$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
 			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.$FUNCNAME.$SCRIPT_PID)" "DEBUG"
