@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090403
+PROGRAM_BUILD=2016090404
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1038,17 +1038,18 @@ function DecryptFiles {
 		exit 1
 	fi
 
-	#TODO: This is an Fix: gpg 1.4.11 fails with passphrase-file but not with passphrase $(cat file)
-	#if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
-	#	secret="--passphrase-file $passphraseFile"
-	#elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
-	#	secert="$$passphrase $(cat "$passphraseFile")"
-	if [ -f "$passphraseFile" ]; then
+	TODO: ugly fix : gpg 1.4.x fails with passphrase-file but not with passphrase (error is: can't query passphrase in batch mode)
+	if [ "$CRYPT_TOOL" == "gpg2" ] && [ -f "$passphraseFile" ]; then
 		secret="--passphrase-file $passphraseFile"
+	elif [ "$CRYPT_TOOL" == "gpg" ] && [ -f "$passphraseFile" ]; then
+		secret="$$passphrase $(cat "$passphraseFile")"
+
+	#if [ -f "$passphraseFile" ]; then
+	#	secret="--passphrase-file $passphraseFile"
 	elif [ "$passphrase" != "" ]; then
 		secret="--passphrase $passphrase"
 	else
-		Logger "Invalid passphrase file or passphrase." "CRITICAL"
+		Logger "The given passphrase file or passphrase are inexistent." "CRITICAL"
 		exit 1
 	fi
 
