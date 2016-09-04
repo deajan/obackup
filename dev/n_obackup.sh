@@ -1054,7 +1054,9 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		#$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension}" --batch --yes $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		#WIP trying to resolve travis GPG mystery
+		$CRYPT_TOOL --out "${encryptedFile%%$cryptFileExtension}" --batch --yes $secret --decrypt "$encryptedFile"
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
 			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"

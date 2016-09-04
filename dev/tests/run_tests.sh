@@ -231,7 +231,7 @@ function test_GPG () {
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase file --no-use-agent"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase-file="TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase --no-use-agent"
