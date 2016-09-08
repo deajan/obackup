@@ -1,22 +1,29 @@
 #!/usr/bin/env bash
 
+#TODO: missing files says Backup succeed
+#TODO: add new encryption variable checks, also upgrade script
+#TODO: ListingDatabases fail succeed
+#TODO: Add .gpg extesion to RotateFiles ?
+
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016083003
+PROGRAM_BUILD=2016090405
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016083003
+## FUNC_BUILD=2016090701
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
 ## PROGRAM=program-name
 ## INSTANCE_ID=program-instance-name
 ## _DEBUG=yes/no
+
+#TODO: Windows checks, check sendmail & mailsend
 
 if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -169,7 +176,7 @@ function Logger {
 		fi						#__WITH_PARANOIA_DEBUG
 	else
 		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m"
-		_Logger "$prefix$value"
+		_Logger "Value was: $prefix$value"
 	fi
 }
 
@@ -550,23 +557,23 @@ function TrapError {
 }
 
 function LoadConfigFile {
-	local config_file="${1}"
+	local configFile="${1}"
 	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
 
-	if [ ! -f "$config_file" ]; then
-		Logger "Cannot load configuration file [$config_file]. Cannot start." "CRITICAL"
+	if [ ! -f "$configFile" ]; then
+		Logger "Cannot load configuration file [$configFile]. Cannot start." "CRITICAL"
 		exit 1
-	elif [[ "$1" != *".conf" ]]; then
-		Logger "Wrong configuration file supplied [$config_file]. Cannot start." "CRITICAL"
+	elif [[ "$configFile" != *".conf" ]]; then
+		Logger "Wrong configuration file supplied [$configFile]. Cannot start." "CRITICAL"
 		exit 1
 	else
-		grep '^[^ ]*=[^;&]*' "$config_file" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" # WITHOUT COMMENTS
-		# Shellcheck source=./sync.conf
+		# Remove everything that is not a variable assignation
+		grep '^[^ ]*=[^;&]*' "$configFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
 		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
 	fi
 
-	CONFIG_FILE="$config_file"
+	CONFIG_FILE="$configFile"
 }
 
 function Spinner {
@@ -683,12 +690,11 @@ function WaitForTaskCompletion {
 					fi
 				done
 				SendAlert true
-				errrorcount=$((errorcount+1))
 			fi
 		fi
 
 		for pid in "${pidsArray[@]}"; do
-			if [ $(IsNumeric $pid) -eq 1 ]; then
+			if [ $(IsInteger $pid) -eq 1 ]; then
 				if kill -0 $pid > /dev/null 2>&1; then
 					# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
 					#TODO(high): have this tested on *BSD, Mac & Win
@@ -735,42 +741,62 @@ function WaitForTaskCompletion {
 
 # Take a list of commands to run, runs them sequentially with numberOfProcesses commands simultaneously runs
 # Returns the number of non zero exit codes from commands
+# Use cmd1;cmd2;cmd3 syntax for small sets, use file for large command sets
 function ParallelExec {
 	local numberOfProcesses="${1}" # Number of simultaneous commands to run
-	local commandsArg="${2}" # Semi-colon separated list of commands
+	local commandsArg="${2}" # Semi-colon separated list of commands, or file containing one command per line
+	local readFromFile="${3:-false}" # Is commandsArg a file or a string ?
 
+	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"				#__WITH_PARANOIA_DEBUG
+
+	local commandCount
+	local command
 	local pid
-	local runningPids=0
 	local counter=0
 	local commandsArray
 	local pidsArray
 	local newPidsArray
 	local retval
-	local retvalAll=0
+	local errorCount=0
 	local pidState
 	local commandsArrayPid
 
 	local hasPids=false # Are any valable pids given to function ?		#__WITH_PARANOIA_DEBUG
 
-	IFS=';' read -r -a commandsArray <<< "$commandsArg"
+	if [ $readFromFile == true ];then
+		if [ -f "$commandsArg" ]; then
+			commandCount=$(wc -l < "$commandsArg")
+		else
+			commandCount=0
+		fi
+	else
+		IFS=';' read -r -a commandsArray <<< "$commandsArg"
+		commandCount=${#commandsArray[@]}
+	fi
 
-	Logger "Runnning ${#commandsArray[@]} commands in $numberOfProcesses simultaneous processes." "DEBUG"
+	Logger "Runnning $commandCount commands in $numberOfProcesses simultaneous processes." "DEBUG"
 
-	while [ $counter -lt "${#commandsArray[@]}" ] || [ ${#pidsArray[@]} -gt 0 ]; do
+	while [ $counter -lt "$commandCount" ] || [ ${#pidsArray[@]} -gt 0 ]; do
 
-		while [ $counter -lt "${#commandsArray[@]}" ] && [ ${#pidsArray[@]} -lt $numberOfProcesses ]; do
-			Logger "Running command [${commandsArray[$counter]}]." "DEBUG"
-			eval "${commandsArray[$counter]}" &
+		while [ $counter -lt "$commandCount" ] && [ ${#pidsArray[@]} -lt $numberOfProcesses ]; do
+			if [ $readFromFile == true ]; then
+				#TODO: Checked on FreeBSD 10, also check on Win
+				command=$(awk 'NR == num_line {print; exit}' num_line=$((counter+1)) "$commandsArg")
+			else
+				command="${commandsArray[$counter]}"
+			fi
+			Logger "Running command [$command]." "DEBUG"
+			eval "$command" &
 			pid=$!
 			pidsArray+=($pid)
-			commandsArrayPid[$pid]="${commandsArray[$counter]}"
+			commandsArrayPid[$pid]="$command"
 			counter=$((counter+1))
 		done
 
 
 		newPidsArray=()
 		for pid in "${pidsArray[@]}"; do
-			if [ $(IsNumeric $pid) -eq 1 ]; then
+			if [ $(IsInteger $pid) -eq 1 ]; then
 				# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
 				if kill -0 $pid > /dev/null 2>&1; then
 					pidState=$(ps -p$pid -o state= 2 > /dev/null)
@@ -783,7 +809,7 @@ function ParallelExec {
 					retval=$?
 					if [ $retval -ne 0 ]; then
 						Logger "Command [${commandsArrayPid[$pid]}] failed with exit code [$retval]." "ERROR"
-						retvalAll=$((retvalAll+1))
+						errorCount=$((errorCount+1))
 					fi
 				fi
 				hasPids=true					##__WITH_PARANOIA_DEBUG
@@ -799,7 +825,7 @@ function ParallelExec {
 		sleep $SLEEP_TIME
 	done
 
-	return $retvalAll
+	return $errorCount
 }
 
 function CleanUp {
@@ -840,16 +866,37 @@ function StripQuotes {
 	echo "$(StripSingleQuotes $(StripDoubleQuotes $string))"
 }
 
+# Usage var=$(EscapeSpaces "$var") or var="$(EscapeSpaces "$var")"
 function EscapeSpaces {
 	local string="${1}" # String on which spaces will be escaped
-	echo "${string// /\ }"
+	echo "${string// /\\ }"
 }
 
-function IsNumeric {
+function IsNumericExpand {
 	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
 
 	local re="^-?[0-9]+([.][0-9]+)?$"
 	if [[ $value =~ $re ]]; then
+		echo 1
+	else
+		echo 0
+	fi
+}
+
+function IsNumeric {
+	local value="${1}"
+
+	if [[ $value =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+		echo 1
+	else
+		echo 0
+	fi
+}
+
+function IsInteger {
+	local value="${1}"
+
+	if [[ $value =~ ^[0-9]+$ ]]; then
 		echo 1
 	else
 		echo 0
@@ -1091,14 +1138,17 @@ function RunAfterHook {
 function CheckConnectivityRemoteHost {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
+	local retval
+
 	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
 			WaitForTaskCompletion $! 60 180 ${FUNCNAME[0]} true $KEEP_LOGGING
-			if [ $? != 0 ]; then
-				Logger "Cannot ping $REMOTE_HOST" "ERROR"
-				return 1
+			retval=$?
+			if [ $retval != 0 ]; then
+				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "ERROR"
+				return $retval
 			fi
 		fi
 	fi
@@ -1108,7 +1158,7 @@ function CheckConnectivity3rdPartyHosts {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
 	local remote_3rd_party_success
-	local pids
+	local retval
 
 	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug
 
@@ -1118,8 +1168,9 @@ function CheckConnectivity3rdPartyHosts {
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
 				WaitForTaskCompletion $! 180 360 ${FUNCNAME[0]} true $KEEP_LOGGING
-				if [ $? != 0 ]; then
-					Logger "Cannot ping 3rd party host $i" "NOTICE"
+				retval=$?
+				if [ $retval != 0 ]; then
+					Logger "Cannot ping 3rd party host [$i]. Return code [$retval]." "NOTICE"
 				else
 					remote_3rd_party_success=true
 				fi
@@ -1460,6 +1511,9 @@ _LOGGER_PREFIX="time"
 ## Working directory for partial downloads
 PARTIAL_DIR=".obackup_workdir_partial"
 
+## File extension for encrypted files
+CRYPT_FILE_EXTENSION=".obackup.gpg"
+
 # List of runtime created global variables
 # $SQL_DISK_SPACE, disk space available on target for sql backups
 # $FILE_DISK_SPACE, disk space available on target for file backups
@@ -1487,7 +1541,7 @@ function TrapQuit {
 			RunAfterHook
 		fi
 		CleanUp
-		Logger "Backup script finished with errors." "ERROR"
+		Logger "$PROGRAM finished with errors." "ERROR"
 		SendAlert
 		exitcode=1
 	elif [ $WARN_ALERT == true ]; then
@@ -1495,13 +1549,13 @@ function TrapQuit {
 			RunAfterHook
 		fi
 		CleanUp
-		Logger "Backup script finished with warnings." "WARN"
+		Logger "$PROGRAM finished with warnings." "WARN"
 		SendAlert
 		exitcode=2
 	else
 		RunAfterHook
 		CleanUp
-		Logger "Backup script finshed." "NOTICE"
+		Logger "$PROGRAM finshed without errors." "NOTICE"
 		exitcode=0
 	fi
 
@@ -1535,17 +1589,28 @@ function CheckEnvironment {
 	fi
 
 	if [ "$FILE_BACKUP" != "no" ]; then
-		if [ "$ENCRYPTION" == "yes" ]; then
-			if ! type gpg > /dev/null 2>&1 ; then
-				Logger "gpg not present. Cannot encrypt backup files." "CRITICAL"
-				CAN_BACKUP_FILES=false
-			fi
-		else
-			if ! type rsync > /dev/null 2>&1 ; then
-				Logger "rsync not present. Cannot backup files." "CRITICAL"
-				CAN_BACKUP_FILES=false
-			fi
+		if ! type rsync > /dev/null 2>&1 ; then
+			Logger "rsync not present. Cannot backup files." "CRITICAL"
+			CAN_BACKUP_FILES=false
 		fi
+	fi
+
+	if [ "$ENCRYPTION" == "yes" ]; then
+		CheckCryptEnvironnment
+	fi
+}
+
+function CheckCryptEnvironnment {
+	if ! type gpg2 > /dev/null 2>&1 ; then
+		if ! type gpg > /dev/null 2>&1; then
+			Logger "gpg2 nor gpg not present. Cannot encrypt backup files." "CRITICAL"
+			CAN_BACKUP_FILES=false
+		else
+			Logger "gpg2 not present, falling back to gpg." "NOTICE"
+			CRYPT_TOOL=gpg
+		fi
+	else
+		CRYPT_TOOL=gpg2
 	fi
 }
 
@@ -1572,7 +1637,7 @@ function CheckCurrentConfig {
 	# Check all variables that should contain a numerical value >= 0
 	declare -a num_vars=(BACKUP_SIZE_MINIMUM SQL_WARN_MIN_SPACE FILE_WARN_MIN_SPACE SOFT_MAX_EXEC_TIME_DB_TASK HARD_MAX_EXEC_TIME_DB_TASK COMPRESSION_LEVEL SOFT_MAX_EXEC_TIME_FILE_TASK HARD_MAX_EXEC_TIME_FILE_TASK BANDWIDTH SOFT_MAX_EXEC_TIME_TOTAL HARD_MAX_EXEC_TIME_TOTAL ROTATE_SQL_COPIES ROTATE_FILE_COPIES KEEP_LOGGING MAX_EXEC_TIME_PER_CMD_BEFORE MAX_EXEC_TIME_PER_CMD_AFTER)
 	for i in "${num_vars[@]}"; do
-		test="if [ $(IsNumeric \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
+		test="if [ $(IsNumericExpand \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
 	done
 
@@ -1589,10 +1654,28 @@ function CheckCurrentConfig {
 		exit 1
 	fi
 
-	if [ -f "$ENCRYPT_GPG_PYUBKEY" ]; then
-		Logger "Cannot find gpg pubkey [$ENCRPYT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
+	#WIP: Encryption use key file instead of recipient ?
+	#if [ ! -f "$ENCRYPT_GPG_PYUBKEY" ]; then
+	#	Logger "Cannot find gpg pubkey [$ENCRYPT_GPG_PUBKEY]. Cannot encrypt backup files." "CRITICAL"
+	#	exit 1
+	#fi
+
+	if [ "$SQL_BACKUP" == "yes" ] && [ "$SQL_STORAGE" == "" ]; then
+		Logger "SQL_STORAGE not defined." "CRITICAL"
 		exit 1
 	fi
+
+	if [ "$FILE_BACKUP" == "yes" ] && [ "$FILE_STORAGE" == "" ]; then
+		Logger "FILE_STORAGE not defined." "CRITICAL"
+		exit 1
+	fi
+
+	if [ "$ENCRYPTION" == "yes" ] && [ "$CRYPT_STORAGE" == "" ]; then
+		Logger "CRYPT_STORAGE not defined." "CRITICAL"
+		exit 1
+	fi
+
+
 }
 
 function CheckRunningInstances {
@@ -1612,11 +1695,11 @@ function CheckRunningInstances {
 function _ListDatabasesLocal {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sql_cmd=
+	local sqlCmd=
 
-	sql_cmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
-	Logger "cmd: $sql_cmd" "DEBUG"
-	eval "$sql_cmd" &
+	sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+	Logger "cmd: $sqlCmd" "DEBUG"
+	eval "$sqlCmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	if [ $? -eq 0 ]; then
 		Logger "Listing databases succeeded." "NOTICE"
@@ -1633,13 +1716,13 @@ function _ListDatabasesLocal {
 function _ListDatabasesRemote {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sql_cmd=
+	local sqlCmd=
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
-	sql_cmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID\" 2>&1"
-	Logger "cmd: $sql_cmd" "DEBUG"
-	eval "$sql_cmd" &
+	sqlCmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID\" 2>&1"
+	Logger "cmd: $sqlCmd" "DEBUG"
+	eval "$sqlCmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	if [ $? -eq 0 ]; then
 		Logger "Listing databases succeeded." "NOTICE"
@@ -1688,10 +1771,6 @@ function ListDatabases {
 	if [ -f "$outputFile" ] && [ $CAN_BACKUP_SQL == true ]; then
 		while read -r line; do
 			while read -r name size; do dbName=$name; dbSize=$size; done <<< "$line"
-			#db_name="${line% *}"
-			#db_size="${line# *}"
-			#db_name=$(echo $line | cut -f1)
-			#db_size=$(echo $line | cut -f2)
 
 			if [ "$DATABASES_ALL" == "yes" ]; then
 				dbBackup=1
@@ -1994,6 +2073,12 @@ function CreateStorageDirectories {
 				CAN_BACKUP_FILES=false
 			fi
 		fi
+		if [ "$ENCRYPTION" == "yes" ]; then
+			_CreateDirectoryLocal "$CRYPT_STORAGE"
+			if [ $? != 0 ]; then
+				CAN_BACKUP_FILES=false
+			fi
+		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$SQL_STORAGE"
@@ -2003,6 +2088,12 @@ function CreateStorageDirectories {
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$FILE_STORAGE"
+			if [ $? != 0 ]; then
+				CAN_BACKUP_FILES=false
+			fi
+		fi
+		if [ "$ENCRYPTION" == "yes" ]; then
+			_CreateDirectoryLocal "$CRYPT_STORAGE"
 			if [ $? != 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
@@ -2082,6 +2173,17 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
+		if [ "$ENCRYPTION" != "no" ]; then
+			GetDiskSpaceLocal "$CRYPT_STORAGE"
+			if [ $? != 0 ]; then
+				CRYPT_DISK_SPACE=0
+				CAN_BACKUP_FILES=false
+				CAN_BACKUP_SQL=false
+			else
+				CRYPT_DISK_SPACE=$DISK_SPACE
+				CRYPT_DRIVE=$DRIVE
+			fi
+		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			GetDiskSpaceRemote "$SQL_STORAGE"
@@ -2101,6 +2203,18 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
+		if [ "$ENCRYPTION" != "no" ]; then
+			GetDiskSpaceLocal "$CRYPT_STORAGE"
+			if [ $? != 0 ]; then
+				CRYPT_DISK_SPACE=0
+				CAN_BACKUP_FILES=false
+				CAN_BACKUP_SQL=false
+			else
+				CRYPT_DISK_SPACE=$DISK_SPACE
+				CRYPT_DRIVE=$DRIVE
+			fi
+		fi
+
 	fi
 
 	if [ "$TOTAL_DATABASES_SIZE" == "" ]; then
@@ -2136,6 +2250,34 @@ function CheckDiskSpace {
 		Logger "File storage space: $FILE_DISK_SPACE Ko - Files size: $TOTAL_FILES_SIZE Ko" "NOTICE"
 	fi
 
+	if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$SQL_BACKUP" != "no" ]; then
+			if [ "$SQL_DRIVE" == "$CRYPT_DRIVE" ]; then
+				if [ $((SQL_DISK_SPACE/2)) -lt $((TOTAL_DATABASES_SIZE)) ]; then
+					Logger "Disk space in [$SQL_STORAGE] and [$CRYPT_STORAGE] may be insufficient to backup SQL ($SQL_DISK_SPACE Ko available in $SQL_DRIVE) (non compressed databases calculation + crypt storage space)." "WARN"
+				fi
+			else
+				if [ $((CRYPT_DISK_SPACE)) -lt $((TOTAL_DATABASES_SIZE)) ]; then
+					Logger "Disk space in [$CRYPT_STORAGE] may be insufficient to encrypt SQL ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE) (non compressed databases calculation)." "WARN"
+				fi
+			fi
+		fi
+
+		if [ "$FILE_BACKUP" != "no" ]; then
+			if [ "$FILE_DRIVE" == "$CRYPT_DRIVE" ]; then
+				if [ $((FILE_DISK_SPACE/2)) -lt $((TOTAL_FILES_SIZE)) ]; then
+					Logger "Disk space in [$FILE_STORAGE] and [$CRYPT_STORAGE] may be insufficient to encrypt Sfiles ($FILE_DISK_SPACE Ko available in $FILE_DRIVE)." "WARN"
+				fi
+			else
+				if [ $((CRYPT_DISK_SPACE)) -lt $((TOTAL_FILES_SIZE)) ]; then
+					Logger "Disk space in [$CRYPT_STORAGE] may be insufficient to encrypt files ($CRYPT_DISK_SPACE Ko available in $CRYPT_DRIVE)." "WARN"
+				fi
+			fi
+		fi
+
+		Logger "Crypt storage space: $CRYPT_DISK_SPACE Ko" "NOTICE"
+	fi
+
 	if [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
 		Logger "Backup size is smaller than expected." "WARN"
 	fi
@@ -2143,23 +2285,30 @@ function CheckDiskSpace {
 
 function _BackupDatabaseLocalToLocal {
 	local database="${1}" # Database to backup
-	local export_options="${2}" # export options
+	local exportOptions="${2}" # export options
+	local encrypt="${3:-false}" # Does the file need to be encrypted ?
 
-	local dry_sql_cmd
-	local sql_cmd
+	local encryptOptions
+	local drySqlCmd
+	local sqlCmd
 	local retval
 
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	if [ $encrypt == true ]; then
+		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
+		encryptExtension="$CRYPT_FILE_EXTENSION"
+	fi
+
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sql_cmd" "DEBUG"
-		eval "$sql_cmd" &
+		Logger "cmd: $sqlCmd" "DEBUG"
+		eval "$sqlCmd" &
 	else
-		Logger "cmd: $dry_sql_cmd" "DEBUG"
-		eval "$dry_sql_cmd" &
+		Logger "cmd: $drySqlCmd" "DEBUG"
+		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
@@ -2173,26 +2322,35 @@ function _BackupDatabaseLocalToLocal {
 
 function _BackupDatabaseLocalToRemote {
 	local database="${1}" # Database to backup
-	local export_options="${2}" # export options
+	local exportOptions="${2}" # export options
+	local encrypt="${3:-false}" # Does the file need to be encrypted
 
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local dry_sql_cmd
-	local sql_cmd
+	local encryptOptions
+	local encryptExtension
+	local drySqlCmd
+	local sqlCmd
 	local retval
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
 
-	local dry_sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sql_cmd="mysqldump -u $SQL_USER $export_options --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+
+	if [ $encrypt == true ]; then
+		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
+		encryptExtension="$CRYPT_FILE_EXTENSION"
+	fi
+
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sql_cmd" "DEBUG"
-		eval "$sql_cmd" &
+		Logger "cmd: $sqlCmd" "DEBUG"
+		eval "$sqlCmd" &
 	else
-		Logger "cmd: $dry_sql_cmd" "DEBUG"
-		eval "$dry_sql_cmd" &
+		Logger "cmd: $drySqlCmd" "DEBUG"
+		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
@@ -2206,26 +2364,35 @@ function _BackupDatabaseLocalToRemote {
 
 function _BackupDatabaseRemoteToLocal {
 	local database="${1}" # Database to backup
-	local export_options="${2}" # export options
+	local exportOptions="${2}" # export options
+	local encrypt="${3:-false}" # Does the file need to be encrypted ?
 
 	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local dry_sql_cmd
-	local sql_cmd
+	local encryptOptions
+	local encryptExtension
+	local drySqlCmd
+	local sqlCmd
 	local retval
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
 
-	local dry_sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
-	local sql_cmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$export_options' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+
+	if [ $encrypt == true ]; then
+		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\\\"$GPG_RECIPIENT\\\""
+		encryptExtension="$CRYPT_FILE_EXTENSION"
+	fi
+
+	local drySqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+	local sqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sql_cmd" "DEBUG"
-		eval "$sql_cmd" &
+		Logger "cmd: $sqlCmd" "DEBUG"
+		eval "$sqlCmd" &
 	else
-		Logger "cmd: $dry_sql_cmd" "DEBUG"
-		eval "$dry_sql_cmd" &
+		Logger "cmd: $drySqlCmd" "DEBUG"
+		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
@@ -2241,21 +2408,29 @@ function BackupDatabase {
 	local database="${1}"
 	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local mysql_options
+	local mysqlOptions
+	local encrypt=false
 
 	# Hack to prevent warning on table mysql.events, some mysql versions don't support --skip-events, prefer using --ignore-table
 	if [ "$database" == "mysql" ]; then
-		mysql_options="$MYSQLDUMP_OPTIONS --ignore-table=mysql.event"
+		mysqlOptions="$MYSQLDUMP_OPTIONS --ignore-table=mysql.event"
 	else
-		mysql_options="$MYSQLDUMP_OPTIONS"
+		mysqlOptions="$MYSQLDUMP_OPTIONS"
+	fi
+
+	if [ "$ENCRYPTION" == "yes" ]; then
+		encrypt=true
+		Logger "Backing up encrypted database [$database]." "NOTICE"
+	else
+		Logger "Backing up database [$database]." "NOTICE"
 	fi
 
 	if [ "$BACKUP_TYPE" == "local" ]; then
-		_BackupDatabaseLocalToLocal "$database" "$mysql_options"
+		_BackupDatabaseLocalToLocal "$database" "$mysqlOptions" $encrypt
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_BackupDatabaseRemoteToLocal "$database" "$mysql_options"
+		_BackupDatabaseRemoteToLocal "$database" "$mysqlOptions" $encrypt
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		_BackupDatabaseLocalToRemote "$database" "$mysql_options"
+		_BackupDatabaseLocalToRemote "$database" "$mysqlOptions" $encrypt
 	fi
 
 	if [ $? -ne 0 ]; then
@@ -2272,54 +2447,150 @@ function BackupDatabases {
 
 	for database in $SQL_BACKUP_TASKS
 	do
-		Logger "Backing up database [$database]." "NOTICE"
 		BackupDatabase $database
 		CheckTotalExecutionTime
 	done
 }
 
-function PrepareEncryptFiles {
-	local tmpPath="${2}"
+#TODO: exclusions don't work for encrypted files
+#TODO: add ParallelExec here ? Also rework ParallelExec to use files or variables, vars are max 4M, if cannot be combined, create ParallelExecFromFile
+function EncryptFiles {
+	local filePath="${1}"	# Path of files to encrypt
+	local destPath="${2}"    # Path to store encrypted files
+	local recipient="${3}"  # GPG recipient
+	local recursive="${4:-true}" # Is recursive ?
+	local keepFullPath="${5:-false}" # Should destpath become destpath + sourcepath ?
 
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 5 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		_CreateDirsLocal "$tmpPath"
-	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		Logger "Encryption only works with [local] or [push] backup types." "CRITICAL"
-		exit 1
+	local successCounter=0
+	local errorCounter=0
+	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
+	local recursiveArgs=""
+
+	if [ ! -w "$destPath" ]; then
+		Logger "Cannot write to crypt storage path [$destPath]." "ERROR"
+		return 1
 	fi
-	#WIP: check disk space in tmp dir and compare to backup size else error
+
+	if [ $recursive == false ]; then
+		recursiveArgs="-mindepth 1 -maxdepth 1"
+	fi
+
+	while IFS= read -r -d $'\0' sourceFile; do
+		# Get path of sourcefile
+		path="$(dirname "$sourceFile")"
+		if [ $keepFullPath == false ]; then
+			# Remove source path part
+			path="${path#$filePath}"
+		fi
+		# Remove ending slash if there is one
+		path="${path%/}"
+		# Add new path
+		path="$destPath/$path"
+
+		# Get filename
+		file="$(basename "$sourceFile")"
+		if [ ! -d "$path" ]; then
+			mkdir -p "$path"
+		fi
+
+		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
+		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		if [ $? != 0 ]; then
+			Logger "Cannot encrypt [$sourceFile]." "ERROR"
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
+			errorCounter=$((errorCounter+1))
+		else
+			successCounter=$((successCounter+1))
+		fi
+	done < <(find "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
+	Logger "Encrypted [$successCounter] files successfully." "NOTICE"
+	if [ $errorCounter -gt 0 ]; then
+		Logger "Failed to encrypt [$errorCounter] files." "CRITICAL"
+	fi
+	return $errorCounter
 }
 
-function EncrpytFiles {
-	local filePath="${1}"	# Path of files to encrypt
-	local tmpPath="${2}"
+function DecryptFiles {
+	local filePath="${1}"	 # Path to files to decrypt
+	local passphraseFile="${2}"  # Passphrase file to decrypt files
+	local passphrase="${3}"	# Passphrase to decrypt files
 
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	#gpg here ?
-	#crypt_cmd source temp
-	# Send files to remote, rotate & copy
+	local options
+	local secret
+	local successCounter=0
+	local errorCounter=0
+	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
+
+	if [ ! -w "$filePath" ]; then
+		Logger "Directory [$filePath] is not writable. Cannot decrypt files." "CRITICAL"
+		exit 1
+	fi
+
+	if [ -f "$passphraseFile" ]; then
+		secret="--passphrase-file $passphraseFile"
+	elif [ "$passphrase" != "" ]; then
+		secret="--passphrase $passphrase"
+	else
+		Logger "The given passphrase file or passphrase are inexistent." "CRITICAL"
+		exit 1
+	fi
+
+	if [ "$CRYPT_TOOL" == "gpg2" ]; then
+		options="--batch --yes"
+	elif [ "$CRYPT_TOOL" == "gpg" ]; then
+		options="--no-use-agent --batch"
+	fi
+
+	while IFS= read -r -d $'\0' encryptedFile; do
+		Logger "Decrypting [$encryptedFile]." "VERBOSE"
+		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		if [ $? != 0 ]; then
+			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
+			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
+			errorCounter=$((errorCounter+1))
+		else
+			successCounter=$((successCounter+1))
+			rm -f "$encryptedFile"
+			if [ $? != 0 ]; then
+				Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
+			fi
+		fi
+	done < <(find "$filePath" -type f -name "*$cryptFileExtension" -print0)
+	Logger "Decrypted [$successCounter] files successfully." "NOTICE"
+	if [ $errorCounter -gt 0 ]; then
+		Logger "Failed to decrypt [$errorCounter] files." "CRITICAL"
+	fi
+	return $errorCounter
 }
 
 function Rsync {
-	local backup_directory="${1}"	# Which directory to backup
-	local is_recursive="${2}"	# Backup only files at toplevel of directory
+	local backupDirectory="${1}"	# Which directory to backup
+	local recursive="${2:-true}"	# Backup only files at toplevel of directory
 
 	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local file_storage_path
-	local rsync_cmd
+	local fileStoragePath
+	local withoutCryptPath
+	local rsyncCmd
+	local retval
 
-	if [ "$KEEP_ABSOLUTE_PATHS" == "yes" ]; then
-		file_storage_path=$(dirname "$FILE_STORAGE/${backup_directory#/}")
+	if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$ENCRYPTION" == "yes" ]; then
+			withoutCryptPath="${backupDirectory#$CRYPT_STORAGE}"
+			fileStoragePath=$(dirname "$FILE_STORAGE/${withoutCryptPath#/}")
+		else
+			fileStoragePath=$(dirname "$FILE_STORAGE/${backupDirectory#/}")
+		fi
 	else
-		file_storage_path="$FILE_STORAGE"
+		fileStoragePath="$FILE_STORAGE"
 	fi
 
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
-	if [ "$is_recursive" == "no-recurse" ]; then
+	if [ $recursive == false ]; then
 		# Fixes symlinks to directories in target cannot be deleted when backing up root directory without recursion, and excludes subdirectories
 		RSYNC_NO_RECURSE_ARGS=" -k  --exclude=*/*/"
 	else
@@ -2328,31 +2599,34 @@ function Rsync {
 
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
-		_CreateDirectoryLocal "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		_CreateDirectoryLocal "$fileStoragePath"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_CreateDirectoryLocal "$file_storage_path"
+		_CreateDirectoryLocal "$fileStoragePath"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		backup_directory=$(EscapeSpaces "$backup_directory")
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backup_directory\" \"$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		backupDirectory=$(EscapeSpaces "$backupDirectory")
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
+		fileStoragePath=$(EscapeSpaces "$fileStoragePath")
+		_CreateDirectoryRemote "$fileStoragePath"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		file_storage_path=$(EscapeSpaces "$file_storage_path")
-		_CreateDirectoryRemote "$file_storage_path"
-		rsync_cmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backup_directory\" \"$REMOTE_USER@$REMOTE_HOST:$file_storage_path\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backupDirectory\" \"$REMOTE_USER@$REMOTE_HOST:$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
 	fi
 
-	Logger "cmd: $rsync_cmd" "DEBUG"
-	eval "$rsync_cmd" &
+	Logger "cmd: $rsyncCmd" "DEBUG"
+	eval "$rsyncCmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
-	if [ $? != 0 ]; then
-		Logger "Failed to backup [$backup_directory] to [$file_storage_path]." "ERROR"
+	retval=$?
+	if [ $retval != 0 ]; then
+		Logger "Failed to backup [$backupDirectory] to [$fileStoragePath]." "ERROR"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
 	fi
+
+	return $retval
 }
 
 function FilesBackup {
@@ -2364,12 +2638,20 @@ function FilesBackup {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning file backup of [$backupTask]." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ]; then
-			Dummy
-			#Encrpyt files recursively
-			#Rsync encrypted files instead of original ones
+		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
+			if [ $? == 0 ]; then
+				Rsync "$CRYPT_STORAGE/$backupTask" true
+			else
+				Logger "backup failed." "ERROR"
+			fi
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+			Rsync "$backupTask" true
+			if [ $? == 0 ]; then
+				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+			fi
 		else
-			Rsync "$backupTask" "recurse"
+			Rsync "$backupTask" true
 		fi
 		CheckTotalExecutionTime
 	done
@@ -2377,12 +2659,20 @@ function FilesBackup {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
 		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ]; then
-			Dummy
-			#Encrpyt files non recursively
-			#Rsync encrypted files instead of original ones
+		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
+			if [ $? == 0 ]; then
+				Rsync "$CRYPT_STORAGE/$backupTask" false true
+			else
+				Logger "backup failed." "ERROR"
+			fi
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+			Rsync "$backupTask" false
+			if [ $? == 0 ]; then
+				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false false
+			fi
 		else
-			Rsync "$backupTask" "no-recurse"
+			Rsync "$backupTask" false
 		fi
 		CheckTotalExecutionTime
 	done
@@ -2391,12 +2681,20 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup sub directories of recursive directories
 		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ]; then
-			Dummy
-			#Encrpyt files recursively
-			#Rsync encrypted files instead of original ones
+		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
+			if [ $? == 0 ]; then
+				Rsync "$CRYPT_STORAGE/$backupTask" true true
+			else
+				Logger "backup failed." "ERROR"
+			fi
+		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+			Rsync "$backupTask" true
+			if [ $? == 0 ]; then
+				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+			fi
 		else
-			Rsync "$backupTask" "recurse"
+			Rsync "$backupTask" true
 		fi
 		CheckTotalExecutionTime
 	done
@@ -2427,7 +2725,8 @@ function _RotateBackupsLocal {
 	local cmd
 	local path
 
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	#TODO: Replace this iname with regex .*$PROGRAM\.[1-9][0-9]+
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
@@ -2535,7 +2834,7 @@ function RemoteLogger {
 }
 
 function _RotateBackupsRemoteSSH {
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.*" -print0 | while IFS= read -r -d $'\0' backup; do
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
@@ -2620,15 +2919,17 @@ function RotateBackups {
 	fi
 }
 
+function SetTraps {
+	trap TrapStop INT QUIT TERM HUP
+	trap TrapQuit EXIT
+}
+
 function Init {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local uri
 	local hosturiandpath
 	local hosturi
-
-	trap TrapStop INT QUIT TERM HUP
-	trap TrapQuit EXIT
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
 	if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
@@ -2697,7 +2998,7 @@ function Main {
 	FILE_STORAGE="${FILE_STORAGE/#\~/$HOME}"
 	SQL_STORAGE="${SQL_STORAGE/#\~/$HOME}"
 	SSH_RSA_PRIVATE_KEY="${SSH_RSA_PRIVATE_KEY/#\~/$HOME}"
-	ENCRYPT_PUBKEY="${ENCRPYT_PUBKEY/#\~/$HOME}"
+	ENCRYPT_PUBKEY="${ENCRYPT_PUBKEY/#\~/$HOME}"
 
 	if [ "$CREATE_DIRS" != "no" ]; then
 		CreateStorageDirectories
@@ -2734,7 +3035,7 @@ function Usage {
 	echo "$AUTHOR"
 	echo "$CONTACT"
 	echo ""
-	echo "usage: obackup.sh /path/to/backup.conf [OPTIONS]"
+	echo "General usage: $0 /path/to/backup.conf [OPTIONS]"
 	echo ""
 	echo "OPTIONS:"
 	echo "--dry             will run obackup without actually doing anything, just testing"
@@ -2745,6 +3046,14 @@ function Usage {
 	echo "--no-maxtime      disables any soft and hard execution time checks"
 	echo "--delete          Deletes files on destination that vanished on source"
 	echo "--dontgetsize     Does not try to evaluate backup size"
+	echo ""
+	echo "Batch processing usage:"
+	echo -e "\e[93mDecrypt\e[0m a backup encrypted with $PROGRAM"
+	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase-file=/path/to/passphrase"
+	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase=MySecretPassPhrase (security risk)"
+	echo ""
+	echo "Batch encrypt a directory in separate gpg files"
+	echo "$0 --encrypt=/path/to/files --destination=/path/to/encrypted/files --recipient=\"Your Name\""
 	exit 128
 }
 
@@ -2754,6 +3063,9 @@ _SILENT=false
 no_maxtime=false
 stats=false
 PARTIAL=no
+_DECRYPT_MODE=false
+DECRYPT_PATH=""
+_ENCRYPT_MODE=false
 
 function GetCommandlineArguments {
 	if [ $# -eq 0 ]; then
@@ -2789,11 +3101,44 @@ function GetCommandlineArguments {
 			--help|-h|--version|-v)
 			Usage
 			;;
+			--decrypt=*)
+			_DECRYPT_MODE=true
+			DECRYPT_PATH="${i##*=}"
+			;;
+			--passphrase=*)
+			PASSPHRASE="${i##*=}"
+			;;
+			--passphrase-file=*)
+			PASSPHRASE_FILE="${i##*=}"
+			;;
+			--encrypt=*)
+			_ENCRYPT_MODE=true
+			CRYPT_SOURCE="${i##*=}"
+			;;
+			--destination=*)
+			CRYPT_STORAGE="${i##*=}"
+			;;
+			--recipient=*)
+			GPG_RECIPIENT="${i##*=}"
+			;;
 		esac
 	done
 }
 
+SetTraps
 GetCommandlineArguments "$@"
+if [ "$_DECRYPT_MODE" == true ]; then
+	CheckCryptEnvironnment
+	DecryptFiles "$DECRYPT_PATH" "$PASSPHRASE_FILE" "$PASSPHRASE"
+	exit $?
+fi
+
+if [ "$_ENCRYPT_MODE" == true ]; then
+	CheckCryptEnvironnment
+	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+	exit $?
+fi
+
 LoadConfigFile "$1"
 if [ "$LOGFILE" == "" ]; then
 	if [ -w /var/log ]; then
