@@ -6,7 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-PROGRAM_BUILD=2016081901
+PROGRAM_BUILD=2016090901
 
 ## type -p does not work on platforms other than linux (bash). If if does not work, always as$
 if ! type "$BASH" > /dev/null; then
@@ -69,12 +69,12 @@ function RewriteConfigFiles {
 		sed -i'.tmp' '/^FILE_STORAGE=*/a\'$'\n''ENCRYPTION=no\'$'\n''' "$config_file"
 	fi
 
-	if ! grep "^ENCRYPT_STORAGE=" "$config_file" > /dev/null; then
-		sed -i'.tmp' '/^ENCRYPTION=*/a\'$'\n''ENCRYPT_STORAGE=/home/storage/backup/crypt\'$'\n''' "$config_file"
+	if ! grep "^CRYPT_STORAGE=" "$config_file" > /dev/null; then
+		sed -i'.tmp' '/^ENCRYPTION=*/a\'$'\n''CRYPT_STORAGE=/home/storage/backup/crypt\'$'\n''' "$config_file"
 	fi
 
-	if ! grep "^ENCRYPT_PUBKEY=" "$config_file" > /dev/null; then
-		sed -i'.tmp' '/^ENCRYPT_STORAGE=*/a\'$'\n''ENCRYPTION='${HOME}/.gpg/pubkey'\'$'\n''' "$config_file"
+	if ! grep "^GPG_RECIPIENT=" "$config_file" > /dev/null; then
+		sed -i'.tmp' '/^CRYPT_STORAGE=*/a\'$'\n''GPG_RECIPIENT=John Doe\'$'\n''' "$config_file"
 	fi
 
 	sed -i'.tmp' 's/^DISABLE_GET_BACKUP_FILE_SIZE=no/GET_BACKUP_SIZE=yes/g' "$config_file"
