@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016090701
+## FUNC_BUILD=2016090901
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -1132,7 +1132,7 @@ function CheckConnectivityRemoteHost {
 			WaitForTaskCompletion $! 60 180 ${FUNCNAME[0]} true $KEEP_LOGGING
 			retval=$?
 			if [ $retval != 0 ]; then
-				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "ERROR"
+				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "WARN"
 				return $retval
 			fi
 		fi
@@ -1162,7 +1162,7 @@ function CheckConnectivity3rdPartyHosts {
 			done
 
 			if [ $remote_3rd_party_success == false ]; then
-				Logger "No remote 3rd party host responded to ping. No internet ?" "ERROR"
+				Logger "No remote 3rd party host responded to ping. No internet ?" "WARN"
 				return 1
 			else
 				return 0
