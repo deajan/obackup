@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090405
+PROGRAM_BUILD=2016090901
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
@@ -1603,10 +1603,10 @@ function CheckEnvironment {
 function CheckCryptEnvironnment {
 	if ! type gpg2 > /dev/null 2>&1 ; then
 		if ! type gpg > /dev/null 2>&1; then
-			Logger "gpg2 nor gpg not present. Cannot encrypt backup files." "CRITICAL"
+			Logger "Programs gpg2 nor gpg not present. Cannot encrypt backup files." "CRITICAL"
 			CAN_BACKUP_FILES=false
 		else
-			Logger "gpg2 not present, falling back to gpg." "NOTICE"
+			Logger "Program gpg2 not present, falling back to gpg." "NOTICE"
 			CRYPT_TOOL=gpg
 		fi
 	else
@@ -1670,9 +1670,15 @@ function CheckCurrentConfig {
 		exit 1
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ] && [ "$CRYPT_STORAGE" == "" ]; then
-		Logger "CRYPT_STORAGE not defined." "CRITICAL"
-		exit 1
+	if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$CRYPT_STORAGE" == "" ]; then
+			Logger "CRYPT_STORAGE not defined." "CRITICAL"
+			exit 1
+		fi
+		if [ "$GPG_RECIPIENT" == "" ]; then
+			Logger "No GPG recipient defined." "CRITICAL"
+			exit 1
+		fi
 	fi
 
 
@@ -2453,7 +2459,7 @@ function BackupDatabases {
 }
 
 #TODO: exclusions don't work for encrypted files
-#TODO: add ParallelExec here ? Also rework ParallelExec to use files or variables, vars are max 4M, if cannot be combined, create ParallelExecFromFile
+#TODO: add ParallelExec here ?
 function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
 	local destPath="${2}"    # Path to store encrypted files
@@ -2725,8 +2731,8 @@ function _RotateBackupsLocal {
 	local cmd
 	local path
 
-	#TODO: Replace this iname with regex .*$PROGRAM\.[1-9][0-9]+
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -iname "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
+	#TODO: Replace this -name with regex .*$PROGRAM\.[1-9][0-9]+
+	find "$backup_path" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotate_copies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotate_copies ]; then
