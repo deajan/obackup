@@ -183,7 +183,8 @@ function CheckCurrentConfig {
 		if [ "$CRYPT_STORAGE" == "" ]; then
 			Logger "CRYPT_STORAGE not defined." "CRITICAL"
 			exit 1
-		if [ "$GPG_RECIPIENT" == "" ], then
+		fi
+		if [ "$GPG_RECIPIENT" == "" ]; then
 			Logger "No GPG recipient defined." "CRITICAL"
 			exit 1
 		fi
