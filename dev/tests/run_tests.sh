@@ -2,6 +2,7 @@
 
 ## obackup basic tests suite 2016090403
 
+#TODO: add old conf file, have upgrade and check
 #TODO: Must recreate files before each test set
 
 OBACKUP_DIR="$(pwd)"
@@ -20,8 +21,10 @@ fi
 LOCAL_CONF="local.conf"
 PULL_CONF="pull.conf"
 PUSH_CONF="push.conf"
+OLD_CONF="old.conf"
 
 OBACKUP_EXECUTABLE=obackup.sh
+OBACKUP_UPGRADE=upgrade-v1.x-2.1x.sh
 
 SOURCE_DIR="${HOME}/obackup-testdata"
 TARGET_DIR="${HOME}/obackup-storage"
@@ -619,6 +622,20 @@ function test_ParallelExec () {
 	cmd="sleep 4;du /none;sleep 3;du /none;sleep 2"
 	ParallelExec 3 "$cmd"
 	assertEquals "ParallelExec test 3" "2" $?
+}
+
+function test_UpgradeConfPullRun () {
+
+	# Basic return code tests. Need to go deep into file presence testing
+	cd "$OBACKUP_DIR"
+
+	./$OBACKUP_UPGRADE "$CONF_DIR/$OLD_CONF"
+	assertEquals "Conf file upgrade" "0" $?
+	./$OBACKUP_EXECUTABLE "$CONF_DIR/$OLD_CONF"
+	assertEquals "Upgraded conf file execution test" "0" $?
+
+	# Move pre-upgraded file to original location agian
+	mv -f "$CONF_DIR/$OLD_CONF.save" "$CONF_DIR/$OLD_CONF"
 }
 
 . "$TESTS_DIR/shunit2/shunit2"
