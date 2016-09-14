@@ -6,7 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-PROGRAM_BUILD=2016090901
+PROGRAM_BUILD=2016091401
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -271,9 +271,9 @@ function RewriteOldConfigFiles {
 		REMOTE_SYSTEM_URI="ssh://$REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT/"
 
 		sed -i'.tmp' 's#^REMOTE_BACKUP=yes#REMOTE_SYSTEM_URI='$REMOTE_SYSTEM_URI'#g' "$config_file"
-		sed -i'.tmp' '/^REMOTE_USER=*/d' "$config_file"
-		sed -i'.tmp' '/^REMOTE_HOST=*/d' "$config_file"
-		sed -i'.tmp' '/^REMOTE_PORT=*/d' "$config_file"
+		sed -i'.tmp' '/^REMOTE_USER==*/d' "$config_file"
+		sed -i'.tmp' '/^REMOTE_HOST==*/d' "$config_file"
+		sed -i'.tmp' '/^REMOTE_PORT==*/d' "$config_file"
 
 		sed -i'.tmp' '/^INSTANCE_ID=*/a\'$'\n''BACKUP_TYPE=pull\'$'\n''' "$config_file"
 	else
@@ -288,14 +288,20 @@ function AddMissingConfigOptions {
 	local counter=0
 
 	while [ $counter -lt ${#KEYWORDS[@]} ]; do
-		if ! grep "^${KEYWORDS[$counter]}" "$config_file" > /dev/null; then
-		       #sed -i'.tmp' '/^ROTATE_SQL_COPIES=*/a\'$'\n''ROTATE_FILE_COPIES='$VALUE'\'$'\n''' "$config_file"
-			sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
-			if [ $? != 0 ]; then
-				echo "Cannot add missing ${[KEYWORDS[$counter]}."
-				exit 1
-			fi
+		if ! grep "^${KEYWORDS[$counter]}=" "$config_file"; then
+			echo "${KEYWORDS[$counter]} not found"
+			if [ $counter -gt 0 ]; then
+				sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
+				if [ $? -ne 0 ]; then
+					echo "Cannot add missing ${[KEYWORDS[$counter]}."
+					exit 1
+				fi
+		else
+			sed -i'.tmp' '/onfig file rev*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
+		fi
 			echo "Added missing ${KEYWORDS[$counter]} config option with default option [${VALUES[$counter]}]"
+		else
+			echo "${KEYWORDS[$counter]} found"
 		fi
 		counter=$((counter+1))
 	done
