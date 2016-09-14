@@ -6,7 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-PROGRAM_BUILD=2016091401
+PROGRAM_BUILD=2016091402
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -281,6 +281,7 @@ function RewriteOldConfigFiles {
 			sed -i'.tmp' '/^INSTANCE_ID=*/a\'$'\n''BACKUP_TYPE=local\'$'\n''' "$config_file"
 		fi
 	fi
+	sed -i'.tmp' 's/^REMOTE_3RD_PARTY_HOST=/REMOTE_3RD_PARTY_HOSTS=/g' "$config_file"
 }
 
 function AddMissingConfigOptions {
@@ -296,12 +297,10 @@ function AddMissingConfigOptions {
 					echo "Cannot add missing ${[KEYWORDS[$counter]}."
 					exit 1
 				fi
-		else
-			sed -i'.tmp' '/onfig file rev*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
-		fi
+			else
+				sed -i'.tmp' '/onfig file rev*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
+			fi
 			echo "Added missing ${KEYWORDS[$counter]} config option with default option [${VALUES[$counter]}]"
-		else
-			echo "${KEYWORDS[$counter]} found"
 		fi
 		counter=$((counter+1))
 	done
