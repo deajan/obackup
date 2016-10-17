@@ -6,6 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
+CONFIG_FILE_VERSION=2016091402
 PROGRAM_BUILD=2016091402
 
 if ! type "$BASH" > /dev/null; then
@@ -289,7 +290,7 @@ function AddMissingConfigOptions {
 	local counter=0
 
 	while [ $counter -lt ${#KEYWORDS[@]} ]; do
-		if ! grep "^${KEYWORDS[$counter]}=" "$config_file"; then
+		if ! grep "^${KEYWORDS[$counter]}=" > /dev/null "$config_file"; then
 			echo "${KEYWORDS[$counter]} not found"
 			if [ $counter -gt 0 ]; then
 				sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
@@ -310,7 +311,7 @@ function UpdateConfigHeader {
 	local config_file="${1}"
 
 	# "onfig file rev" to deal with earlier variants of the file
-        sed -i'.tmp' '/onfig file rev/c\###### '$SUBPROGRAM' config file rev '$PROGRAM_BUILD "$config_file"
+        sed -i'.tmp' '/onfig file rev/c\###### '$SUBPROGRAM' config file rev '$CONFIG_FILE_VERSION' '$NEW_PROGRAM_VERSION "$config_file"
 
 	rm -f "$config_file.tmp"
 }
