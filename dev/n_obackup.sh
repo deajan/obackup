@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 #TODO: missing files says Backup succeed
-#TODO: add new encryption variable checks, also upgrade script
 #TODO: ListingDatabases fail succeed
 #TODO: Add .gpg extesion to RotateFiles ?
 
@@ -10,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090901
+PROGRAM_BUILD=2016101901
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1679,10 +1678,10 @@ Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID 
 
 GetLocalOS
 InitLocalOSSettings
-CheckEnvironment
 CheckRunningInstances
 PreInit
 Init
+CheckEnvironment
 PostInit
 CheckCurrentConfig
 
