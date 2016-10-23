@@ -1,12 +1,14 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016102303
+## FUNC_BUILD=2016102304
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
 ## PROGRAM=program-name
 ## INSTANCE_ID=program-instance-name
 ## _DEBUG=yes/no
+
+#TODO(high): Refactor GetRemoteOs into big oneliner for faster execution (if busybox else uname else uname -spio in one statement)
 
 #TODO: Windows checks, check sendmail & mailsend
 
@@ -1387,6 +1389,8 @@ function RsyncPatterns {
 function PreInit {
 	 __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
+	local compressionString
+
 	## SSH compression
 	if [ "$SSH_COMPRESSION" != "no" ]; then
 		SSH_COMP=-C
@@ -1477,24 +1481,34 @@ function PreInit {
 	fi
 
 	 ## Set compression executable and extension
-	COMPRESSION_LEVEL=3
+	if [ "$(IsInteger $COMPRESSION_LEVEL)" -eq 0 ]; then
+		COMPRESSION_LEVEL=3
+	fi
+
+	## Busybox fix (Termux xz command doesn't support compression level as example)
+	if [ "$LOCAL_OS" == "BUSYBOX" ] || [ "$REMOTE_OS" == "BUSYBOX" ]; then
+		compressionString=""
+	else
+		compressionString=" -$COMPRESSION_LEVEL"
+	fi
+
 	if type xz > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| xz -$COMPRESSION_LEVEL"
+		COMPRESSION_PROGRAM="| xz$compressionString"
 		COMPRESSION_EXTENSION=.xz
 	elif type lzma > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| lzma -$COMPRESSION_LEVEL"
+		COMPRESSION_PROGRAM="| lzma$compressionString"
 		COMPRESSION_EXTENSION=.lzma
 	elif type pigz > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| pigz -$COMPRESSION_LEVEL"
+		COMPRESSION_PROGRAM="| pigz$compressionString"
 		COMPRESSION_EXTENSION=.gz
 		# obackup specific
 		COMPRESSION_OPTIONS=--rsyncable
 	elif type gzip > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| gzip -$COMPRESSION_LEVEL"
+		COMPRESSION_PROGRAM="| gzip$compressionString"
 		COMPRESSION_EXTENSION=.gz
 		# obackup specific
 		COMPRESSION_OPTIONS=--rsyncable
