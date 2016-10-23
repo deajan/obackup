@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016102308
+## FUNC_BUILD=2016102309
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -9,7 +9,7 @@
 ## _DEBUG=yes/no
 
 #TODO(high): Refactor GetRemoteOs into big oneliner for faster execution (if busybox else uname else uname -spio in one statement)
-
+#TODO(high): Implement busybox support in SendEmail function
 #TODO: Windows checks, check sendmail & mailsend
 
 if ! type "$BASH" > /dev/null; then
@@ -304,7 +304,7 @@ function SendAlert {
 
 	if [ "LOCAL_OS" == "BUSYBOX" ]; then
 		if type sendmail > /dev/null 2>&1; then
-			echo "$body" | $(type -p sendmail) -f "$SENDER_EMAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au "$SMTP_USER" -ap "$SMTP_PASS"
+			echo "$body" | $(type -p sendmail) -f "$SENDER_EMAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASS" $DESTINATION_MAILS
 			if [ $? != 0 ]; then
 				Logger "Cannot send alert mail via ($type -p sendmail) !!!" "WARN"
 				return 1
