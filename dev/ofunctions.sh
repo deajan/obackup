@@ -304,9 +304,9 @@ function SendAlert {
 
 	if [ "$LOCAL_OS" == "BUSYBOX" ]; then
 		if type sendmail > /dev/null 2>&1; then
-			echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) -f "$SENDER_EMAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASS" $DESTINATION_MAILS
+			echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) -f "$SENDER_MAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASSWORD" $DESTINATION_MAILS
 			if [ $? != 0 ]; then
-				Logger "Cannot send alert mail via ($type -p sendmail) !!!" "WARN"
+				Logger "Cannot send alert mail via $(type -p sendmail) !!!" "WARN"
 				return 1
 			fi
 		else
@@ -459,7 +459,7 @@ function SendEmail {
 		if type sendmail > /dev/null 2>&1; then
 			echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderEmail" -S "$smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
 			if [ $? != 0 ]; then
-				Logger "Cannot send alert mail via ($type -p sendmail) !!!" "WARN"
+				Logger "Cannot send alert mail via $(type -p sendmail) !!!" "WARN"
 				return 1
 			fi
 		else
