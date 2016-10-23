@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016102305
+## FUNC_BUILD=2016102306
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -1485,36 +1485,45 @@ function PreInit {
 		COMPRESSION_LEVEL=3
 	fi
 
-	## Busybox fix (Termux xz command doesn't support compression level as example)
+	## Busybox fix (Termux xz command doesn't support compression at all)
 	if [ "$LOCAL_OS" == "BUSYBOX" ] || [ "$REMOTE_OS" == "BUSYBOX" ]; then
 		compressionString=""
+		if type gzip > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| gzip -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+		else
+			COMPRESSION_PROGRAM=
+			COMPRESSION_EXTENSION=
+		fi
 	else
 		compressionString=" -$COMPRESSION_LEVEL"
-	fi
 
-	if type xz > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| xz -c$compressionString"
-		COMPRESSION_EXTENSION=.xz
-	elif type lzma > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| lzma -c$compressionString"
-		COMPRESSION_EXTENSION=.lzma
-	elif type pigz > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| pigz -c$compressionString"
-		COMPRESSION_EXTENSION=.gz
-		# obackup specific
-		COMPRESSION_OPTIONS=--rsyncable
-	elif type gzip > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| gzip -c$compressionString"
-		COMPRESSION_EXTENSION=.gz
-		# obackup specific
-		COMPRESSION_OPTIONS=--rsyncable
-	else
-		COMPRESSION_PROGRAM=
-		COMPRESSION_EXTENSION=
+		if type xz > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| xz -c$compressionString"
+			COMPRESSION_EXTENSION=.xz
+		elif type lzma > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| lzma -c$compressionString"
+			COMPRESSION_EXTENSION=.lzma
+		elif type pigz > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| pigz -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+			COMPRESSION_OPTIONS=--rsyncable
+		elif type gzip > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| gzip -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+			COMPRESSION_OPTIONS=--rsyncable
+		else
+			COMPRESSION_PROGRAM=
+			COMPRESSION_EXTENSION=
+		fi
 	fi
 	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 }
