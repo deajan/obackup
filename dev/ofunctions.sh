@@ -306,7 +306,7 @@ function SendAlert {
 		if type sendmail > /dev/null 2>&1; then
 			echo "$body" | $(type -p sendmail) -f "$SENDER_EMAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au "$SMTP_USER" -ap "$SMTP_PASS"
 			if [ $? != 0 ]; then
-				Logger "Cannot send alert mail via ($type -p sendmail) !!! "WARN"
+				Logger "Cannot send alert mail via ($type -p sendmail) !!!" "WARN"
 				return 1
 			fi
 		else
