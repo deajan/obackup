@@ -6,7 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-CONFIG_FILE_VERSION=2016091402
+CONFIG_FILE_VERSION=2016102301
 PROGRAM_BUILD=2016091402
 
 if ! type "$BASH" > /dev/null; then
@@ -37,6 +37,7 @@ SQL_WARN_MIN_SPACE
 FILE_WARN_MIN_SPACE
 REMOTE_SYSTEM_URI
 SSH_RSA_PRIVATE_KEY
+SSH_PASSWORD
 SSH_COMPRESSION
 SSH_IGNORE_KNOWN_HOSTS
 RSYNC_REMOTE_PATH
@@ -120,6 +121,7 @@ yes
 1048576
 ssh://backupuser@remote.system.tld:22/
 ${HOME}/.ssh/id_rsa
+''
 yes
 no
 ''
