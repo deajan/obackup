@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016102307
+## FUNC_BUILD=2016102308
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -301,6 +301,20 @@ function SendAlert {
 	if [ "$mail_no_attachment" -eq 0 ]; then
 		attachment_command="-a $ALERT_LOG_FILE"
 	fi
+
+	if [ "LOCAL_OS" == "BUSYBOX" ]; then
+		if type sendmail > /dev/null 2>&1; then
+			echo "$body" | $(type -p sendmail) -f "$SENDER_EMAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au "$SMTP_USER" -ap "$SMTP_PASS"
+			if [ $? != 0 ]; then
+				Logger "Cannot send alert mail via ($type -p sendmail) !!! "WARN"
+				return 1
+			fi
+		else
+			Logger "Sendmail not present. Won't send any mail" "WARN"
+			return 1
+		fi
+	fi
+
 	if type mutt > /dev/null 2>&1 ; then
 		echo "$body" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS $attachment_command
 		if [ $? != 0 ]; then
