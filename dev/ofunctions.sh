@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016102310
+## FUNC_BUILD=2016102311
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -307,7 +307,10 @@ function SendAlert {
 			echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) -f "$SENDER_MAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASSWORD" $DESTINATION_MAILS
 			if [ $? != 0 ]; then
 				Logger "Cannot send alert mail via $(type -p sendmail) !!!" "WARN"
+				# Don't bother try other mail systems with busybox
 				return 1
+			else
+				return 0
 			fi
 		else
 			Logger "Sendmail not present. Won't send any mail" "WARN"
@@ -460,7 +463,10 @@ function SendEmail {
 			echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderEmail" -S "$smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
 			if [ $? != 0 ]; then
 				Logger "Cannot send alert mail via $(type -p sendmail) !!!" "WARN"
+				# Don't bother try other mail systems with busybox
 				return 1
+			else
+				return 0
 			fi
 		else
 			Logger "Sendmail not present. Won't send any mail" "WARN"
