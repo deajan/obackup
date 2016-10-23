@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016102301
+PROGRAM_BUILD=2016102303
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -94,6 +94,11 @@ function CheckEnvironment {
 				CAN_BACKUP_SQL=false
 			fi
 		fi
+
+		if [ "$SSH_PASSWORD_FILE" != "" ] && ! type sshpass > /dev/null 2>&1 ; then
+                        Logger "sshpass not present. Cannot use password authentication." "CRITICAL"
+                        exit 1
+                fi
 	fi
 
 	if [ "$FILE_BACKUP" != "no" ]; then
@@ -189,7 +194,10 @@ function CheckCurrentConfig {
 		fi
 	fi
 
-
+	if [ "$REMOTE_OPERATION" == "yes" ] && ([ ! -f "$SSH_RSA_PRIVATE_KEY" ] && [ ! -f "$SSH_PASSWORD_FILE" ]); then
+                Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY] nor password file [$SSH_PASSWORD_FILE]. No authentication method provided." "CRITICAL"
+                exit 1
+        fi
 }
 
 function CheckRunningInstances {
@@ -482,7 +490,7 @@ function _GetDirectoriesSizeLocal {
 
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
                 TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
-		if [ $(IsNumeric $TOTAL_FILES_SIZE) -eq 0 ]; then
+		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
 	else
@@ -515,7 +523,7 @@ function _GetDirectoriesSizeRemote {
 	fi
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
 		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
-		if [ $(IsNumeric $TOTAL_FILES_SIZE) -eq 0 ]; then
+		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
 	else
@@ -636,7 +644,7 @@ function GetDiskSpaceLocal {
         	else
                 	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
                 	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
-			if [ $(IsNumeric $DISK_SPACE) -eq 0 ]; then
+			if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
 				DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
 			fi
         	fi
@@ -665,7 +673,7 @@ function GetDiskSpaceRemote {
         else
                	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
                	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
-		if [ $(IsNumeric $DISK_SPACE) -eq 0 ]; then
+		if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
 			DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
 		fi
         fi
@@ -1469,7 +1477,10 @@ function Init {
                 fi
 
                 if [ "$SSH_RSA_PRIVATE_KEY" == "" ]; then
-                        SSH_RSA_PRIVATE_KEY=~/.ssh/id_rsa
+                        if [ ! -f "$SSH_PASSWORD_FILE" ]; then
+                                # Assume that there might exist a standard rsa key
+                                SSH_RSA_PRIVATE_KEY=~/.ssh/id_rsa
+                        fi
                 fi
 
                 # remove everything before '@'
@@ -1522,6 +1533,7 @@ function Main {
 	FILE_STORAGE="${FILE_STORAGE/#\~/$HOME}"
 	SQL_STORAGE="${SQL_STORAGE/#\~/$HOME}"
 	SSH_RSA_PRIVATE_KEY="${SSH_RSA_PRIVATE_KEY/#\~/$HOME}"
+	SSH_PASSWORD_FILE="${SSH_PASSWORD_FILE/#\~/$HOME}"
 	ENCRYPT_PUBKEY="${ENCRYPT_PUBKEY/#\~/$HOME}"
 
 	if [ "$CREATE_DIRS" != "no" ]; then
