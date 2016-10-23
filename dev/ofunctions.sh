@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016102304
+## FUNC_BUILD=2016102305
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -1494,21 +1494,21 @@ function PreInit {
 
 	if type xz > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| xz$compressionString"
+		COMPRESSION_PROGRAM="| xz -c$compressionString"
 		COMPRESSION_EXTENSION=.xz
 	elif type lzma > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| lzma$compressionString"
+		COMPRESSION_PROGRAM="| lzma -c$compressionString"
 		COMPRESSION_EXTENSION=.lzma
 	elif type pigz > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| pigz$compressionString"
+		COMPRESSION_PROGRAM="| pigz -c$compressionString"
 		COMPRESSION_EXTENSION=.gz
 		# obackup specific
 		COMPRESSION_OPTIONS=--rsyncable
 	elif type gzip > /dev/null 2>&1
 	then
-		COMPRESSION_PROGRAM="| gzip$compressionString"
+		COMPRESSION_PROGRAM="| gzip -c$compressionString"
 		COMPRESSION_EXTENSION=.gz
 		# obackup specific
 		COMPRESSION_OPTIONS=--rsyncable
