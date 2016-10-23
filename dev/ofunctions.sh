@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016102309
+## FUNC_BUILD=2016102310
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -302,9 +302,9 @@ function SendAlert {
 		attachment_command="-a $ALERT_LOG_FILE"
 	fi
 
-	if [ "LOCAL_OS" == "BUSYBOX" ]; then
+	if [ "$LOCAL_OS" == "BUSYBOX" ]; then
 		if type sendmail > /dev/null 2>&1; then
-			echo "$body" | $(type -p sendmail) -f "$SENDER_EMAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASS" $DESTINATION_MAILS
+			echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) -f "$SENDER_EMAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASS" $DESTINATION_MAILS
 			if [ $? != 0 ]; then
 				Logger "Cannot send alert mail via ($type -p sendmail) !!!" "WARN"
 				return 1
@@ -423,21 +423,21 @@ function SendAlert {
 # SendEmail "subject" "Body text" "receiver@example.com receiver2@otherdomain.com" "/path/to/attachment.file"
 # Usage (Windows, make sure you have mailsend.exe in executable path, see http://github.com/muquit/mailsend)
 # attachment is optional but must be in windows format like "c:\\some\path\\my.file", or ""
-# smtp_server.domain.tld is mandatory, as is smtp_port (should be 25, 465 or 587)
+# smtp_server.domain.tld is mandatory, as is smtpPort (should be 25, 465 or 587)
 # encryption can be set to tls, ssl or none
-# smtp_user and smtp_password are optional
-# SendEmail "subject" "Body text" "receiver@example.com receiver2@otherdomain.com" "/path/to/attachment.file" "sender_email@example.com" "smtp_server.domain.tld" "smtp_port" "encryption" "smtp_user" "smtp_password"
+# smtpUser and smtpPassword are optional
+# SendEmail "subject" "Body text" "receiver@example.com receiver2@otherdomain.com" "/path/to/attachment.file" "senderEmail@example.com" "smtpServer.domain.tld" "smtpPort" "encryption" "smtpUser" "smtpPassword"
 function SendEmail {
 	local subject="${1}"
 	local message="${2}"
-	local destination_mails="${3}"
+	local destinationMails="${3}"
 	local attachment="${4}"
-	local sender_email="${5}"
-	local smtp_server="${6}"
-	local smtp_port="${7}"
+	local senderEmail="${5}"
+	local smtpServer="${6}"
+	local smtpPort="${7}"
 	local encryption="${8}"
-	local smtp_user="${9}"
-	local smtp_password="${10}"
+	local smtpUser="${9}"
+	local smtpPassword="${10}"
 
 	# CheckArguments will report a warning that can be ignored if used in Windows with paranoia debug enabled
 	__CheckArguments 4 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
@@ -455,8 +455,21 @@ function SendEmail {
 		mail_no_attachment=0
 	fi
 
+	if [ "$LOCAL_OS" == "BUSYBOX" ]; then
+		if type sendmail > /dev/null 2>&1; then
+			echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderEmail" -S "$smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			if [ $? != 0 ]; then
+				Logger "Cannot send alert mail via ($type -p sendmail) !!!" "WARN"
+				return 1
+			fi
+		else
+			Logger "Sendmail not present. Won't send any mail" "WARN"
+			return 1
+		fi
+	fi
+
 	if type mutt > /dev/null 2>&1 ; then
-		echo "$message" | $(type -p mutt) -x -s "$subject" "$destination_mails" $attachment_command
+		echo "$message" | $(type -p mutt) -x -s "$subject" "$destinationMails" $attachment_command
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p mutt) !!!" "WARN"
 		else
@@ -473,10 +486,10 @@ function SendEmail {
 		else
 			attachment_command=""
 		fi
-		echo "$message" | $(type -p mail) $attachment_command -s "$subject" "$destination_mails"
+		echo "$message" | $(type -p mail) $attachment_command -s "$subject" "$destinationMails"
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p mail) with attachments !!!" "WARN"
-			echo "$message" | $(type -p mail) -s "$subject" "$destination_mails"
+			echo "$message" | $(type -p mail) -s "$subject" "$destinationMails"
 			if [ $? != 0 ]; then
 				Logger "Cannot send mail via $(type -p mail) without attachments !!!" "WARN"
 			else
@@ -490,7 +503,7 @@ function SendEmail {
 	fi
 
 	if type sendmail > /dev/null 2>&1 ; then
-		echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) "$destination_mails"
+		echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) "$destinationMails"
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p sendmail) !!!" "WARN"
 		else
@@ -501,17 +514,17 @@ function SendEmail {
 
 	# Windows specific
 	if type "mailsend.exe" > /dev/null 2>&1 ; then
-		if [ "$sender_email" == "" ]; then
+		if [ "$senderEmail" == "" ]; then
 			Logger "Missing sender email." "ERROR"
 			return 1
 		fi
-		if [ "$smtp_server" == "" ]; then
+		if [ "$smtpServer" == "" ]; then
 			Logger "Missing smtp port." "ERROR"
 			return 1
 		fi
-		if [ "$smtp_port" == "" ]; then
+		if [ "$smtpPort" == "" ]; then
 			Logger "Missing smtp port, assuming 25." "WARN"
-			smtp_port=25
+			smtpPort=25
 		fi
 		if [ "$encryption" != "tls" ] && [ "$encryption" != "ssl" ]  && [ "$encryption" != "none" ]; then
 			Logger "Bogus smtp encryption, assuming none." "WARN"
@@ -521,10 +534,10 @@ function SendEmail {
 		elif [ "$encryption" == "ssl" ]:; then
 			encryption_string=-ssl
 		fi
-		if [ "$smtp_user" != "" ] && [ "$smtp_password" != "" ]; then
-			auth_string="-auth -user \"$smtp_user\" -pass \"$smtp_password\""
+		if [ "$smtpUser" != "" ] && [ "$smtpPassword" != "" ]; then
+			auth_string="-auth -user \"$smtpUser\" -pass \"$smtpPassword\""
 		fi
-		$(type mailsend.exe) -f "$sender_email" -t "$destination_mails" -sub "$subject" -M "$message" -attach "$attachment" -smtp "$smtp_server" -port "$smtp_port" $encryption_string $auth_string
+		$(type mailsend.exe) -f "$senderEmail" -t "$destinationMails" -sub "$subject" -M "$message" -attach "$attachment" -smtp "$smtpServer" -port "$smtpPort" $encryption_string $auth_string
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type mailsend.exe) !!!" "WARN"
 		else
