@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016090403
+## obackup basic tests suite 2016102301
 
-#TODO: add old conf file, have upgrade and check
 #TODO: Must recreate files before each test set
 
 OBACKUP_DIR="$(pwd)"
@@ -22,9 +21,10 @@ LOCAL_CONF="local.conf"
 PULL_CONF="pull.conf"
 PUSH_CONF="push.conf"
 OLD_CONF="old.conf"
+TMP_OLD_CONF="tmp.old.conf"
 
-OBACKUP_EXECUTABLE=obackup.sh
-OBACKUP_UPGRADE=upgrade-v1.x-2.1x.sh
+OBACKUP_EXECUTABLE="obackup.sh"
+OBACKUP_UPGRADE="upgrade-v1.x-2.1x.sh"
 
 SOURCE_DIR="${HOME}/obackup-testdata"
 TARGET_DIR="${HOME}/obackup-storage"
@@ -629,13 +629,17 @@ function test_UpgradeConfPullRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
 
-	./$OBACKUP_UPGRADE "$CONF_DIR/$OLD_CONF"
+
+	# Make a security copy of the old config file
+	cp "$CONF_DIR/$OLD_CONF" "$CONF_DIR/$TMP_OLD_CONF"
+
+	./$OBACKUP_UPGRADE "$CONF_DIR/$TMP_OLD_CONF"
 	assertEquals "Conf file upgrade" "0" $?
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$OLD_CONF"
+	./$OBACKUP_EXECUTABLE "$CONF_DIR/$TMP_OLD_CONF"
 	assertEquals "Upgraded conf file execution test" "0" $?
 
-	# Move pre-upgraded file to original location agian
-	mv -f "$CONF_DIR/$OLD_CONF.save" "$CONF_DIR/$OLD_CONF"
+	rm -f "$CONF_DIR/$TMP_OLD_CONF"
+	rm -f "$CONF_DIR/$TMP_OLD_CONF.save"
 }
 
 . "$TESTS_DIR/shunit2/shunit2"
