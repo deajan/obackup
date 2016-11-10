@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 #TODO: missing files says Backup succeed
-#TODO: add new encryption variable checks, also upgrade script
 #TODO: ListingDatabases fail succeed
 #TODO: Add .gpg extesion to RotateFiles ?
 
@@ -10,12 +9,12 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016090901
+PROGRAM_BUILD=2016111002
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016090701
+## FUNC_BUILD=2016111002
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -23,6 +22,8 @@ IS_STABLE=no
 ## INSTANCE_ID=program-instance-name
 ## _DEBUG=yes/no
 
+#TODO(high): Refactor GetRemoteOs into big oneliner for faster execution (if busybox else uname else uname -spio in one statement)
+#TODO(high): Implement busybox support in SendEmail function
 #TODO: Windows checks, check sendmail & mailsend
 
 if ! type "$BASH" > /dev/null; then
@@ -94,7 +95,7 @@ fi
 
 
 # Default alert attachment filename
-ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.last.log"
+ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.last.log"
 
 # Set error exit code if a piped command fails
 	set -o pipefail
@@ -115,7 +116,7 @@ function _Logger {
 	echo -e "$lvalue" >> "$LOG_FILE"
 	CURRENT_LOG="$CURRENT_LOG"$'\n'"$lvalue"
 
-	if [ $_LOGGER_STDERR == true ]; then
+	if [ $_LOGGER_STDERR == true ] && [ "$evalue" != "" ]; then
 		cat <<< "$evalue" 1>&2
 	elif [ "$_SILENT" == false ]; then
 		echo -e "$svalue"
@@ -299,6 +300,30 @@ function SendAlert {
 	if [ "$mail_no_attachment" -eq 0 ]; then
 		attachment_command="-a $ALERT_LOG_FILE"
 	fi
+
+	if [ "$LOCAL_OS" == "BUSYBOX" ]; then
+		if type sendmail > /dev/null 2>&1; then
+			if [ "$ENCRYPTION" == "tls" ]; then
+				echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) -f "$SENDER_MAIL" -H "exec openssl s_client -quiet -tls1_2 -starttls smtp -connect $SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASSWORD" $DESTINATION_MAILS
+			elif [ "$ENCRYPTION" == "ssl" ]; then
+				echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) -f "$SENDER_MAIL" -H "exec openssl s_client -quiet -connect $SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASSWORD" $DESTINATION_MAILS
+			else
+				echo -e "Subject:$subject\r\n$body" | $(type -p sendmail) -f "$SENDER_MAIL" -S "$SMTP_SERVER:$SMTP_PORT" -au"$SMTP_USER" -ap"$SMTP_PASSWORD" $DESTINATION_MAILS
+			fi
+
+			if [ $? != 0 ]; then
+				Logger "Cannot send alert mail via $(type -p sendmail) !!!" "WARN"
+				# Don't bother try other mail systems with busybox
+				return 1
+			else
+				return 0
+			fi
+		else
+			Logger "Sendmail not present. Won't send any mail" "WARN"
+			return 1
+		fi
+	fi
+
 	if type mutt > /dev/null 2>&1 ; then
 		echo "$body" | $(type -p mutt) -x -s "$subject" $DESTINATION_MAILS $attachment_command
 		if [ $? != 0 ]; then
@@ -398,7 +423,7 @@ function SendAlert {
 
 	# Delete tmp log file
 	if [ -f "$ALERT_LOG_FILE" ]; then
-		rm "$ALERT_LOG_FILE"
+		rm -f "$ALERT_LOG_FILE"
 	fi
 }
 
@@ -407,21 +432,21 @@ function SendAlert {
 # SendEmail "subject" "Body text" "receiver@example.com receiver2@otherdomain.com" "/path/to/attachment.file"
 # Usage (Windows, make sure you have mailsend.exe in executable path, see http://github.com/muquit/mailsend)
 # attachment is optional but must be in windows format like "c:\\some\path\\my.file", or ""
-# smtp_server.domain.tld is mandatory, as is smtp_port (should be 25, 465 or 587)
+# smtp_server.domain.tld is mandatory, as is smtpPort (should be 25, 465 or 587)
 # encryption can be set to tls, ssl or none
-# smtp_user and smtp_password are optional
-# SendEmail "subject" "Body text" "receiver@example.com receiver2@otherdomain.com" "/path/to/attachment.file" "sender_email@example.com" "smtp_server.domain.tld" "smtp_port" "encryption" "smtp_user" "smtp_password"
+# smtpUser and smtpPassword are optional
+# SendEmail "subject" "Body text" "receiver@example.com receiver2@otherdomain.com" "/path/to/attachment.file" "senderMail@example.com" "smtpServer.domain.tld" "smtpPort" "encryption" "smtpUser" "smtpPassword"
 function SendEmail {
 	local subject="${1}"
 	local message="${2}"
-	local destination_mails="${3}"
+	local destinationMails="${3}"
 	local attachment="${4}"
-	local sender_email="${5}"
-	local smtp_server="${6}"
-	local smtp_port="${7}"
+	local senderMail="${5}"
+	local smtpServer="${6}"
+	local smtpPort="${7}"
 	local encryption="${8}"
-	local smtp_user="${9}"
-	local smtp_password="${10}"
+	local smtpUser="${9}"
+	local smtpPassword="${10}"
 
 	# CheckArguments will report a warning that can be ignored if used in Windows with paranoia debug enabled
 
@@ -432,14 +457,37 @@ function SendEmail {
 	local auth_string=
 
 	if [ ! -f "$attachment" ]; then
-		attachment_command="-a $ALERT_LOG_FILE"
+		attachment_command="-a $attachment"
 		mail_no_attachment=1
 	else
 		mail_no_attachment=0
 	fi
 
+	if [ "$LOCAL_OS" == "BUSYBOX" ]; then
+		if type sendmail > /dev/null 2>&1; then
+			if [ "$ENCRYPTION" == "tls" ]; then
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -H "exec openssl s_client -quiet -tls1_2 -starttls smtp -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			elif [ "$ENCRYPTION" == "ssl" ]; then
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -H "exec openssl s_client -quiet -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			else
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -S "$smtpServer:$SmtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			fi
+
+			if [ $? != 0 ]; then
+				Logger "Cannot send alert mail via $(type -p sendmail) !!!" "WARN"
+				# Don't bother try other mail systems with busybox
+				return 1
+			else
+				return 0
+			fi
+		else
+			Logger "Sendmail not present. Won't send any mail" "WARN"
+			return 1
+		fi
+	fi
+
 	if type mutt > /dev/null 2>&1 ; then
-		echo "$message" | $(type -p mutt) -x -s "$subject" "$destination_mails" $attachment_command
+		echo "$message" | $(type -p mutt) -x -s "$subject" "$destinationMails" $attachment_command
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p mutt) !!!" "WARN"
 		else
@@ -456,10 +504,10 @@ function SendEmail {
 		else
 			attachment_command=""
 		fi
-		echo "$message" | $(type -p mail) $attachment_command -s "$subject" "$destination_mails"
+		echo "$message" | $(type -p mail) $attachment_command -s "$subject" "$destinationMails"
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p mail) with attachments !!!" "WARN"
-			echo "$message" | $(type -p mail) -s "$subject" "$destination_mails"
+			echo "$message" | $(type -p mail) -s "$subject" "$destinationMails"
 			if [ $? != 0 ]; then
 				Logger "Cannot send mail via $(type -p mail) without attachments !!!" "WARN"
 			else
@@ -473,7 +521,7 @@ function SendEmail {
 	fi
 
 	if type sendmail > /dev/null 2>&1 ; then
-		echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) "$destination_mails"
+		echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) "$destinationMails"
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p sendmail) !!!" "WARN"
 		else
@@ -484,17 +532,17 @@ function SendEmail {
 
 	# Windows specific
 	if type "mailsend.exe" > /dev/null 2>&1 ; then
-		if [ "$sender_email" == "" ]; then
+		if [ "$senderMail" == "" ]; then
 			Logger "Missing sender email." "ERROR"
 			return 1
 		fi
-		if [ "$smtp_server" == "" ]; then
+		if [ "$smtpServer" == "" ]; then
 			Logger "Missing smtp port." "ERROR"
 			return 1
 		fi
-		if [ "$smtp_port" == "" ]; then
+		if [ "$smtpPort" == "" ]; then
 			Logger "Missing smtp port, assuming 25." "WARN"
-			smtp_port=25
+			smtpPort=25
 		fi
 		if [ "$encryption" != "tls" ] && [ "$encryption" != "ssl" ]  && [ "$encryption" != "none" ]; then
 			Logger "Bogus smtp encryption, assuming none." "WARN"
@@ -504,10 +552,10 @@ function SendEmail {
 		elif [ "$encryption" == "ssl" ]:; then
 			encryption_string=-ssl
 		fi
-		if [ "$smtp_user" != "" ] && [ "$smtp_password" != "" ]; then
-			auth_string="-auth -user \"$smtp_user\" -pass \"$smtp_password\""
+		if [ "$smtpUser" != "" ] && [ "$smtpPassword" != "" ]; then
+			auth_string="-auth -user \"$smtpUser\" -pass \"$smtpPassword\""
 		fi
-		$(type mailsend.exe) -f "$sender_email" -t "$destination_mails" -sub "$subject" -M "$message" -attach "$attachment" -smtp "$smtp_server" -port "$smtp_port" $encryption_string $auth_string
+		$(type mailsend.exe) -f "$senderMail" -t "$destinationMails" -sub "$subject" -M "$message" -attach "$attachment" -smtp "$smtpServer" -port "$smtpPort" $encryption_string $auth_string
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type mailsend.exe) !!!" "WARN"
 		else
@@ -535,6 +583,7 @@ function TrapError {
 	local job="$0"
 	local line="$1"
 	local code="${2:-1}"
+
 	if [ $_SILENT == false ]; then
 		echo -e " /!\ ERROR in ${job}: Near line ${line}, exit code ${code}"
 	fi
@@ -542,6 +591,7 @@ function TrapError {
 
 function LoadConfigFile {
 	local configFile="${1}"
+
 
 
 	if [ ! -f "$configFile" ]; then
@@ -604,11 +654,11 @@ function joinString {
 
 function WaitForTaskCompletion {
 	local pids="${1}" # pids to wait for, separated by semi-colon
-	local soft_max_time="${2}" # If program with pid $pid takes longer than $soft_max_time seconds, will log a warning, unless $soft_max_time equals 0.
-	local hard_max_time="${3}" # If program with pid $pid takes longer than $hard_max_time seconds, will stop execution, unless $hard_max_time equals 0.
-	local caller_name="${4}" # Who called this function
+	local softMaxTime="${2}" # If program with pid $pid takes longer than $softMaxTime seconds, will log a warning, unless $softMaxTime equals 0.
+	local hardMaxTime="${3}" # If program with pid $pid takes longer than $hardMaxTime seconds, will stop execution, unless $hardMaxTime equals 0.
+	local callerName="${4}" # Who called this function
 	local counting="${5:-true}" # Count time since function has been launched if true, since script has been launched if false
-	local keep_logging="${6:-0}" # Log a standby message every X seconds. Set to zero to disable logging
+	local keepLogging="${6:-0}" # Log a standby message every X seconds. Set to zero to disable logging
 
 
 	local soft_alert=false # Does a soft alert need to be triggered, if yes, send an alert once
@@ -643,8 +693,8 @@ function WaitForTaskCompletion {
 			exec_time=$SECONDS
 		fi
 
-		if [ $keep_logging -ne 0 ]; then
-			if [ $((($exec_time + 1) % $keep_logging)) -eq 0 ]; then
+		if [ $keepLogging -ne 0 ]; then
+			if [ $((($exec_time + 1) % $keepLogging)) -eq 0 ]; then
 				if [ $log_ttime -ne $exec_time ]; then # Fix when sleep time lower than 1s
 					log_ttime=$exec_time
 					Logger "Current tasks still running with pids [$(joinString , ${pidsArray[@]})]." "NOTICE"
@@ -652,15 +702,15 @@ function WaitForTaskCompletion {
 			fi
 		fi
 
-		if [ $exec_time -gt $soft_max_time ]; then
-			if [ $soft_alert == true ] && [ $soft_max_time -ne 0 ]; then
-				Logger "Max soft execution time exceeded for task [$caller_name] with pids [$(joinString , ${pidsArray[@]})]." "WARN"
+		if [ $exec_time -gt $softMaxTime ]; then
+			if [ $soft_alert == true ] && [ $softMaxTime -ne 0 ]; then
+				Logger "Max soft execution time exceeded for task [$callerName] with pids [$(joinString , ${pidsArray[@]})]." "WARN"
 				soft_alert=true
 				SendAlert true
 
 			fi
-			if [ $exec_time -gt $hard_max_time ] && [ $hard_max_time -ne 0 ]; then
-				Logger "Max hard execution time exceeded for task [$caller_name] with pids [$(joinString , ${pidsArray[@]})]. Stopping task execution." "ERROR"
+			if [ $exec_time -gt $hardMaxTime ] && [ $hardMaxTime -ne 0 ]; then
+				Logger "Max hard execution time exceeded for task [$callerName] with pids [$(joinString , ${pidsArray[@]})]. Stopping task execution." "ERROR"
 				for pid in "${pidsArray[@]}"; do
 					KillChilds $pid true
 					if [ $? == 0 ]; then
@@ -677,8 +727,10 @@ function WaitForTaskCompletion {
 			if [ $(IsInteger $pid) -eq 1 ]; then
 				if kill -0 $pid > /dev/null 2>&1; then
 					# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
-					#TODO(high): have this tested on *BSD, Mac & Win
-					pidState=$(ps -p$pid -o state= 2 > /dev/null)
+					#TODO(high): have this tested on *BSD, Mac, Win & busybox.
+					#TODO(high): propagate changes to ParallelExec
+					#pidState=$(ps -p$pid -o state= 2 > /dev/null)
+					pidState="$(eval $PROCESS_STATE_CMD)"
 					if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
 						newPidsArray+=($pid)
 					fi
@@ -688,7 +740,7 @@ function WaitForTaskCompletion {
 					retval=$?
 					if [ $retval -ne 0 ]; then
 						errorcount=$((errorcount+1))
-						Logger "${FUNCNAME[0]} called by [$caller_name] finished monitoring [$pid] with exitcode [$retval]." "DEBUG"
+						Logger "${FUNCNAME[0]} called by [$callerName] finished monitoring [$pid] with exitcode [$retval]." "DEBUG"
 						if [ "$WAIT_FOR_TASK_COMPLETION" == "" ]; then
 							WAIT_FOR_TASK_COMPLETION="$pid:$retval"
 						else
@@ -721,6 +773,11 @@ function ParallelExec {
 	local numberOfProcesses="${1}" # Number of simultaneous commands to run
 	local commandsArg="${2}" # Semi-colon separated list of commands, or file containing one command per line
 	local readFromFile="${3:-false}" # Is commandsArg a file or a string ?
+	local softMaxTime="${4:-0}"
+	local hardMaxTime="${5:-0}"
+	local callerName="${6}" # Who called this function
+	local counting="${7:-true}" # Count time since function has been launched if true, since script has been launched if false
+	local keepLogging="${8:-0}" # Log a standby message every X seconds. Set to zero to disable logging
 
 
 	local commandCount
@@ -759,7 +816,7 @@ function ParallelExec {
 				command="${commandsArray[$counter]}"
 			fi
 			Logger "Running command [$command]." "DEBUG"
-			eval "$command" &
+			eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
 			pid=$!
 			pidsArray+=($pid)
 			commandsArrayPid[$pid]="$command"
@@ -772,7 +829,8 @@ function ParallelExec {
 			if [ $(IsInteger $pid) -eq 1 ]; then
 				# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
 				if kill -0 $pid > /dev/null 2>&1; then
-					pidState=$(ps -p$pid -o state= 2 > /dev/null)
+					#pidState=$(ps -p$pid -o state= 2 > /dev/null)
+					pidState="$(eval $PROCESS_STATE_CMD)"
 					if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
 						newPidsArray+=($pid)
 					fi
@@ -806,8 +864,6 @@ function CleanUp {
 	fi
 }
 
-#### MINIMAL-FUNCTION-SET END ####
-
 # obsolete, use StripQuotes
 function SedStripQuotes {
 	echo $(echo $1 | sed "s/^\([\"']\)\(.*\)\1\$/\2/g")
@@ -816,6 +872,7 @@ function SedStripQuotes {
 # Usage: var=$(StripSingleQuotes "$var")
 function StripSingleQuotes {
 	local string="${1}"
+
 	string="${string/#\'/}" # Remove singlequote if it begins string
 	string="${string/%\'/}" # Remove singlequote if it ends string
 	echo "$string"
@@ -824,6 +881,7 @@ function StripSingleQuotes {
 # Usage: var=$(StripDoubleQuotes "$var")
 function StripDoubleQuotes {
 	local string="${1}"
+
 	string="${string/#\"/}"
 	string="${string/%\"/}"
 	echo "$string"
@@ -831,12 +889,14 @@ function StripDoubleQuotes {
 
 function StripQuotes {
 	local string="${1}"
+
 	echo "$(StripSingleQuotes $(StripDoubleQuotes $string))"
 }
 
 # Usage var=$(EscapeSpaces "$var") or var="$(EscapeSpaces "$var")"
 function EscapeSpaces {
 	local string="${1}" # String on which spaces will be escaped
+
 	echo "${string// /\\ }"
 }
 
@@ -844,20 +904,22 @@ function IsNumericExpand {
 	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
 
 	local re="^-?[0-9]+([.][0-9]+)?$"
+
 	if [[ $value =~ $re ]]; then
-		echo 1
+		echo 1 && return 1
 	else
-		echo 0
+		echo 0 && return 0
 	fi
 }
 
+# Usage [ $(IsNumeric $var) -eq 1 ]
 function IsNumeric {
 	local value="${1}"
 
 	if [[ $value =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-		echo 1
+		echo 1 && return 1
 	else
-		echo 0
+		echo 0 && return 0
 	fi
 }
 
@@ -865,10 +927,41 @@ function IsInteger {
 	local value="${1}"
 
 	if [[ $value =~ ^[0-9]+$ ]]; then
-		echo 1
+		echo 1 && return 1
 	else
-		echo 0
+		echo 0 && return 0
 	fi
+}
+
+# Converts human readable sizes into integer kilobyte sizes
+# Usage numericSize="$(HumanToNumeric $humanSize)"
+function HumanToNumeric {
+	local value="${1}"
+
+	local notation
+	local suffix
+	local suffixPresent
+	local multiplier
+
+	notation=(K M G T P E)
+	for suffix in "${notation[@]}"; do
+		multiplier=$((multiplier+1))
+		if [[ "$value" == *"$suffix"* ]]; then
+			suffixPresent=$suffix
+			break;
+		fi
+	done
+
+	if [ "$suffixPresent" != "" ]; then
+		value=${value%$suffix*}
+		value=${value%.*}
+		# /1024 since we convert to kilobytes instead of bytes
+		value=$((value*(1024**multiplier/1024)))
+	else
+		value=${value%.*}
+	fi
+
+	echo $value
 }
 
 ## from https://gist.github.com/cdown/1163649
@@ -890,24 +983,45 @@ function urlEncode {
 }
 
 function urlDecode {
-	local url_encoded="${1//+/ }"
+	local urlEncoded="${1//+/ }"
 
-	printf '%b' "${url_encoded//%/\\x}"
+	printf '%b' "${urlEncoded//%/\\x}"
+}
+
+## Modified version of http://stackoverflow.com/a/8574392
+## Usage: arrayContains "needle" "${haystack[@]}"
+arrayContains () {
+	local e
+
+	if [ "$2" == "" ]; then
+		echo 0 && return 0
+	fi
+
+	for e in "${@:2}"; do
+		[[ "$e" == "$1" ]] && echo 1 && return 1
+	done
+	echo 0 && return 0
 }
 
 function GetLocalOS {
 
-	local local_os_var=
+	local localOsVar
 
-	local_os_var="$(uname -spio 2>&1)"
-	if [ $? != 0 ]; then
-		local_os_var="$(uname -v 2>&1)"
+	# There's no good way to tell if currently running in BusyBox shell. Using sluggish way.
+	ls --help 2>&1 | grep -i BusyBox > /dev/null
+	if [ $? == 0 ]; then
+		localOsVar="BusyBox"
+	else
+		localOsVar="$(uname -spio 2>&1)"
 		if [ $? != 0 ]; then
-			local_os_var="$(uname)"
+			localOsVar="$(uname -v 2>&1)"
+			if [ $? != 0 ]; then
+				localOsVar="$(uname)"
+			fi
 		fi
 	fi
 
-	case $local_os_var in
+	case $localOsVar in
 		*"Linux"*)
 		LOCAL_OS="Linux"
 		;;
@@ -920,53 +1034,67 @@ function GetLocalOS {
 		*"Darwin"*)
 		LOCAL_OS="MacOSX"
 		;;
+		*"BusyBox"*)
+		LOCAL_OS="BUSYBOX"
+		;;
 		*)
-		if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#DOC: Undocumented option
-			Logger "Running on unknown local OS [$local_os_var]." "WARN"
+		if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#TODO(doc): Undocumented option
+			Logger "Running on unknown local OS [$localOsVar]." "WARN"
 			return
 		fi
-		Logger "Running on >> $local_os_var << not supported. Please report to the author." "ERROR"
+		Logger "Running on >> $localOsVar << not supported. Please report to the author." "ERROR"
 		exit 1
 		;;
 	esac
-	Logger "Local OS: [$local_os_var]." "DEBUG"
+	Logger "Local OS: [$localOsVar]." "DEBUG"
 }
+
+#### MINIMAL-FUNCTION-SET END ####
 
 function GetRemoteOS {
 
-	local cmd=
-	local remote_os_var=
-
+	local retval
+	local cmd
+	local remoteOsVar
 
 	if [ "$REMOTE_OPERATION" == "yes" ]; then
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		cmd=$SSH_CMD' "uname -spio" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+
+		cmd=$SSH_CMD' "ls --help 2>&1 | grep -i BusyBox > /dev/null"'
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
-		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-1" true $KEEP_LOGGING
+		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-0" true $KEEP_LOGGING
 		retval=$?
-		if [ $retval != 0 ]; then
-			cmd=$SSH_CMD' "uname -v" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+		if [ $retval == 0 ]; then
+			remoteOsVar="BusyBox"
+		else
+			cmd=$SSH_CMD' "uname -spio" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-2" true $KEEP_LOGGING
+			WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-1" true $KEEP_LOGGING
 			retval=$?
 			if [ $retval != 0 ]; then
-				cmd=$SSH_CMD' "uname" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+				cmd=$SSH_CMD' "uname -v" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
-				WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-3" true $KEEP_LOGGING
+				WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-2" true $KEEP_LOGGING
 				retval=$?
 				if [ $retval != 0 ]; then
-					Logger "Cannot Get remote OS type." "ERROR"
+					cmd=$SSH_CMD' "uname" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+					Logger "cmd: $cmd" "DEBUG"
+					eval "$cmd" &
+					WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-3" true $KEEP_LOGGING
+					retval=$?
+					if [ $retval != 0 ]; then
+						Logger "Cannot Get remote OS type." "ERROR"
+					fi
 				fi
 			fi
+			remoteOsVar=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID")
 		fi
 
-		remote_os_var=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID")
-
-		case $remote_os_var in
+		case $remoteOsVar in
 			*"Linux"*)
 			REMOTE_OS="Linux"
 			;;
@@ -979,27 +1107,30 @@ function GetRemoteOS {
 			*"Darwin"*)
 			REMOTE_OS="MacOSX"
 			;;
+			*"BusyBox"*)
+			REMOTE_OS="BUSYBOX"
+			;;
 			*"ssh"*|*"SSH"*)
 			Logger "Cannot connect to remote system." "CRITICAL"
 			exit 1
 			;;
 			*)
 			if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#DOC: Undocumented option
-				Logger "Running on unknown remote OS [$remote_os_var]." "WARN"
+				Logger "Running on unknown remote OS [$remoteOsVar]." "WARN"
 				return
 			fi
 			Logger "Running on remote OS failed. Please report to the author if the OS is not supported." "CRITICAL"
-			Logger "Remote OS said:\n$remote_os_var" "CRITICAL"
+			Logger "Remote OS said:\n$remoteOsVar" "CRITICAL"
 			exit 1
 		esac
 
-		Logger "Remote OS: [$remote_os_var]." "DEBUG"
+		Logger "Remote OS: [$remoteOsVar]." "DEBUG"
 	fi
 }
 
 function RunLocalCommand {
 	local command="${1}" # Command to run
-	local hard_max_time="${2}" # Max time to wait for command to compleet
+	local hardMaxTime="${2}" # Max time to wait for command to compleet
 
 	if [ $_DRYRUN == true ]; then
 		Logger "Dryrun: Local command [$command] not run." "NOTICE"
@@ -1008,7 +1139,7 @@ function RunLocalCommand {
 
 	Logger "Running command [$command] on local host." "NOTICE"
 	eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
-	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} true $KEEP_LOGGING
+	WaitForTaskCompletion $! 0 $hardMaxTime ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -1029,7 +1160,7 @@ function RunLocalCommand {
 ## Runs remote command $1 and waits for completition in $2 seconds
 function RunRemoteCommand {
 	local command="${1}" # Command to run
-	local hard_max_time="${2}" # Max time to wait for command to compleet
+	local hardMaxTime="${2}" # Max time to wait for command to compleet
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
@@ -1042,7 +1173,7 @@ function RunRemoteCommand {
 	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
-	WaitForTaskCompletion $! 0 $hard_max_time ${FUNCNAME[0]} true $KEEP_LOGGING
+	WaitForTaskCompletion $! 0 $hardMaxTime ${FUNCNAME[0]} true $KEEP_LOGGING
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -1063,7 +1194,7 @@ function RunRemoteCommand {
 
 function RunBeforeHook {
 
-	local pids=
+	local pids
 
 	if [ "$LOCAL_RUN_BEFORE_CMD" != "" ]; then
 		RunLocalCommand "$LOCAL_RUN_BEFORE_CMD" $MAX_EXEC_TIME_PER_CMD_BEFORE &
@@ -1108,7 +1239,7 @@ function CheckConnectivityRemoteHost {
 			WaitForTaskCompletion $! 60 180 ${FUNCNAME[0]} true $KEEP_LOGGING
 			retval=$?
 			if [ $retval != 0 ]; then
-				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "ERROR"
+				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "WARN"
 				return $retval
 			fi
 		fi
@@ -1117,13 +1248,13 @@ function CheckConnectivityRemoteHost {
 
 function CheckConnectivity3rdPartyHosts {
 
-	local remote_3rd_party_success
+	local remote3rdPartySuccess
 	local retval
 
 	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug
 
 		if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]; then
-			remote_3rd_party_success=false
+			remote3rdPartySuccess=false
 			for i in $REMOTE_3RD_PARTY_HOSTS
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
@@ -1132,12 +1263,12 @@ function CheckConnectivity3rdPartyHosts {
 				if [ $retval != 0 ]; then
 					Logger "Cannot ping 3rd party host [$i]. Return code [$retval]." "NOTICE"
 				else
-					remote_3rd_party_success=true
+					remote3rdPartySuccess=true
 				fi
 			done
 
-			if [ $remote_3rd_party_success == false ]; then
-				Logger "No remote 3rd party host responded to ping. No internet ?" "ERROR"
+			if [ $remote3rdPartySuccess == false ]; then
+				Logger "No remote 3rd party host responded to ping. No internet ?" "WARN"
 				return 1
 			else
 				return 0
@@ -1150,7 +1281,7 @@ function CheckConnectivity3rdPartyHosts {
 #__END_WITH_PARANOIA_DEBUG
 
 function RsyncPatternsAdd {
-	local pattern_type="${1}"	# exclude or include
+	local patternType="${1}"	# exclude or include
 	local pattern="${2}"
 
 	local rest
@@ -1161,7 +1292,7 @@ function RsyncPatternsAdd {
 	while [ -n "$rest" ]
 	do
 		# Take the string until first occurence until $PATH_SEPARATOR_CHAR
-		str=${rest%%;*}
+		str=${rest%%;*} #TODO: replace ; with $PATH_SEPARATOR_CHAR
 		# Handle the last case
 		if [ "$rest" = "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
 			rest=
@@ -1170,25 +1301,25 @@ function RsyncPatternsAdd {
 			rest=${rest#*$PATH_SEPARATOR_CHAR}
 		fi
 			if [ "$RSYNC_PATTERNS" == "" ]; then
-			RSYNC_PATTERNS="--"$pattern_type"=\"$str\""
+			RSYNC_PATTERNS="--"$patternType"=\"$str\""
 		else
-			RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"=\"$str\""
+			RSYNC_PATTERNS="$RSYNC_PATTERNS --"$patternType"=\"$str\""
 		fi
 	done
 	set +f
 }
 
 function RsyncPatternsFromAdd {
-	local pattern_type="${1}"
-	local pattern_from="${2}"
+	local patternType="${1}"
+	local patternFrom="${2}"
 
 	## Check if the exclude list has a full path, and if not, add the config file path if there is one
-	if [ "$(basename $pattern_from)" == "$pattern_from" ]; then
-		pattern_from="$(dirname $CONFIG_FILE)/$pattern_from"
+	if [ "$(basename $patternFrom)" == "$patternFrom" ]; then
+		patternFrom="$(dirname $CONFIG_FILE)/$patternFrom"
 	fi
 
-	if [ -e "$pattern_from" ]; then
-		RSYNC_PATTERNS="$RSYNC_PATTERNS --"$pattern_type"-from=\"$pattern_from\""
+	if [ -e "$patternFrom" ]; then
+		RSYNC_PATTERNS="$RSYNC_PATTERNS --"$patternType"-from=\"$patternFrom\""
 	fi
 }
 
@@ -1207,7 +1338,8 @@ function RsyncPatterns {
 		if [ "$RSYNC_INCLUDE_FROM" != "" ]; then
 			RsyncPatternsFromAdd "include" "$RSYNC_INCLUDE_FROM"
 		fi
-	elif [ "$RSYNC_PATTERN_FIRST" == "include" ]; then
+	# Use default include first for quicksync runs
+	elif [ "$RSYNC_PATTERN_FIRST" == "include" ] || [ "$_QUICK_SYNC" == "2" ]; then
 		if [ "$RSYNC_INCLUDE_PATTERN" != "" ]; then
 			RsyncPatternsAdd "include" "$RSYNC_INCLUDE_PATTERN"
 		fi
@@ -1226,6 +1358,8 @@ function RsyncPatterns {
 }
 
 function PreInit {
+
+	local compressionString
 
 	## SSH compression
 	if [ "$SSH_COMPRESSION" != "no" ]; then
@@ -1317,30 +1451,49 @@ function PreInit {
 	fi
 
 	 ## Set compression executable and extension
-	COMPRESSION_LEVEL=3
-	if type xz > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| xz -$COMPRESSION_LEVEL"
-		COMPRESSION_EXTENSION=.xz
-	elif type lzma > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| lzma -$COMPRESSION_LEVEL"
-		COMPRESSION_EXTENSION=.lzma
-	elif type pigz > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| pigz -$COMPRESSION_LEVEL"
-		COMPRESSION_EXTENSION=.gz
-		# obackup specific
-		COMPRESSION_OPTIONS=--rsyncable
-	elif type gzip > /dev/null 2>&1
-	then
-		COMPRESSION_PROGRAM="| gzip -$COMPRESSION_LEVEL"
-		COMPRESSION_EXTENSION=.gz
-		# obackup specific
-		COMPRESSION_OPTIONS=--rsyncable
+	if [ "$(IsInteger $COMPRESSION_LEVEL)" -eq 0 ]; then
+		COMPRESSION_LEVEL=3
+	fi
+
+	## Busybox fix (Termux xz command doesn't support compression at all)
+	if [ "$LOCAL_OS" == "BUSYBOX" ] || [ "$REMOTE_OS" == "BUSYBOX" ]; then
+		compressionString=""
+		if type gzip > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| gzip -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+		else
+			COMPRESSION_PROGRAM=
+			COMPRESSION_EXTENSION=
+		fi
 	else
-		COMPRESSION_PROGRAM=
-		COMPRESSION_EXTENSION=
+		compressionString=" -$COMPRESSION_LEVEL"
+
+		if type xz > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| xz -c$compressionString"
+			COMPRESSION_EXTENSION=.xz
+		elif type lzma > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| lzma -c$compressionString"
+			COMPRESSION_EXTENSION=.lzma
+		elif type pigz > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| pigz -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+			COMPRESSION_OPTIONS=--rsyncable
+		elif type gzip > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| gzip -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+			COMPRESSION_OPTIONS=--rsyncable
+		else
+			COMPRESSION_PROGRAM=
+			COMPRESSION_EXTENSION=
+		fi
 	fi
 	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 }
@@ -1348,9 +1501,20 @@ function PreInit {
 function PostInit {
 
 	# Define remote commands
-	SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
-	SCP_CMD="$(type -p scp) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -P $REMOTE_PORT"
-	RSYNC_SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS -p $REMOTE_PORT"
+	if [ -f "$SSH_RSA_PRIVATE_KEY" ]; then
+		SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
+		SCP_CMD="$(type -p scp) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -P $REMOTE_PORT"
+		RSYNC_SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS -p $REMOTE_PORT"
+	elif [ -f "$SSH_PASSWORD_FILE" ]; then
+		SSH_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p ssh) $SSH_COMP $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
+		SCP_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p scp) $SSH_COMP -P $REMOTE_PORT"
+		RSYNC_SSH_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p ssh) $SSH_COMP $SSH_OPTS -p $REMOTE_PORT"
+	else
+		SSH_PASSWORD=""
+		SSH_CMD=""
+		SCP_CMD=""
+		RSYNC_SSH_CMD=""
+	fi
 }
 
 function InitLocalOSSettings {
@@ -1367,12 +1531,20 @@ function InitLocalOSSettings {
 		PING_CMD="ping -c 2 -i .2"
 	fi
 
+	if [ "$LOCAL_OS" == "BUSYBOX" ]; then
+		PROCESS_STATE_CMD="echo none"
+	else
+		PROCESS_STATE_CMD='ps -p$pid -o state= 2 > /dev/null'
+	fi
+
 	## Stat command has different syntax on Linux and FreeBSD/MacOSX
 	if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
+		# Tested on BSD and Mac
 		STAT_CMD="stat -f \"%Sm\""
 		STAT_CTIME_MTIME_CMD="stat -f %N;%c;%m"
 	else
-		STAT_CMD="stat --format %y"
+		# Tested on GNU stat and busybox
+		STAT_CMD="stat -c %y"
 		STAT_CTIME_MTIME_CMD="stat -c %n;%Z;%Y"
 	fi
 }
@@ -1406,6 +1578,19 @@ function InitRemoteOSSettings {
 ## IFS debug function
 function PrintIFS {
 	printf "IFS is: %q" "$IFS"
+}
+
+# Process debugging
+# Recursive function to get all parents from a pid
+function ParentPid {
+	local pid="${1}" # Pid to analyse
+	local parent
+
+	parent=$(ps -p $pid -o ppid=)
+	echo "$pid is a child of $parent"
+	if [ $parent -gt 0 ]; then
+		ParentPid $parent
+	fi
 }
 
 ## END Generic functions
@@ -1489,6 +1674,11 @@ function CheckEnvironment {
 				CAN_BACKUP_SQL=false
 			fi
 		fi
+
+		if [ "$SSH_PASSWORD_FILE" != "" ] && ! type sshpass > /dev/null 2>&1 ; then
+			Logger "sshpass not present. Cannot use password authentication." "CRITICAL"
+			exit 1
+		fi
 	fi
 
 	if [ "$FILE_BACKUP" != "no" ]; then
@@ -1527,7 +1717,7 @@ function CheckCurrentConfig {
 	# Check all variables that should contain "yes" or "no"
 	declare -a yes_no_vars=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
 	for i in "${yes_no_vars[@]}"; do
-		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ]; then Logger \"Bogus $i value defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
+		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ]; then Logger \"Bogus $i value [$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
 	done
 
@@ -1539,7 +1729,7 @@ function CheckCurrentConfig {
 	# Check all variables that should contain a numerical value >= 0
 	declare -a num_vars=(BACKUP_SIZE_MINIMUM SQL_WARN_MIN_SPACE FILE_WARN_MIN_SPACE SOFT_MAX_EXEC_TIME_DB_TASK HARD_MAX_EXEC_TIME_DB_TASK COMPRESSION_LEVEL SOFT_MAX_EXEC_TIME_FILE_TASK HARD_MAX_EXEC_TIME_FILE_TASK BANDWIDTH SOFT_MAX_EXEC_TIME_TOTAL HARD_MAX_EXEC_TIME_TOTAL ROTATE_SQL_COPIES ROTATE_FILE_COPIES KEEP_LOGGING MAX_EXEC_TIME_PER_CMD_BEFORE MAX_EXEC_TIME_PER_CMD_AFTER)
 	for i in "${num_vars[@]}"; do
-		test="if [ $(IsNumericExpand \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
+		test="if [ $(IsNumericExpand \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value [$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
 	done
 
@@ -1583,7 +1773,10 @@ function CheckCurrentConfig {
 		fi
 	fi
 
-
+	if [ "$REMOTE_OPERATION" == "yes" ] && ([ ! -f "$SSH_RSA_PRIVATE_KEY" ] && [ ! -f "$SSH_PASSWORD_FILE" ]); then
+		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY] nor password file [$SSH_PASSWORD_FILE]. No authentication method provided." "CRITICAL"
+		exit 1
+	fi
 }
 
 function CheckRunningInstances {
@@ -1778,9 +1971,7 @@ function ListRecursiveBackupDirectories {
 
 	local output_file
 	local file_exclude
-
 	local excluded
-
 	local fileArray
 
 	Logger "Listing directories to backup." "NOTICE"
@@ -1870,6 +2061,9 @@ function _GetDirectoriesSizeLocal {
 
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
 		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
+		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
+			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
+		fi
 	else
 		TOTAL_FILES_SIZE=-1
 	fi
@@ -1899,6 +2093,9 @@ function _GetDirectoriesSizeRemote {
 	fi
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
 		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
+		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
+			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
+		fi
 	else
 		TOTAL_FILES_SIZE=-1
 	fi
@@ -2004,7 +2201,7 @@ function GetDiskSpaceLocal {
 	if [ -d "$path_to_check" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
-		df -P "$path_to_check" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		df "$path_to_check" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
 		if [ $? != 0 ]; then
 			DISK_SPACE=0
 			Logger "Cannot get disk space in [$path_to_check] on local system." "ERROR"
@@ -2012,6 +2209,9 @@ function GetDiskSpaceLocal {
 		else
 			DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
 			DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
+			if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
+				DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
+			fi
 		fi
 	else
 		Logger "Storage path [$path_to_check] does not exist." "CRITICAL"
@@ -2025,7 +2225,7 @@ function GetDiskSpaceRemote {
 
 	local cmd
 
-	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' df -P \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' df \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK ${FUNCNAME[0]} true $KEEP_LOGGING
@@ -2037,6 +2237,9 @@ function GetDiskSpaceRemote {
 	else
 		DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
 		DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
+		if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
+			DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
+		fi
 	fi
 }
 
@@ -2818,7 +3021,10 @@ function Init {
 		fi
 
 		if [ "$SSH_RSA_PRIVATE_KEY" == "" ]; then
-			SSH_RSA_PRIVATE_KEY=~/.ssh/id_rsa
+			if [ ! -f "$SSH_PASSWORD_FILE" ]; then
+				# Assume that there might exist a standard rsa key
+				SSH_RSA_PRIVATE_KEY=~/.ssh/id_rsa
+			fi
 		fi
 
 		# remove everything before '@'
@@ -2870,6 +3076,7 @@ function Main {
 	FILE_STORAGE="${FILE_STORAGE/#\~/$HOME}"
 	SQL_STORAGE="${SQL_STORAGE/#\~/$HOME}"
 	SSH_RSA_PRIVATE_KEY="${SSH_RSA_PRIVATE_KEY/#\~/$HOME}"
+	SSH_PASSWORD_FILE="${SSH_PASSWORD_FILE/#\~/$HOME}"
 	ENCRYPT_PUBKEY="${ENCRYPT_PUBKEY/#\~/$HOME}"
 
 	if [ "$CREATE_DIRS" != "no" ]; then
@@ -3023,8 +3230,16 @@ else
 	LOG_FILE="$LOGFILE"
 fi
 
+fi
+
+if [ ! -w "$(dirname $LOG_FILE)" ]; then
+	echo "Cannot write to log [$(dirname $LOG_FILE)]."
+else
+	Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
+fi
+
 if [ "$IS_STABLE" != "yes" ]; then
-	Logger "This is an unstable dev build. Please use with caution." "WARN"
+	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
 fi
 
 DATE=$(date)
@@ -3035,10 +3250,10 @@ Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID 
 
 GetLocalOS
 InitLocalOSSettings
-CheckEnvironment
 CheckRunningInstances
 PreInit
 Init
+CheckEnvironment
 PostInit
 CheckCurrentConfig
 
