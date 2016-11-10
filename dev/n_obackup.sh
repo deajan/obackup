@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016111001
+PROGRAM_BUILD=2016111002
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1690,8 +1690,8 @@ fi
 
 fi
 
-if [ ! -w "$(dirname LOG_FILE)" ]; then
-	echo "Cannot write to log [$(dirname LOG_FILE)]."
+if [ ! -w "$(dirname $LOG_FILE)" ]; then
+	echo "Cannot write to log [$(dirname $LOG_FILE)]."
 else
 	Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
 fi
