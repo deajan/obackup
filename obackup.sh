@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016111002
+PROGRAM_BUILD=2016111201
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
@@ -3228,8 +3228,6 @@ if [ "$LOGFILE" == "" ]; then
 	fi
 else
 	LOG_FILE="$LOGFILE"
-fi
-
 fi
 
 if [ ! -w "$(dirname $LOG_FILE)" ]; then
