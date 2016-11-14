@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016111201
+PROGRAM_BUILD=2016111401
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1576,6 +1576,7 @@ function Usage {
 	echo "OPTIONS:"
 	echo "--dry             will run obackup without actually doing anything, just testing"
 	echo "--silent          will run obackup without any output to stdout, usefull for cron backups"
+	echo "--errors only     Output only errors (can be combined with silent or verbose)"
 	echo "--verbose         adds command outputs"
 	echo "--stats           Adds rsync transfer statistics to verbose output"
 	echo "--partial         Allows rsync to keep partial downloads that can be resumed later (experimental)"
@@ -1656,6 +1657,10 @@ function GetCommandlineArguments {
 			;;
 			--recipient=*)
 			GPG_RECIPIENT="${i##*=}"
+			;;
+			--only-errors)
+			_LOGGER_STDERR=True
+			_LOGGER_ERR_ONLY=True
 			;;
 		esac
 	done
