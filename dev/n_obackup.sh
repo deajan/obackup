@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016111401
+PROGRAM_BUILD=2016111501
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -1576,7 +1576,7 @@ function Usage {
 	echo "OPTIONS:"
 	echo "--dry             will run obackup without actually doing anything, just testing"
 	echo "--silent          will run obackup without any output to stdout, usefull for cron backups"
-	echo "--errors only     Output only errors (can be combined with silent or verbose)"
+	echo "--errors-only     Output only errors (can be combined with silent or verbose)"
 	echo "--verbose         adds command outputs"
 	echo "--stats           Adds rsync transfer statistics to verbose output"
 	echo "--partial         Allows rsync to keep partial downloads that can be resumed later (experimental)"
@@ -1658,7 +1658,7 @@ function GetCommandlineArguments {
 			--recipient=*)
 			GPG_RECIPIENT="${i##*=}"
 			;;
-			--only-errors)
+			--errors-only)
 			_LOGGER_STDERR=True
 			_LOGGER_ERR_ONLY=True
 			;;
@@ -1705,7 +1705,7 @@ fi
 
 DATE=$(date)
 Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "$DRY_WARNING $DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
+Logger "$DRY_WARNING$DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
 Logger "--------------------------------------------------------------------" "NOTICE"
 Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
 
