@@ -1,14 +1,15 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016111401
+## FUNC_BUILD=2016111502
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
 ## PROGRAM=program-name
 ## INSTANCE_ID=program-instance-name
 ## _DEBUG=yes/no
-## _LOGGER_STDERR=True/False
-## _LOGGER_ERR_ONLY=True/False
+## _LOGGER_STDERR=true/false
+## _LOGGER_ERR_ONLY=true/false
+## _LOGGER_PREFIX="date"/"time"/""
 
 #TODO: Windows checks, check sendmail & mailsend
 
@@ -51,7 +52,9 @@ if [ ! "$_DEBUG" == "yes" ]; then
 	SLEEP_TIME=.05 # Tested under linux and FreeBSD bash, #TODO tests on cygwin / msys
 	_VERBOSE=false
 else
-	SLEEP_TIME=1
+	if [ "$SLEEP_TIME" == "" ]; then
+		SLEEP_TIME=1
+	fi
 	trap 'TrapError ${LINENO} $?' ERR
 	_VERBOSE=true
 fi
@@ -140,17 +143,22 @@ function Logger {
 		ERROR_ALERT=true
 		return
 	elif [ "$level" == "WARN" ]; then
-		_Logger "$prefix\e[93m$value\e[0m" "$prefix$level:$value" "$level:$value"
+		_Logger "$prefix\e[33m$value\e[0m" "$prefix$level:$value" "$level:$value"
 		WARN_ALERT=true
 		return
 	elif [ "$level" == "NOTICE" ]; then
-		if [ "$_LOGGER_ERR_ONLY" != True ]; then
+		if [ "$_LOGGER_ERR_ONLY" != true ]; then
 			_Logger "$prefix$value"
 		fi
 		return
 	elif [ "$level" == "VERBOSE" ]; then
 		if [ $_VERBOSE == true ]; then
 			_Logger "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		if [ $_SILENT != true ]; then
+			_Logger "$prefix$value" "$prefix$level:$value" "$level:$value"
 		fi
 		return
 	elif [ "$level" == "DEBUG" ]; then
@@ -276,9 +284,9 @@ function SendAlert {
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
 	if [ $? != 0 ]; then
 		Logger "Cannot create [$ALERT_LOG_FILE]" "WARN"
-		attachment=False
+		attachment=false
 	else
-		attachment=True
+		attachment=true
 	fi
 	body="$MAIL_ALERT_MSG"$'\n\n'"$CURRENT_LOG"
 
@@ -296,14 +304,14 @@ function SendAlert {
 		subject="Fnished run - $subject"
 	fi
 
-	if [ "$attachment" == True ]; then
+	if [ "$attachment" == true ]; then
 		attachmentFile="$ALERT_LOG_FILE"
 	fi
 
 	SendEmail "$subject" "$body" "$DESTINATION_MAILS" "$attachmentFile" "$SENDER_MAIL" "$SMTP_SERVER" "$SMTP_PORT" "$ENCRYPTION" "SMTP_USER" "$SMTP_PASSWORD"
 
 	# Delete tmp log file
-	if [ "$attachment" == True ]; then
+	if [ "$attachment" == true ]; then
 		if [ -f "$ALERT_LOG_FILE" ]; then
 			rm -f "$ALERT_LOG_FILE"
 		fi
@@ -469,7 +477,7 @@ function TrapError {
 	local code="${2:-1}"
 
 	if [ $_SILENT == false ]; then
-		echo -e " /!\ ERROR in ${job}: Near line ${line}, exit code ${code}"
+		echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m"
 	fi
 }
 
@@ -495,7 +503,7 @@ function LoadConfigFile {
 }
 
 function Spinner {
-	if [ $_SILENT == true ]; then
+	if [ $_SILENT == true ] || [ "$_LOGGER_ERR_ONLY" == true ]; then
 		return 0
 	fi
 
@@ -909,8 +917,7 @@ function GetLocalOS {
 	local localOsVar
 
 	# There's no good way to tell if currently running in BusyBox shell. Using sluggish way.
-	ls --help 2>&1 | grep -i BusyBox > /dev/null
-	if [ $? == 0 ]; then
+	if ls --help 2>&1 | grep -i "BusyBox" > /dev/null; then
 		localOsVar="BusyBox"
 	else
 		localOsVar="$(uname -spio 2>&1)"
@@ -955,6 +962,73 @@ function GetLocalOS {
 function GetRemoteOS {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
+	local remoteOsVar
+
+$SSH_CMD bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+
+function GetOs {
+	local localOsVar
+
+	# There's no good way to tell if currently running in BusyBox shell. Using sluggish way.
+	if ls --help 2>&1 | grep -i "BusyBox" > /dev/null; then
+		localOsVar="BusyBox"
+	else
+		localOsVar="$(uname -spio 2>&1)"
+		if [ $? != 0 ]; then
+			localOsVar="$(uname -v 2>&1)"
+			if [ $? != 0 ]; then
+				localOsVar="$(uname)"
+			fi
+		fi
+	fi
+
+	echo "$localOsVar"
+}
+
+GetOs
+
+ENDSSH
+
+	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
+		remoteOsVar=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID")
+		case $remoteOsVar in
+			*"Linux"*)
+			REMOTE_OS="Linux"
+			;;
+			*"BSD"*)
+			REMOTE_OS="BSD"
+			;;
+			*"MINGW32"*|*"CYGWIN"*)
+			REMOTE_OS="msys"
+			;;
+			*"Darwin"*)
+			REMOTE_OS="MacOSX"
+			;;
+			*"BusyBox"*)
+			REMOTE_OS="BUSYBOX"
+			;;
+			*"ssh"*|*"SSH"*)
+			Logger "Cannot connect to remote system." "CRITICAL"
+			exit 1
+			;;
+			*)
+			if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#DOC: Undocumented debug only setting
+				Logger "Running on unknown remote OS [$remoteOsVar]." "WARN"
+				return
+			fi
+			Logger "Running on remote OS failed. Please report to the author if the OS is not supported." "CRITICAL"
+			Logger "Remote OS said:\n$remoteOsVar" "CRITICAL"
+			exit 1
+		esac
+		Logger "Remote OS: [$remoteOsVar]." "DEBUG"
+	else
+		Logge "Cannot get Remote OS" "CRITICAL"
+	fi
+}
+
+function oldGetRemoteOS {
+	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+
 	local retval
 	local cmd
 	local remoteOsVar
@@ -963,7 +1037,7 @@ function GetRemoteOS {
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 
-		cmd=$SSH_CMD' "ls --help 2>&1 | grep -i BusyBox > /dev/null"'
+		cmd=$SSH_CMD' "if [ ls --help 2>&1 | grep -i BusyBox > /dev/null ]; then exit 0; else exit 1"'
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
 		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-0" true $KEEP_LOGGING
@@ -1360,7 +1434,7 @@ function PreInit {
 	RSYNC_ARGS="-rltD"
 	if [ "$_DRYRUN" == true ]; then
 		RSYNC_DRY_ARG="-n"
-		DRY_WARNING="/!\ DRY RUN"
+		DRY_WARNING="/!\ DRY RUN "
 	else
 		RSYNC_DRY_ARG=""
 	fi
