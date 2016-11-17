@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016111501
+PROGRAM_BUILD=2016111701
 IS_STABLE=no
 
 source "./ofunctions.sh"
@@ -48,22 +48,22 @@ function TrapQuit {
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
-		CleanUp
 		Logger "$PROGRAM finished with errors." "ERROR"
 		SendAlert
+		CleanUp
 		exitcode=1
 	elif [ $WARN_ALERT == true ]; then
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
 			RunAfterHook
 		fi
-		CleanUp
 		Logger "$PROGRAM finished with warnings." "WARN"
 		SendAlert
+		CleanUp
 		exitcode=2
 	else
 		RunAfterHook
-		CleanUp
 		Logger "$PROGRAM finshed without errors." "NOTICE"
+		CleanUp
 		exitcode=0
 	fi
 
@@ -1498,7 +1498,7 @@ function Init {
 	## Add update to default RSYNC_ARGS
 	RSYNC_ARGS=$RSYNC_ARGS" -u"
 
-	if [ $_VERBOSE == true ]; then
+	if [ $_LOGGER_VERBOSE == true ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" -i"
 	fi
 
@@ -1596,7 +1596,7 @@ function Usage {
 
 # Command line argument flags
 _DRYRUN=false
-_SILENT=false
+_LOGGER_SILENT=false
 no_maxtime=false
 stats=false
 PARTIAL=no
@@ -1615,10 +1615,10 @@ function GetCommandlineArguments {
 			_DRYRUN=true
 			;;
 			--silent)
-			_SILENT=true
+			_LOGGER_SILENT=true
 			;;
 			--verbose)
-			_VERBOSE=true
+			_LOGGER_VERBOSE=true
 			;;
 			--stats)
 			stats=false
@@ -1659,8 +1659,7 @@ function GetCommandlineArguments {
 			GPG_RECIPIENT="${i##*=}"
 			;;
 			--errors-only)
-			_LOGGER_STDERR=True
-			_LOGGER_ERR_ONLY=True
+			_LOGGER_ERR_ONLY=true
 			;;
 		esac
 	done
