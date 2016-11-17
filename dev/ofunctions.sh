@@ -1,16 +1,21 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016111502
+## FUNC_BUILD=2016111704
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
 ## PROGRAM=program-name
 ## INSTANCE_ID=program-instance-name
 ## _DEBUG=yes/no
-## _LOGGER_STDERR=true/false
+## _LOGGER_LOGGER_SILENT=true/false
+## _LOGGER_LOGGER_VERBOSE=true/false
 ## _LOGGER_ERR_ONLY=true/false
 ## _LOGGER_PREFIX="date"/"time"/""
 
+## Logger sets {ERROR|WARN}_ALERT variable when called with critical / error / warn loglevel
+## When called from subprocesses, variable of main process can't be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID
+
+#TODO: Rewrite Logger so we can decide what to send to stdout, stderr and logfile
 #TODO: Windows checks, check sendmail & mailsend
 
 if ! type "$BASH" > /dev/null; then
@@ -26,10 +31,10 @@ MAIL_ALERT_MSG="Execution of $PROGRAM instance $INSTANCE_ID on $(date) has warni
 
 # Environment variables that can be overriden by programs
 _DRYRUN=false
-_SILENT=false
-_VERBOSE=false
+_LOGGER_SILENT=false
+_LOGGER_VERBOSE=false
+_LOGGER_ERR_ONLY=false
 _LOGGER_PREFIX="date"
-_LOGGER_STDERR=false
 if [ "$KEEP_LOGGING" == "" ]; then
         KEEP_LOGGING=1801
 fi
@@ -37,9 +42,6 @@ fi
 # Initial error status, logging 'WARN', 'ERROR' or 'CRITICAL' will enable alerts flags
 ERROR_ALERT=false
 WARN_ALERT=false
-
-# Log from current run
-CURRENT_LOG=""
 
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
 if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
@@ -50,13 +52,13 @@ fi						#__WITH_PARANOIA_DEBUG
 if [ ! "$_DEBUG" == "yes" ]; then
 	_DEBUG=no
 	SLEEP_TIME=.05 # Tested under linux and FreeBSD bash, #TODO tests on cygwin / msys
-	_VERBOSE=false
+	_LOGGER_VERBOSE=false
 else
-	if [ "$SLEEP_TIME" == "" ]; then
-		SLEEP_TIME=1
+	if [ "$SLEEP_TIME" == "" ]; then # Set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
+		SLEEP_TIME=.05
 	fi
 	trap 'TrapError ${LINENO} $?' ERR
-	_VERBOSE=true
+	_LOGGER_VERBOSE=true
 fi
 
 SCRIPT_PID=$$
@@ -103,28 +105,43 @@ function Dummy {
 
 # Sub function of Logger
 function _Logger {
-	local svalue="${1}" # What to log to stdout
-	local lvalue="${2:-$svalue}" # What to log to logfile, defaults to screen value
-	local evalue="${3}" # What to log to stderr
+	local logValue="${1}"		# Log to file
+	local stdValue="${2}"		# Log to screeen
+	local toStderr="${3:-false}"	# Log to stderr instead of stdout
 
-	echo -e "$lvalue" >> "$LOG_FILE"
-	CURRENT_LOG="$CURRENT_LOG"$'\n'"$lvalue"
+	echo -e "$logValue" >> "$LOG_FILE"
+	# Current log file
+	echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
 
-	if [ $_LOGGER_STDERR == true ] && [ "$evalue" != "" ]; then
-		cat <<< "$evalue" 1>&2
-	elif [ "$_SILENT" == false ]; then
-		echo -e "$svalue"
+	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
+		if [ $toStderr == true ]; then
+			# Force stderr color in subshell
+			(>&2 echo -e "$stdValue")
+
+		else
+			echo -e "$stdValue"
+		fi
 	fi
 }
 
 # General log function with log levels:
-# CRITICAL, ERROR, WARN are colored in stdout, prefixed in stderr
-# NOTICE is standard level
-# VERBOSE is only sent to stdout / stderr if _VERBOSE=true
-# DEBUG & PARANOIA_DEBUG are only sent if _DEBUG=yes
+
+# Environment variables
+# _LOGGER_SILENT: Disables any output to stdout & stderr
+# _LOGGER_STD_ERR: Disables any output to stdout except for ALWAYS loglevel
+# _LOGGER_VERBOSE: Allows VERBOSE loglevel messages to be sent to stdout
+
+# Loglevels
+# Except for VERBOSE, all loglevels are ALWAYS sent to log file
+
+# CRITICAL, ERROR, WARN sent to stderr, color depending on level, level also logged
+# NOTICE sent to stdout
+# VERBOSE sent to stdout if _LOGGER_VERBOSE = true
+# ALWAYS is sent to stdout unless _LOGGER_SILENT = true
+# DEBUG & PARANOIA_DEBUG are only sent to stdout if _DEBUG=yes
 function Logger {
 	local value="${1}" # Sentence to log (in double quotes)
-	local level="${2}" # Log level: PARANOIA_DEBUG, DEBUG, VERBOSE, NOTICE, WARN, ERROR, CRITIAL
+	local level="${2}" # Log level
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -135,42 +152,44 @@ function Logger {
 	fi
 
 	if [ "$level" == "CRITICAL" ]; then
-		_Logger "$prefix\e[41m$value\e[0m" "$prefix$level:$value" "$level:$value"
+		_Logger "$prefix($level):$value" "$prefix\e[41m$value\e[0m" true
 		ERROR_ALERT=true
+		# ERROR_ALERT / WARN_ALERT isn't set in main when Logger is called from a subprocess. Need to keep this flag.
+		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 		return
 	elif [ "$level" == "ERROR" ]; then
-		_Logger "$prefix\e[91m$value\e[0m" "$prefix$level:$value" "$level:$value"
+		_Logger "$prefix($level):$value" "$prefix\e[91m$value\e[0m" true
 		ERROR_ALERT=true
+		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
 		return
 	elif [ "$level" == "WARN" ]; then
-		_Logger "$prefix\e[33m$value\e[0m" "$prefix$level:$value" "$level:$value"
+		_Logger "$prefix($level):$value" "$prefix\e[33m$value\e[0m" true
 		WARN_ALERT=true
+		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.warn.$SCRIPT_PID"
 		return
 	elif [ "$level" == "NOTICE" ]; then
 		if [ "$_LOGGER_ERR_ONLY" != true ]; then
-			_Logger "$prefix$value"
+			_Logger "$prefix$value" "$prefix$value"
 		fi
 		return
 	elif [ "$level" == "VERBOSE" ]; then
-		if [ $_VERBOSE == true ]; then
-			_Logger "$prefix$value"
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "$prefix:$value" "$prefix$value"
 		fi
 		return
 	elif [ "$level" == "ALWAYS" ]; then
-		if [ $_SILENT != true ]; then
-			_Logger "$prefix$value" "$prefix$level:$value" "$level:$value"
-		fi
+		_Logger  "$prefix$value" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
 		if [ "$_DEBUG" == "yes" ]; then
-			_Logger "$prefix$value"
+			_Logger "$prefix$value" "$prefix$value"
 			return
 		fi
-	elif [ "$level" == "PARANOIA_DEBUG" ]; then		#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then	#__WITH_PARANOIA_DEBUG
-			_Logger "$prefix$value"			#__WITH_PARANOIA_DEBUG
-			return					#__WITH_PARANOIA_DEBUG
-		fi						#__WITH_PARANOIA_DEBUG
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then		#__WITH_PARANOIA_DEBUG
+			_Logger "$prefix$value" "$prefix$value"		#__WITH_PARANOIA_DEBUG
+			return						#__WITH_PARANOIA_DEBUG
+		fi							#__WITH_PARANOIA_DEBUG
 	else
 		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m"
 		_Logger "Value was: $prefix$value"
@@ -197,7 +216,7 @@ function QuickLogger {
 
 	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
-	if [ $_SILENT == true ]; then
+	if [ $_LOGGER_SILENT == true ]; then
 		_QuickLogger "$value" "log"
 	else
 		_QuickLogger "$value" "stdout"
@@ -260,10 +279,10 @@ function SendAlert {
 
 	__CheckArguments 0-1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
-	local attachment=
-	local attachmentFile=
-	local subject=
-	local body=
+	local attachment
+	local attachmentFile
+	local subject
+	local body
 
 	if [ "$DESTINATION_MAILS" == "" ]; then
 		return 0
@@ -288,7 +307,10 @@ function SendAlert {
 	else
 		attachment=true
 	fi
-	body="$MAIL_ALERT_MSG"$'\n\n'"$CURRENT_LOG"
+	if [ -e "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID" ]; then
+		body="$MAIL_ALERT_MSG"$'\n\n'"$(cat $RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID)"
+	fi
+	exit
 
 	if [ $ERROR_ALERT == true ]; then
 		subject="Error alert for $INSTANCE_ID"
@@ -476,7 +498,7 @@ function TrapError {
 	local line="$1"
 	local code="${2:-1}"
 
-	if [ $_SILENT == false ]; then
+	if [ $_LOGGER_SILENT == false ]; then
 		echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m"
 	fi
 }
@@ -503,7 +525,7 @@ function LoadConfigFile {
 }
 
 function Spinner {
-	if [ $_SILENT == true ] || [ "$_LOGGER_ERR_ONLY" == true ]; then
+	if [ $_LOGGER_SILENT == true ] || [ "$_LOGGER_ERR_ONLY" == true ]; then
 		return 0
 	fi
 
@@ -1022,85 +1044,7 @@ ENDSSH
 		esac
 		Logger "Remote OS: [$remoteOsVar]." "DEBUG"
 	else
-		Logge "Cannot get Remote OS" "CRITICAL"
-	fi
-}
-
-function oldGetRemoteOS {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
-
-	local retval
-	local cmd
-	local remoteOsVar
-
-	if [ "$REMOTE_OPERATION" == "yes" ]; then
-		CheckConnectivity3rdPartyHosts
-		CheckConnectivityRemoteHost
-
-		cmd=$SSH_CMD' "if [ ls --help 2>&1 | grep -i BusyBox > /dev/null ]; then exit 0; else exit 1"'
-		Logger "cmd: $cmd" "DEBUG"
-		eval "$cmd" &
-		WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-0" true $KEEP_LOGGING
-		retval=$?
-		if [ $retval == 0 ]; then
-			remoteOsVar="BusyBox"
-		else
-			cmd=$SSH_CMD' "uname -spio" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
-			Logger "cmd: $cmd" "DEBUG"
-			eval "$cmd" &
-			WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-1" true $KEEP_LOGGING
-			retval=$?
-			if [ $retval != 0 ]; then
-				cmd=$SSH_CMD' "uname -v" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
-				Logger "cmd: $cmd" "DEBUG"
-				eval "$cmd" &
-				WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-2" true $KEEP_LOGGING
-				retval=$?
-				if [ $retval != 0 ]; then
-					cmd=$SSH_CMD' "uname" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
-					Logger "cmd: $cmd" "DEBUG"
-					eval "$cmd" &
-					WaitForTaskCompletion $! 120 240 ${FUNCNAME[0]}"-3" true $KEEP_LOGGING
-					retval=$?
-					if [ $retval != 0 ]; then
-						Logger "Cannot Get remote OS type." "ERROR"
-					fi
-				fi
-			fi
-			remoteOsVar=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID")
-		fi
-
-		case $remoteOsVar in
-			*"Linux"*)
-			REMOTE_OS="Linux"
-			;;
-			*"BSD"*)
-			REMOTE_OS="BSD"
-			;;
-			*"MINGW32"*|*"CYGWIN"*)
-			REMOTE_OS="msys"
-			;;
-			*"Darwin"*)
-			REMOTE_OS="MacOSX"
-			;;
-			*"BusyBox"*)
-			REMOTE_OS="BUSYBOX"
-			;;
-			*"ssh"*|*"SSH"*)
-			Logger "Cannot connect to remote system." "CRITICAL"
-			exit 1
-			;;
-			*)
-			if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#DOC: Undocumented option
-				Logger "Running on unknown remote OS [$remoteOsVar]." "WARN"
-				return
-			fi
-			Logger "Running on remote OS failed. Please report to the author if the OS is not supported." "CRITICAL"
-			Logger "Remote OS said:\n$remoteOsVar" "CRITICAL"
-			exit 1
-		esac
-
-		Logger "Remote OS: [$remoteOsVar]." "DEBUG"
+		Logger "Cannot get Remote OS" "CRITICAL"
 	fi
 }
 
@@ -1124,7 +1068,7 @@ function RunLocalCommand {
 		Logger "Command failed." "ERROR"
 	fi
 
-	if [ $_VERBOSE == true ] || [ $retval -ne 0 ]; then
+	if [ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ]; then
 		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "NOTICE"
 	fi
 
@@ -1159,7 +1103,7 @@ function RunRemoteCommand {
 		Logger "Command failed." "ERROR"
 	fi
 
-	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ] && ([ $_VERBOSE == true ] || [ $retval -ne 0 ])
+	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ] && ([ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ])
 	then
 		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "NOTICE"
 	fi
