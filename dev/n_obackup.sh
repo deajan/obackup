@@ -50,7 +50,6 @@ function TrapQuit {
 		fi
 		Logger "$PROGRAM finished with errors." "ERROR"
 		SendAlert
-		CleanUp
 		exitcode=1
 	elif [ $WARN_ALERT == true ]; then
 		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
@@ -58,12 +57,10 @@ function TrapQuit {
 		fi
 		Logger "$PROGRAM finished with warnings." "WARN"
 		SendAlert
-		CleanUp
 		exitcode=2
 	else
 		RunAfterHook
 		Logger "$PROGRAM finshed without errors." "NOTICE"
-		CleanUp
 		exitcode=0
 	fi
 
@@ -71,6 +68,7 @@ function TrapQuit {
 		rm -f "$RUN_DIR/$PROGRAM.$INSTANCE_ID"
 	fi
 
+	CleanUp
 	KillChilds $$ > /dev/null 2>&1
 	exit $exitcode
 }
