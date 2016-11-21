@@ -1,6 +1,6 @@
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016111901
+## FUNC_BUILD=2016112103
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -410,13 +410,18 @@ function SendEmail {
 	fi
 
 	if type mail > /dev/null 2>&1 ; then
-		if [ "$mail_no_attachment" -eq 0 ] && $(type -p mail) -V | grep "GNU" > /dev/null; then
+		# We need to detect which version of mail is installed
+		if ! $(type -p mail) -V > /dev/null 2>&1; then
+			# This may be MacOS mail program
+			attachment_command=""
+		elif [ "$mail_no_attachment" -eq 0 ] && $(type -p mail) -V | grep "GNU" > /dev/null; then
 			attachment_command="-A $attachment"
 		elif [ "$mail_no_attachment" -eq 0 ] && $(type -p mail) -V > /dev/null; then
 			attachment_command="-a$attachment"
 		else
 			attachment_command=""
 		fi
+
 		echo "$message" | $(type -p mail) $attachment_command -s "$subject" "$destinationMails"
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p mail) with attachments !!!" "WARN"
@@ -528,30 +533,30 @@ function Spinner {
 		return 0
 	fi
 
-	case $toggle
+	case $_OFUNCTIONS_SPINNER_TOGGLE
 	in
 	1)
 	echo -n " \ "
 	echo -ne "\r"
-	toggle="2"
+	_OFUNCTIONS_SPINNER_TOGGLE=2
 	;;
 
 	2)
 	echo -n " | "
 	echo -ne "\r"
-	toggle="3"
+	_OFUNCTIONS_SPINNER_TOGGLE=3
 	;;
 
 	3)
 	echo -n " / "
 	echo -ne "\r"
-	toggle="4"
+	_OFUNCTIONS_SPINNER_TOGGLE=4
 	;;
 
 	*)
 	echo -n " - "
 	echo -ne "\r"
-	toggle="1"
+	_OFUNCTIONS_SPINNER_TOGGLE=1
 	;;
 	esac
 }
@@ -984,6 +989,10 @@ function GetLocalOS {
 function GetRemoteOS {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
+	if [ "$REMOTE_OPERATION" != "yes" ]; then
+		return 0
+	fi
+
 	local remoteOsVar
 
 $SSH_CMD bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
@@ -1160,7 +1169,7 @@ function CheckConnectivityRemoteHost {
 
 	local retval
 
-	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug
+	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug		#__WITH_PARANOIA_DEBUG
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
@@ -1171,7 +1180,7 @@ function CheckConnectivityRemoteHost {
 				return $retval
 			fi
 		fi
-	fi
+	fi											#__WITH_PARANOIA_DEBUG
 }
 
 function CheckConnectivity3rdPartyHosts {
@@ -1180,7 +1189,7 @@ function CheckConnectivity3rdPartyHosts {
 	local remote3rdPartySuccess
 	local retval
 
-	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug
+	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug		#__WITH_PARANOIA_DEBUG
 
 		if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]; then
 			remote3rdPartySuccess=false
@@ -1203,7 +1212,7 @@ function CheckConnectivity3rdPartyHosts {
 				return 0
 			fi
 		fi
-	fi
+	fi											#__WITH_PARANOIA_DEBUG
 }
 
 #__BEGIN_WITH_PARANOIA_DEBUG
@@ -1377,66 +1386,12 @@ function PreInit {
 		COMMAND_SUDO=""
 	fi
 
-	 ## Set rsync default arguments
-	RSYNC_ARGS="-rltD"
-	if [ "$_DRYRUN" == true ]; then
-		RSYNC_DRY_ARG="-n"
-		DRY_WARNING="/!\ DRY RUN "
-	else
-		RSYNC_DRY_ARG=""
-	fi
-
-	RSYNC_ATTR_ARGS=""
-	if [ "$PRESERVE_PERMISSIONS" != "no" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -p"
-	fi
-	if [ "$PRESERVE_OWNER" != "no" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -o"
-	fi
-	if [ "$PRESERVE_GROUP" != "no" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -g"
-	fi
-	if [ "$PRESERVE_ACL" == "yes" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
-	fi
-	if [ "$PRESERVE_XATTR" == "yes" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -X"
-	fi
-	if [ "$RSYNC_COMPRESS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -z"
-	fi
-	if [ "$COPY_SYMLINKS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -L"
-	fi
-	if [ "$KEEP_DIRLINKS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -K"
-	fi
-	if [ "$PRESERVE_HARDLINKS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -H"
-	fi
-	if [ "$CHECKSUM" == "yes" ]; then
-		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --checksum"
-	fi
-	if [ "$BANDWIDTH" != "" ] && [ "$BANDWIDTH" != "0" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
-	fi
-
-	if [ "$PARTIAL" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
-		RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
-	fi
-
-	if [ "$DELTA_COPIES" != "no" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --no-whole-file"
-	else
-		RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
-	fi
-
-	 ## Set compression executable and extension
+	## Set compression executable and extension
 	if [ "$(IsInteger $COMPRESSION_LEVEL)" -eq 0 ]; then
 		COMPRESSION_LEVEL=3
 	fi
 
+	#TODO: Remote OS isn't defined yet
 	## Busybox fix (Termux xz command doesn't support compression at all)
 	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$REMOTE_OS" == "Busybox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$REMOTE_OS" == "Android" ]; then
 		compressionString=""
@@ -1539,13 +1494,6 @@ function InitLocalOSSettings {
 function InitRemoteOSSettings {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	## MacOSX does not use the -E parameter like Linux or BSD does (-E is mapped to extended attrs instead of preserve executability)
-	if [ "$PRESERVE_EXECUTABILITY" != "no" ];then
-		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
-			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -E"
-		fi
-	fi
-
 	if [ "$REMOTE_OS" == "msys" ]; then
 		REMOTE_FIND_CMD=$(dirname $BASH)/find
 	else
@@ -1561,6 +1509,70 @@ function InitRemoteOSSettings {
 		REMOTE_STAT_CTIME_MTIME_CMD="stat -c \\\"%n;%Z;%Y\\\""
 	fi
 
+}
+
+function InitRsyncSettings {
+	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+
+	## Set rsync default arguments
+	RSYNC_ARGS="-rltD"
+	if [ "$_DRYRUN" == true ]; then
+		RSYNC_DRY_ARG="-n"
+		DRY_WARNING="/!\ DRY RUN "
+	else
+		RSYNC_DRY_ARG=""
+	fi
+
+	RSYNC_ATTR_ARGS=""
+	if [ "$PRESERVE_PERMISSIONS" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -p"
+	fi
+	if [ "$PRESERVE_OWNER" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -o"
+	fi
+	if [ "$PRESERVE_GROUP" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -g"
+	fi
+	if [ "$PRESERVE_EXECUTABILITY" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" --executability"
+	fi
+	if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
+		if [ "$PRESERVE_ACL" == "yes" ]; then
+			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
+		fi
+		if [ "$PRESERVE_XATTR" == "yes" ]; then
+			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -X"
+		fi
+	fi
+	if [ "$RSYNC_COMPRESS" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" -z"
+	fi
+	if [ "$COPY_SYMLINKS" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" -L"
+	fi
+	if [ "$KEEP_DIRLINKS" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" -K"
+	fi
+	if [ "$PRESERVE_HARDLINKS" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" -H"
+	fi
+	if [ "$CHECKSUM" == "yes" ]; then
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --checksum"
+	fi
+	if [ "$BANDWIDTH" != "" ] && [ "$BANDWIDTH" != "0" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
+	fi
+
+	if [ "$PARTIAL" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
+		RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
+	fi
+
+	if [ "$DELTA_COPIES" != "no" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" --no-whole-file"
+	else
+		RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
+	fi
 }
 
 ## IFS debug function

@@ -1719,6 +1719,7 @@ if [ "$REMOTE_OPERATION" == "yes" ]; then
 	GetRemoteOS
 	InitRemoteOSSettings
 fi
+InitRsyncSettings
 
 if [ $no_maxtime == true ]; then
 	SOFT_MAX_EXEC_TIME_DB_TASK=0
