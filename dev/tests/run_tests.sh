@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016102301
+## obackup basic tests suite 2016113001
 
 #TODO: Must recreate files before each test set
+#TODO: Improve this by backcopying from osync tests
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -24,7 +25,9 @@ OLD_CONF="old.conf"
 TMP_OLD_CONF="tmp.old.conf"
 
 OBACKUP_EXECUTABLE="obackup.sh"
+OBACKUP_DEV_EXECUTABLE="dev/n_obackup.sh"
 OBACKUP_UPGRADE="upgrade-v1.x-2.1x.sh"
+TMP_FILE="$DEV_DIR/tmp"
 
 SOURCE_DIR="${HOME}/obackup-testdata"
 TARGET_DIR="${HOME}/obackup-storage"
@@ -561,14 +564,13 @@ function test_EncryptPushRun () {
 }
 
 function test_WaitForTaskCompletion () {
-	# Tests if wait for task completion works correctly
-
+	local pids
 	# Standard wait
 	sleep 1 &
 	pids="$!"
 	sleep 2 &
 	pids="$pids;$!"
-	WaitForTaskCompletion $pids 0 0 ${FUNCNAME[0]} true 0
+	WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
 	assertEquals "WaitForTaskCompletion test 1" "0" $?
 
 	# Standard wait with warning
@@ -577,7 +579,7 @@ function test_WaitForTaskCompletion () {
 	sleep 5 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 3 0 ${FUNCNAME[0]} true 0
+	WaitForTaskCompletion $pids 3 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
 	assertEquals "WaitForTaskCompletion test 2" "0" $?
 
 	# Both pids are killed
@@ -586,7 +588,7 @@ function test_WaitForTaskCompletion () {
 	sleep 5 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 0 2 ${FUNCNAME[0]} true 0
+	WaitForTaskCompletion $pids 0 2 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
 	assertEquals "WaitForTaskCompletion test 3" "2" $?
 
 	# One of two pids are killed
@@ -595,7 +597,7 @@ function test_WaitForTaskCompletion () {
 	sleep 10 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 0 3 ${FUNCNAME[0]} true 0
+	WaitForTaskCompletion $pids 0 3 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
 	assertEquals "WaitForTaskCompletion test 4" "1" $?
 
 	# Count since script begin, the following should output two warnings and both pids should get killed
@@ -604,12 +606,14 @@ function test_WaitForTaskCompletion () {
 	sleep 20 &
 	pids="$pids;$!"
 
-	WaitForTaskCompletion $pids 3 5 ${FUNCNAME[0]} false 0
+	WaitForTaskCompletion $pids 3 5 $SLEEP_TIME $KEEP_LOGGING false true false ${FUNCNAME[0]}
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
 
 function test_ParallelExec () {
-	# Test if parallelExec works correctly
+	local cmd
+
+	# Test if parallelExec works correctly in array mode
 
 	cmd="sleep 2;sleep 2;sleep 2;sleep 2"
 	ParallelExec 4 "$cmd"
@@ -622,6 +626,45 @@ function test_ParallelExec () {
 	cmd="sleep 4;du /none;sleep 3;du /none;sleep 2"
 	ParallelExec 3 "$cmd"
 	assertEquals "ParallelExec test 3" "2" $?
+
+	# Test if parallelExec works correctly in file mode
+
+	echo "sleep 2" > "$TMP_FILE"
+	echo "sleep 2" >> "$TMP_FILE"
+	echo "sleep 2" >> "$TMP_FILE"
+	echo "sleep 2" >> "$TMP_FILE"
+	ParallelExec 4 "$TMP_FILE" true
+	assertEquals "ParallelExec test 4" "0" $?
+
+	echo "sleep 2" > "$TMP_FILE"
+	echo "du /nome" >> "$TMP_FILE"
+	echo "sleep 2" >> "$TMP_FILE"
+	ParallelExec 2 "$TMP_FILE" true
+	assertEquals "ParallelExec test 5" "1" $?
+
+	echo "sleep 4" > "$TMP_FILE"
+	echo "du /none" >> "$TMP_FILE"
+	echo "sleep 3" >> "$TMP_FILE"
+	echo "du /none" >> "$TMP_FILE"
+	echo "sleep 2" >> "$TMP_FILE"
+	ParallelExec 3 "$TMP_FILE" true
+	assertEquals "ParallelExec test 6" "2" $?
+
+	#function ParallelExec $numberOfProcesses $commandsArg $readFromFile $softTime $HardTime $sleepTime $keepLogging $counting $Spinner $noError $callerName
+	# Test if parallelExec works correctly in array mode with full  time control
+
+	cmd="sleep 5;sleep 5;sleep 5;sleep 5;sleep 5"
+	ParallelExec 4 "$cmd" false 1 0 .05 3600 true true false ${FUNCNAME[0]}
+	assertEquals "ParallelExec full test 1" "0" $?
+
+	cmd="sleep 2;du /none;sleep 2;sleep 2;sleep 4"
+	ParallelExec 2 "$cmd" false 0 0 .1 2 true false false ${FUNCNAME[0]}
+	assertEquals "ParallelExec full test 2" "1" $?
+
+	cmd="sleep 4;du /none;sleep 3;du /none;sleep 2"
+	ParallelExec 3 "$cmd" false 1 2 .05 7000 true true false ${FUNCNAME[0]}
+	assertNotEquals "ParallelExec full test 3" "0" $?
+
 }
 
 function test_UpgradeConfPullRun () {
