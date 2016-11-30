@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_VERSION=2016102301
-PROGRAM_BUILD=2016091402
+PROGRAM_BUILD=2016113001
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -313,7 +313,7 @@ function UpdateConfigHeader {
 	local config_file="${1}"
 
 	# "onfig file rev" to deal with earlier variants of the file
-        sed -i'.tmp' '/onfig file rev/c\###### '$SUBPROGRAM' config file rev '$CONFIG_FILE_VERSION' '$NEW_PROGRAM_VERSION "$config_file"
+        sed -i'.tmp' 's/.*onfig file rev.*/##### '$SUBPROGRAM' config file rev '$CONFIG_FILE_VERSION' '$NEW_PROGRAM_VERSION'/' "$config_file"
 
 	rm -f "$config_file.tmp"
 }
