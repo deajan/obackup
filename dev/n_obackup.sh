@@ -1457,17 +1457,15 @@ function RotateBackups {
 	fi
 }
 
-function SetTraps {
-	trap TrapStop INT QUIT TERM HUP
-	trap TrapQuit EXIT
-}
-
 function Init {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local uri
 	local hosturiandpath
 	local hosturi
+
+	trap TrapStop INT QUIT TERM HUP
+	trap TrapQuit EXIT
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
         if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
@@ -1671,7 +1669,6 @@ function GetCommandlineArguments {
 	done
 }
 
-SetTraps
 GetCommandlineArguments "$@"
 if [ "$_DECRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
