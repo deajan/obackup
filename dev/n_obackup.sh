@@ -45,10 +45,10 @@ function TrapQuit {
 	local exitcode
 
         # Get ERROR / WARN alert flags from subprocesses that call Logger
-        if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID" ]; then
+        if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
                 WARN_ALERT=1
         fi
-        if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID" ]; then
+        if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
                 ERROR_ALERT=1
         fi
 
@@ -225,7 +225,7 @@ function _ListDatabasesLocal {
 
 	local sqlCmd=
 
-        sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+        sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
         Logger "cmd: $sqlCmd" "DEBUG"
         eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
@@ -233,8 +233,8 @@ function _ListDatabasesLocal {
                 Logger "Listing databases succeeded." "NOTICE"
         else
                 Logger "Listing databases failed." "ERROR"
-                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
                 return 1
         fi
@@ -248,7 +248,7 @@ function _ListDatabasesRemote {
 
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
-        sqlCmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID\" 2>&1"
+        sqlCmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
         Logger "cmd: $sqlCmd" "DEBUG"
         eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
@@ -256,8 +256,8 @@ function _ListDatabasesRemote {
                 Logger "Listing databases succeeded." "NOTICE"
         else
                 Logger "Listing databases failed." "ERROR"
-                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
                 return 1
         fi
@@ -285,14 +285,14 @@ function ListDatabases {
 		if [ $? != 0 ]; then
 			outputFile=""
 		else
-			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesLocal.$SCRIPT_PID"
+			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesLocal.$SCRIPT_PID.$TSTAMP"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_ListDatabasesRemote
 		if [ $? != 0 ]; then
 			outputFile=""
 		else
-			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesRemote.$SCRIPT_PID"
+			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesRemote.$SCRIPT_PID.$TSTAMP"
 		fi
 	fi
 
@@ -349,17 +349,17 @@ function _ListRecursiveBackupDirectoriesLocal {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		# No sudo here, assuming you should have all necessary rights for local checks
-		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 		if  [ $? != 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
-				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
-				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			retval=1
 		else
@@ -382,17 +382,17 @@ function _ListRecursiveBackupDirectoriesRemote {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		#TODO(med): Uses local home directory for remote lookup...
-		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd" &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 		if  [ $? != 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
-				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
-				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			retval=1
 		else
@@ -416,14 +416,14 @@ function ListRecursiveBackupDirectories {
 		if [ $? != 0 ]; then
 			output_file=""
 		else
-			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID"
+			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID.$TSTAMP"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_ListRecursiveBackupDirectoriesRemote
 		if [ $? != 0 ]; then
 			output_file=""
 		else
-			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID"
+			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
 		fi
 	fi
 
@@ -479,25 +479,25 @@ function _GetDirectoriesSizeLocal {
 
 	# No sudo here, assuming you should have all the necessary rights
 	# This is not pretty, but works with all supported systems
-	cmd="du -cs $dir_list | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	cmd="du -cs $dir_list | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
-        if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
+        if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
                 Logger "Could not get files size for some or all directories." "ERROR"
-                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
         else
                 Logger "File size fetched successfully." "NOTICE"
         fi
 
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-                TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+                TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
 		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
@@ -514,24 +514,24 @@ function _GetDirectoriesSizeRemote {
 
 	#TODO(med): check if heredoc needed for compat
 	# Error output is different from stdout because not all files in list may fail at once
-	cmd=$SSH_CMD' '$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
+	cmd=$SSH_CMD' '$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
-        if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
+        if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
                 Logger "Could not get files size for some or all directories." "ERROR"
-                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+                if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
         else
                 Logger "File size fetched successfully." "NOTICE"
 	fi
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
 		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
@@ -562,11 +562,11 @@ function _CreateDirectoryLocal {
 
 	if [ ! -d "$dir_to_create" ]; then
 		# No sudo, you should have all necessary rights
-                mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1
+                mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1
                 if [ $? != 0 ]; then
                         Logger "Cannot create directory [$dir_to_create]" "CRITICAL"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
-				Logger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
                         return 1
                 fi
@@ -582,13 +582,13 @@ function _CreateDirectoryRemote {
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
 	#TODO: compat bash freebsd 11 checks
-        cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir -p \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2>&1'
+        cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir -p \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP' 2>&1'
         Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
                 Logger "Cannot create remote directory [$dir_to_create]." "CRITICAL"
-                Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+                Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 return 1
         fi
 }
@@ -646,14 +646,14 @@ function GetDiskSpaceLocal {
         if [ -d "$path_to_check" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
-		$DF_CMD "$path_to_check" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		$DF_CMD "$path_to_check" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
         	if [ $? != 0 ]; then
         		DISK_SPACE=0
 			Logger "Cannot get disk space in [$path_to_check] on local system." "ERROR"
-			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
         	else
-                	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
-                	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
+                	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
+                	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
 			if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
 				DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
 			fi
@@ -672,18 +672,18 @@ function GetDiskSpaceRemote {
 	local cmd
 
 	#TODO(med): if -d will fail if cannot traverse above directories. Consider using heredoc here.
-	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' '$DF_CMD' \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' '$DF_CMD' \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
         	DISK_SPACE=0
 		Logger "Cannot get disk space in [$path_to_check] on remote system." "ERROR"
-		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		return 1
         else
-               	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
-               	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
+               	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
+               	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
 		if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
 			DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
 		fi
@@ -843,8 +843,8 @@ function _BackupDatabaseLocalToLocal {
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
 	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sqlCmd" "DEBUG"
@@ -855,8 +855,8 @@ function _BackupDatabaseLocalToLocal {
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
         fi
@@ -885,8 +885,8 @@ function _BackupDatabaseLocalToRemote {
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
 	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sqlCmd" "DEBUG"
@@ -897,8 +897,8 @@ function _BackupDatabaseLocalToRemote {
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
         fi
@@ -927,8 +927,8 @@ function _BackupDatabaseRemoteToLocal {
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
-	local sqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+	local drySqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP'"'
+	local sqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP'"'
 
 	if [ $_DRYRUN == false ]; then
 		Logger "cmd: $sqlCmd" "DEBUG"
@@ -939,8 +939,8 @@ function _BackupDatabaseRemoteToLocal {
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
         fi
@@ -1039,10 +1039,10 @@ function EncryptFiles {
 		fi
 
 		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
-		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot encrypt [$sourceFile]." "ERROR"
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 			errorCounter=$((errorCounter+1))
 		else
 			successCounter=$((successCounter+1))
@@ -1090,10 +1090,10 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
-			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
+			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 			errorCounter=$((errorCounter+1))
 		else
 			successCounter=$((successCounter+1))
@@ -1143,19 +1143,19 @@ function Rsync {
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
 		_CreateDirectoryLocal "$fileStoragePath"
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_CreateDirectoryLocal "$fileStoragePath"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		backupDirectory=$(EscapeSpaces "$backupDirectory")
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		fileStoragePath=$(EscapeSpaces "$fileStoragePath")
 		_CreateDirectoryRemote "$fileStoragePath"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backupDirectory\" \"$REMOTE_USER@$REMOTE_HOST:$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backupDirectory\" \"$REMOTE_USER@$REMOTE_HOST:$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	fi
 
 	Logger "cmd: $rsyncCmd" "DEBUG"
@@ -1164,7 +1164,7 @@ function Rsync {
 	retval=$?
 	if [ $retval != 0 ]; then
 		Logger "Failed to backup [$backupDirectory] to [$fileStoragePath]." "ERROR"
-		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
 	fi
@@ -1336,7 +1336,7 @@ function _RotateBackupsRemote {
 	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 #TODO(high): add _LOGGER_* env variables here
-$SSH_CMD env PROGRAM=$PROGRAM env REMOTE_OPERATION=$REMOTE_OPERATION env _DEBUG=$_DEBUG env rotate_copies=$rotate_copies env backup_path="$backup_path" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
+$SSH_CMD env PROGRAM=$PROGRAM env REMOTE_OPERATION=$REMOTE_OPERATION env _DEBUG=$_DEBUG env rotate_copies=$rotate_copies env backup_path="$backup_path" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
 
 #TODO(high): replace this with include statements
 function _RemoteLogger {
@@ -1441,7 +1441,7 @@ ENDSSH
 	WaitForTaskCompletion $! 1800 0 $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
                 Logger "Could not rotate backups in [$backup_path]." "ERROR"
-                Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+                Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
         else
                 Logger "Remote rotation succeed." "NOTICE"
         fi        ## Need to add a trivial sleep time to give ssh time to log to local file
