@@ -6,7 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-CONFIG_FILE_VERSION=2016102301
+CONFIG_FILE_VERSION=2016121901
 PROGRAM_BUILD=2016113001
 
 if ! type "$BASH" > /dev/null; then
@@ -61,6 +61,7 @@ RSYNC_EXCLUDE_PATTERN
 RSYNC_INCLUDE_FROM
 RSYNC_EXCLUDE_FROM
 PATH_SEPARATOR_CHAR
+RSYNC_OPTIONAL_ARGS
 PRESERVE_PERMISSIONS
 PRESERVE_OWNER
 PRESERVE_GROUP
@@ -145,6 +146,7 @@ include
 ''
 ''
 \;
+''
 yes
 yes
 yes
@@ -217,7 +219,7 @@ function LoadConfigFile {
 function RewriteOldConfigFiles {
 	local config_file="${1}"
 
-	if ((! grep "BACKUP_ID=" $config_file > /dev/null) && ( ! grep "INSTANCE_ID=" $config_file > /dev/null)); then
+	if ! grep "BACKUP_ID=" $config_file > /dev/null && ! grep "INSTANCE_ID=" $config_file > /dev/null; then
 		echo "File [$config_file] does not seem to be a obackup config file."
 		exit 1
 	fi
