@@ -9,33 +9,26 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016113001
+PROGRAM_BUILD=2016120401
 IS_STABLE=no
 
 #### MINIMAL-FUNCTION-SET BEGIN ####
 
-## FUNC_BUILD=2016112902
+_OFUNCTIONS_VERSION=2.0
+_OFUNCTIONS_BUILD=2016120401
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
 ## PROGRAM=program-name
 ## INSTANCE_ID=program-instance-name
 ## _DEBUG=yes/no
-## _LOGGER_LOGGER_SILENT=true/false
-## _LOGGER_LOGGER_VERBOSE=true/false
+## _LOGGER_SILENT=true/false
+## _LOGGER_VERBOSE=true/false
 ## _LOGGER_ERR_ONLY=true/false
 ## _LOGGER_PREFIX="date"/"time"/""
 
 ## Logger sets {ERROR|WARN}_ALERT variable when called with critical / error / warn loglevel
 ## When called from subprocesses, variable of main process can't be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID
-
-## META ISSUES
-##
-## Updated _LOGGER_STDERR
-## Updated WaitForTaskCompletion syntax
-## Updated ParallelExec syntax
-## SendEmail WinNT10 & msys are two totally different beasts. Document in sync.conf and host_backup.conf
-
 
 if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -204,11 +197,11 @@ function Logger {
 			_Logger "$prefix$value" "$prefix$value"
 			return
 		fi
-	elif [ "$level" == "PARANOIA_DEBUG" ]; then			#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then		#__WITH_PARANOIA_DEBUG
-			_Logger "$prefix$value" "$prefix$value"		#__WITH_PARANOIA_DEBUG
-			return						#__WITH_PARANOIA_DEBUG
-		fi							#__WITH_PARANOIA_DEBUG
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "$prefix$value" "$prefix\e[35m$value\e[0m"	#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
 	else
 		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m"
 		_Logger "Value was: $prefix$value"
@@ -383,8 +376,7 @@ function SendEmail {
 	local smtpUser="${9}"
 	local smtpPassword="${10}"
 
-	# CheckArguments will report a warning that can be ignored if used in Windows with paranoia debug enabled
-	__CheckArguments 4 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 3-10 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
 	local mail_no_attachment=
 	local attachment_command=
@@ -423,7 +415,8 @@ function SendEmail {
 	fi
 
 	if type mutt > /dev/null 2>&1 ; then
-		echo "$message" | $(type -p mutt) -x -s "$subject" "$destinationMails" $attachment_command
+		# We need to replace spaces with comma in order for mutt to be able to process multiple destinations
+		echo "$message" | $(type -p mutt) -x -s "$subject" "${destinationMails// /,}" $attachment_command
 		if [ $? != 0 ]; then
 			Logger "Cannot send mail via $(type -p mutt) !!!" "WARN"
 		else
@@ -591,8 +584,8 @@ function joinString {
 }
 
 # Time control function for background processes, suitable for multiple synchronous processes
-# Fills a global variable called WAIT_FOR_TASK_COMPLETION that contains list of failed pids in format pid1:result1;pid2:result2
-# Warning: Don't imbricate this function into another run if you plan to use the global variable output
+# Fills a global variable called WAIT_FOR_TASK_COMPLETION_$callerName that contains list of failed pids in format pid1:result1;pid2:result2
+# Also sets a global variable called HARD_MAX_EXEC_TIME_REACHED_$callerName to true if hardMaxTime is reached
 
 # Standard wait $! emulation would be WaitForTaskCompletion $! 0 0 1 0 true false true false "${FUNCNAME[0]}"
 
@@ -634,7 +627,9 @@ function WaitForTaskCompletion {
 	IFS=';' read -a pidsArray <<< "$pids"
 	pidCount=${#pidsArray[@]}
 
-	WAIT_FOR_TASK_COMPLETION=""
+	# Set global var default
+	eval "WAIT_FOR_TASK_COMPLETION_$callerName=\"\""
+	eval "HARD_MAX_EXEC_TIME_REACHED_$callerName=false"
 
 	while [ ${#pidsArray[@]} -gt 0 ]; do
 		newPidsArray=()
@@ -681,6 +676,7 @@ function WaitForTaskCompletion {
 			if [ $noErrorLog != true ]; then
 				SendAlert true
 			fi
+			eval "HARD_MAX_EXEC_TIME_REACHED_$callerName=true"
 			return $errorcount
 		fi
 
@@ -699,10 +695,11 @@ function WaitForTaskCompletion {
 					if [ $retval -ne 0 ]; then
 						errorcount=$((errorcount+1))
 						Logger "${FUNCNAME[0]} called by [$callerName] finished monitoring [$pid] with exitcode [$retval]." "DEBUG"
-						if [ "$WAIT_FOR_TASK_COMPLETION" == "" ]; then
-							WAIT_FOR_TASK_COMPLETION="$pid:$retval"
+						# Welcome to variable variable bash hell
+						if [ "$(eval echo \"\$WAIT_FOR_TASK_COMPLETION_$callerName\")" == "" ]; then
+							eval "WAIT_FOR_TASK_COMPLETION_$callerName=\"$pid:$retval\""
 						else
-							WAIT_FOR_TASK_COMPLETION=";$pid:$retval"
+							eval "WAIT_FOR_TASK_COMPLETION_$callerName=\";$pid:$retval\""
 						fi
 					fi
 				fi
@@ -734,6 +731,7 @@ function WaitForTaskCompletion {
 # Returns the number of non zero exit codes from commands
 # Use cmd1;cmd2;cmd3 syntax for small sets, use file for large command sets
 # Only 2 first arguments are mandatory
+# Sets a global variable called HARD_MAX_EXEC_TIME_REACHED to true if hardMaxTime is reached
 
 function ParallelExec {
 	local numberOfProcesses="${1}" 		# Number of simultaneous commands to run
@@ -768,6 +766,8 @@ function ParallelExec {
 	local commandsArrayPid
 
 	local hasPids=false # Are any valable pids given to function ?		#__WITH_PARANOIA_DEBUG
+
+	HARD_MAX_EXEC_TIME_REACHED=false
 
 	if [ $counting == true ]; then 	# If counting == false _SOFT_ALERT should be a global value so no more than one soft alert is shown
 		local _SOFT_ALERT=false # Does a soft alert need to be triggered, if yes, send an alert once
@@ -828,10 +828,10 @@ function ParallelExec {
 			done
 			if [ $noErrorLog != true ]; then
 				SendAlert true
-			else
-				# Return the number of commands that haven't run / finished run
-				return $(($commandCount - $counter + ${#pidsArray[@]}))
 			fi
+			HARD_MAX_EXEC_TIME_REACHED=true
+			# Return the number of commands that haven't run / finished run
+			return $(($commandCount - $counter + ${#pidsArray[@]}))
 		fi
 
 		while [ $counter -lt "$commandCount" ] && [ ${#pidsArray[@]} -lt $numberOfProcesses ]; do
@@ -1080,7 +1080,7 @@ function GetLocalOS {
 		LOCAL_OS="BusyBox"
 		;;
 		*)
-		if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#TODO(doc): Undocumented option
+		if [ "$IGNORE_OS_TYPE" == "yes" ]; then
 			Logger "Running on unknown local OS [$localOsVar]." "WARN"
 			return
 		fi
@@ -1370,15 +1370,13 @@ function __CheckArguments {
 			IFS='-' read minArgs maxArgs <<< "$numberOfArguments"
 		fi
 
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then
-			Logger "Entering function [$functionName]." "DEBUG"
-		fi
+		Logger "Entering function [$functionName]." "PARANOIA_DEBUG"
 
 		if ! ([ $countedArguments -ge $minArgs ] && [ $countedArguments -le $maxArgs ]); then
 			Logger "Function $functionName may have inconsistent number of arguments. Expected min: $minArgs, max: $maxArgs, count: $countedArguments, bash seen: $numberOfGivenArguments. see log file." "ERROR"
 			Logger "Arguments passed: $argList" "ERROR"
 		else
-			Logger "Arguments passed: $argList" "VERBOSE"
+			Logger "Arguments passed: $argList" "PARANOIA_DEBUG"
 		fi
 	fi
 }
@@ -1398,13 +1396,13 @@ function RsyncPatternsAdd {
 	while [ -n "$rest" ]
 	do
 		# Take the string until first occurence until $PATH_SEPARATOR_CHAR
-		str=${rest%%;*} #TODO: replace ; with $PATH_SEPARATOR_CHAR
+		str="${rest%%$PATH_SEPARATOR_CHAR*}"
 		# Handle the last case
 		if [ "$rest" = "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
 			rest=
 		else
 			# Cut everything before the first occurence of $PATH_SEPARATOR_CHAR
-			rest=${rest#*$PATH_SEPARATOR_CHAR}
+			rest="${rest#*$PATH_SEPARATOR_CHAR}"
 		fi
 			if [ "$RSYNC_PATTERNS" == "" ]; then
 			RSYNC_PATTERNS="--"$patternType"=\"$str\""
@@ -1508,49 +1506,6 @@ function PreInit {
 	if [ "$(IsInteger $COMPRESSION_LEVEL)" -eq 0 ]; then
 		COMPRESSION_LEVEL=3
 	fi
-
-	#TODO: Remote OS isn't defined yet
-	## Busybox fix (Termux xz command doesn't support compression at all)
-	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$REMOTE_OS" == "Busybox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$REMOTE_OS" == "Android" ]; then
-		compressionString=""
-		if type gzip > /dev/null 2>&1
-		then
-			COMPRESSION_PROGRAM="| gzip -c$compressionString"
-			COMPRESSION_EXTENSION=.gz
-			# obackup specific
-		else
-			COMPRESSION_PROGRAM=
-			COMPRESSION_EXTENSION=
-		fi
-	else
-		compressionString=" -$COMPRESSION_LEVEL"
-
-		if type xz > /dev/null 2>&1
-		then
-			COMPRESSION_PROGRAM="| xz -c$compressionString"
-			COMPRESSION_EXTENSION=.xz
-		elif type lzma > /dev/null 2>&1
-		then
-			COMPRESSION_PROGRAM="| lzma -c$compressionString"
-			COMPRESSION_EXTENSION=.lzma
-		elif type pigz > /dev/null 2>&1
-		then
-			COMPRESSION_PROGRAM="| pigz -c$compressionString"
-			COMPRESSION_EXTENSION=.gz
-			# obackup specific
-			COMPRESSION_OPTIONS=--rsyncable
-		elif type gzip > /dev/null 2>&1
-		then
-			COMPRESSION_PROGRAM="| gzip -c$compressionString"
-			COMPRESSION_EXTENSION=.gz
-			# obackup specific
-			COMPRESSION_OPTIONS=--rsyncable
-		else
-			COMPRESSION_PROGRAM=
-			COMPRESSION_EXTENSION=
-		fi
-	fi
-	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 }
 
 function PostInit {
@@ -1573,7 +1528,7 @@ function PostInit {
 	fi
 }
 
-function InitLocalOSSettings {
+function InitLocalOSDependingSettings {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	## If running under Msys, some commands do not run the same way
@@ -1609,7 +1564,7 @@ function InitLocalOSSettings {
 	fi
 }
 
-function InitRemoteOSSettings {
+function InitRemoteOSDependingSettings {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$REMOTE_OS" == "msys" ]; then
@@ -1626,11 +1581,6 @@ function InitRemoteOSSettings {
 		REMOTE_STAT_CMD="stat --format %y"
 		REMOTE_STAT_CTIME_MTIME_CMD="stat -c \\\"%n;%Z;%Y\\\""
 	fi
-
-}
-
-function InitRsyncSettings {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	## Set rsync default arguments
 	RSYNC_ARGS="-rltD"
@@ -1693,6 +1643,48 @@ function InitRsyncSettings {
 	else
 		RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
 	fi
+
+	## Busybox fix (Termux xz command doesn't support compression at all)
+	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$REMOTE_OS" == "Busybox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$REMOTE_OS" == "Android" ]; then
+		compressionString=""
+		if type gzip > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| gzip -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+		else
+			COMPRESSION_PROGRAM=
+			COMPRESSION_EXTENSION=
+		fi
+	else
+		compressionString=" -$COMPRESSION_LEVEL"
+
+		if type xz > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| xz -c$compressionString"
+			COMPRESSION_EXTENSION=.xz
+		elif type lzma > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| lzma -c$compressionString"
+			COMPRESSION_EXTENSION=.lzma
+		elif type pigz > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| pigz -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+			COMPRESSION_OPTIONS=--rsyncable
+		elif type gzip > /dev/null 2>&1
+		then
+			COMPRESSION_PROGRAM="| gzip -c$compressionString"
+			COMPRESSION_EXTENSION=.gz
+			# obackup specific
+			COMPRESSION_OPTIONS=--rsyncable
+		else
+			COMPRESSION_PROGRAM=
+			COMPRESSION_EXTENSION=
+		fi
+	fi
+	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 }
 
 ## IFS debug function
@@ -1769,7 +1761,7 @@ function TrapQuit {
 		exitcode=2
 	else
 		RunAfterHook
-		Logger "$PROGRAM finshed without errors." "NOTICE"
+		Logger "$PROGRAM finshed." "ALWAYS"
 		exitcode=0
 	fi
 
@@ -3158,17 +3150,15 @@ function RotateBackups {
 	fi
 }
 
-function SetTraps {
-	trap TrapStop INT QUIT TERM HUP
-	trap TrapQuit EXIT
-}
-
 function Init {
 	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
 	local uri
 	local hosturiandpath
 	local hosturi
+
+	trap TrapStop INT QUIT TERM HUP
+	trap TrapQuit EXIT
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
 	if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
@@ -3372,7 +3362,6 @@ function GetCommandlineArguments {
 	done
 }
 
-SetTraps
 GetCommandlineArguments "$@"
 if [ "$_DECRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
@@ -3411,24 +3400,20 @@ fi
 
 DATE=$(date)
 Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "$DRY_WARNING$DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "NOTICE"
+Logger "$DRY_WARNING$DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "ALWAYS"
 Logger "--------------------------------------------------------------------" "NOTICE"
 Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
 
 GetLocalOS
-InitLocalOSSettings
+InitLocalOSDependingSettings
 CheckRunningInstances
 PreInit
 Init
 CheckEnvironment
 PostInit
 CheckCurrentConfig
-
-if [ "$REMOTE_OPERATION" == "yes" ]; then
-	GetRemoteOS
-	InitRemoteOSSettings
-fi
-InitRsyncSettings
+GetRemoteOS
+InitRemoteOSDependingSettings
 
 if [ $no_maxtime == true ]; then
 	SOFT_MAX_EXEC_TIME_DB_TASK=0
