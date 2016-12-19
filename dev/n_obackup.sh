@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+#TODO(low): add --no-prefix switch
 #TODO: missing files says Backup succeed
 #TODO: ListingDatabases fail succeed
 #TODO: Add .gpg extesion to RotateFiles ?
@@ -1735,6 +1736,5 @@ if [ $no_maxtime == true ]; then
 	HARD_MAX_EXEC_TIME_FILE_TASK=0
 	HARD_MAX_EXEC_TIME_TOTAL=0
 fi
-
 RunBeforeHook
 Main
