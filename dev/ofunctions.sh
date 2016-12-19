@@ -1,7 +1,12 @@
-#### MINIMAL-FUNCTION-SET BEGIN ####
+#!/usr/bin/env bash
+#### OFUNCTIONS FULL SUBSET ####
+#### OFUNCTIONS MINI SUBSET ####
 
-_OFUNCTIONS_VERSION=2.0
-_OFUNCTIONS_BUILD=2016120401
+_OFUNCTIONS_VERSION=2.1-RC1+dev
+_OFUNCTIONS_BUILD=2016121902
+#### _OFUNCTIONS_BOOTSTRAP SUBSET ####
+_OFUNCTIONS_BOOTSTRAP=true
+#### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
 ## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
@@ -14,7 +19,7 @@ _OFUNCTIONS_BUILD=2016120401
 ## _LOGGER_PREFIX="date"/"time"/""
 
 ## Logger sets {ERROR|WARN}_ALERT variable when called with critical / error / warn loglevel
-## When called from subprocesses, variable of main process can't be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID
+## When called from subprocesses, variable of main process can't be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID.$TSTAMP
 
 if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -34,13 +39,14 @@ _LOGGER_VERBOSE=false
 _LOGGER_ERR_ONLY=false
 _LOGGER_PREFIX="date"
 if [ "$KEEP_LOGGING" == "" ]; then
-        KEEP_LOGGING=1801
+	KEEP_LOGGING=1801
 fi
 
 # Initial error status, logging 'WARN', 'ERROR' or 'CRITICAL' will enable alerts flags
 ERROR_ALERT=false
 WARN_ALERT=false
 
+#### DEBUG SUBSET ####
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
 if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
 	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
@@ -58,8 +64,10 @@ fi
 if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
 	SLEEP_TIME=.05
 fi
+#### DEBUG SUBSET END ####
 
 SCRIPT_PID=$$
+TSTAMP=$(date '+%Y%m%d%H%M%S%N')
 
 LOCAL_USER=$(whoami)
 LOCAL_HOST=$(hostname)
@@ -73,8 +81,10 @@ if [ -w /var/log ]; then
 	LOG_FILE="/var/log/$PROGRAM.log"
 elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
 	LOG_FILE="$HOME/$PROGRAM.log"
-else
+elif [ -w . ]; then
 	LOG_FILE="./$PROGRAM.log"
+else
+	LOG_FILE="/tmp/$PROGRAM.log"
 fi
 
 ## Default directory where to store temporary run files
@@ -88,7 +98,7 @@ fi
 
 
 # Default alert attachment filename
-ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.last.log"
+ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.$TSTAMP.last.log"
 
 # Set error exit code if a piped command fails
 	set -o pipefail
@@ -96,20 +106,24 @@ ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.last.log"
 
 
 function Dummy {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	sleep $SLEEP_TIME
 }
 
+#### Logger SUBSET ####
+#### RemoteLogger SUBSET ####
 # Sub function of Logger
 function _Logger {
 	local logValue="${1}"		# Log to file
 	local stdValue="${2}"		# Log to screeen
 	local toStderr="${3:-false}"	# Log to stderr instead of stdout
 
-	echo -e "$logValue" >> "$LOG_FILE"
-	# Current log file
-	echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+		# Current log file
+		echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+	fi
 
 	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
 		if [ $toStderr == true ]; then
@@ -122,11 +136,73 @@ function _Logger {
 	fi
 }
 
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="RTIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
+	else
+		prefix=""
+	fi
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "" "$prefix\e[91m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger  "" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "" "$prefix$value"
+			return
+		fi
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
+	else
+		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m"
+		_Logger "Value was: $prefix$value"
+	fi
+}
+#### RemoteLogger SUBSET END ####
+
 # General log function with log levels:
 
 # Environment variables
 # _LOGGER_SILENT: Disables any output to stdout & stderr
-# _LOGGER_STD_ERR: Disables any output to stdout except for ALWAYS loglevel
+# _LOGGER_ERR_ONLY: Disables any output to stdout except for ALWAYS loglevel
 # _LOGGER_VERBOSE: Allows VERBOSE loglevel messages to be sent to stdout
 
 # Loglevels
@@ -138,8 +214,9 @@ function _Logger {
 # ALWAYS is sent to stdout unless _LOGGER_SILENT = true
 # DEBUG & PARANOIA_DEBUG are only sent to stdout if _DEBUG=yes
 function Logger {
-	local value="${1}" # Sentence to log (in double quotes)
-	local level="${2}" # Log level
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -150,20 +227,20 @@ function Logger {
 	fi
 
 	if [ "$level" == "CRITICAL" ]; then
-		_Logger "$prefix($level):$value" "$prefix\e[41m$value\e[0m" true
+		_Logger "$prefix($level):$value" "$prefix\e[1;33;41m$value\e[0m" true
 		ERROR_ALERT=true
 		# ERROR_ALERT / WARN_ALERT isn't set in main when Logger is called from a subprocess. Need to keep this flag.
-		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "$prefix($level):$value" "$prefix\e[91m$value\e[0m" true
 		ERROR_ALERT=true
-		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "$prefix($level):$value" "$prefix\e[33m$value\e[0m" true
 		WARN_ALERT=true
-		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.warn.$SCRIPT_PID"
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.warn.$SCRIPT_PID.$TSTAMP"
 		return
 	elif [ "$level" == "NOTICE" ]; then
 		if [ "$_LOGGER_ERR_ONLY" != true ]; then
@@ -193,13 +270,13 @@ function Logger {
 		_Logger "Value was: $prefix$value"
 	fi
 }
+#### Logger SUBSET END ####
 
+#### QuickLogger SUBSET ####
 # QuickLogger subfunction, can be called directly
 function _QuickLogger {
 	local value="${1}"
 	local destination="${2}" # Destination: stdout, log, both
-
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
 	if ([ "$destination" == "log" ] || [ "$destination" == "both" ]); then
 		echo -e "$(date) - $value" >> "$LOG_FILE"
@@ -212,21 +289,20 @@ function _QuickLogger {
 function QuickLogger {
 	local value="${1}"
 
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
-
-	if [ $_LOGGER_SILENT == true ]; then
+	if [ "$_LOGGER_SILENT" == true ]; then
 		_QuickLogger "$value" "log"
 	else
 		_QuickLogger "$value" "stdout"
 	fi
 }
+#### QuickLogger SUBSET END ####
 
 # Portable child (and grandchild) kill function tester under Linux, BSD and MacOS X
 function KillChilds {
 	local pid="${1}" # Parent pid to kill childs
 	local self="${2:-false}" # Should parent be killed too ?
 
-
+	# Warning: pgrep does not exist in cygwin, have this checked in CheckEnvironment
 	if children="$(pgrep -P "$pid")"; then
 		for child in $children; do
 			Logger "Launching KillChilds \"$child\" true" "DEBUG"	#__WITH_PARANOIA_DEBUG
@@ -261,7 +337,7 @@ function KillAllChilds {
 	local pids="${1}" # List of parent pids to kill separated by semi-colon
 	local self="${2:-false}" # Should parent be killed too ?
 
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 1 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local errorcount=0
 
@@ -279,7 +355,7 @@ function KillAllChilds {
 function SendAlert {
 	local runAlert="${1:-false}" # Specifies if current message is sent while running or at the end of a run
 
-	__CheckArguments 0-1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0-1 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local attachment
 	local attachmentFile
@@ -295,13 +371,6 @@ function SendAlert {
 		return 0
 	fi
 
-	# <OSYNC SPECIFIC>
-	if [ "$_QUICK_SYNC" == "2" ]; then
-		Logger "Current task is a quicksync task. Will not send any alert." "NOTICE"
-		return 0
-	fi
-	# </OSYNC SPECIFIC>
-
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
 	if [ $? != 0 ]; then
 		Logger "Cannot create [$ALERT_LOG_FILE]" "WARN"
@@ -309,8 +378,8 @@ function SendAlert {
 	else
 		attachment=true
 	fi
-	if [ -e "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID" ]; then
-		body="$MAIL_ALERT_MSG"$'\n\n'"$(cat $RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID)"
+	if [ -e "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID.$TSTAMP" ]; then
+		body="$MAIL_ALERT_MSG"$'\n\n'"$(cat $RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID.$TSTAMP)"
 	fi
 
 	if [ $ERROR_ALERT == true ]; then
@@ -324,14 +393,14 @@ function SendAlert {
 	if [ $runAlert == true ]; then
 		subject="Currently runing - $subject"
 	else
-		subject="Fnished run - $subject"
+		subject="Finished run - $subject"
 	fi
 
 	if [ "$attachment" == true ]; then
 		attachmentFile="$ALERT_LOG_FILE"
 	fi
 
-	SendEmail "$subject" "$body" "$DESTINATION_MAILS" "$attachmentFile" "$SENDER_MAIL" "$SMTP_SERVER" "$SMTP_PORT" "$ENCRYPTION" "SMTP_USER" "$SMTP_PASSWORD"
+	SendEmail "$subject" "$body" "$DESTINATION_MAILS" "$attachmentFile" "$SENDER_MAIL" "$SMTP_SERVER" "$SMTP_PORT" "$SMTP_ENCRYPTION" "$SMTP_USER" "$SMTP_PASSWORD"
 
 	# Delete tmp log file
 	if [ "$attachment" == true ]; then
@@ -362,7 +431,7 @@ function SendEmail {
 	local smtpUser="${9}"
 	local smtpPassword="${10}"
 
-	__CheckArguments 3-10 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 3-10 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local mail_no_attachment=
 	local attachment_command=
@@ -378,13 +447,17 @@ function SendEmail {
 	fi
 
 	if [ "$LOCAL_OS" == "Busybox" ] || [ "$LOCAL_OS" == "Android" ]; then
+		if [ "$smtpPort" == "" ]; then
+			Logger "Missing smtp port, assuming 25." "WARN"
+			smtpPort=25
+		fi
 		if type sendmail > /dev/null 2>&1; then
-			if [ "$ENCRYPTION" == "tls" ]; then
-				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -H "exec openssl s_client -quiet -tls1_2 -starttls smtp -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
-			elif [ "$ENCRYPTION" == "ssl" ]; then
-				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -H "exec openssl s_client -quiet -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			if [ "$encryption" == "tls" ]; then
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderMail" -H "exec openssl s_client -quiet -tls1_2 -starttls smtp -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			elif [ "$encryption" == "ssl" ]; then
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderMail" -H "exec openssl s_client -quiet -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
 			else
-				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -S "$smtpServer:$SmtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderMail" -S "$smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
 			fi
 
 			if [ $? != 0 ]; then
@@ -499,6 +572,7 @@ function SendEmail {
 	Logger "Cannot send mail (neither mutt, mail, sendmail, sendemail, mailsend (windows) or pfSense mail.php could be used)." "ERROR" # Is not marked critical because execution must continue
 }
 
+#### TrapError SUBSET ####
 function TrapError {
 	local job="$0"
 	local line="$1"
@@ -508,11 +582,12 @@ function TrapError {
 		echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m"
 	fi
 }
+#### TrapError SUBSET END ####
 
 function LoadConfigFile {
 	local configFile="${1}"
 
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 1 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 
 	if [ ! -f "$configFile" ]; then
@@ -523,44 +598,23 @@ function LoadConfigFile {
 		exit 1
 	else
 		# Remove everything that is not a variable assignation
-		grep '^[^ ]*=[^;&]*' "$configFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
-		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
+		grep '^[^ ]*=[^;&]*' "$configFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
 	fi
 
 	CONFIG_FILE="$configFile"
 }
 
+_OFUNCTIONS_SPINNER="|/-\\"
 function Spinner {
 	if [ $_LOGGER_SILENT == true ] || [ "$_LOGGER_ERR_ONLY" == true ]; then
 		return 0
+	else
+		printf " [%c]  \b\b\b\b\b\b" "$_OFUNCTIONS_SPINNER"
+		#printf "\b\b\b\b\b\b"
+		_OFUNCTIONS_SPINNER=${_OFUNCTIONS_SPINNER#?}${_OFUNCTIONS_SPINNER%%???}
+		return 0
 	fi
-
-	case $_OFUNCTIONS_SPINNER_TOGGLE
-	in
-	1)
-	echo -n " \ "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=2
-	;;
-
-	2)
-	echo -n " | "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=3
-	;;
-
-	3)
-	echo -n " / "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=4
-	;;
-
-	*)
-	echo -n " - "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=1
-	;;
-	esac
 }
 
 # Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
@@ -573,7 +627,7 @@ function joinString {
 # Fills a global variable called WAIT_FOR_TASK_COMPLETION_$callerName that contains list of failed pids in format pid1:result1;pid2:result2
 # Also sets a global variable called HARD_MAX_EXEC_TIME_REACHED_$callerName to true if hardMaxTime is reached
 
-# Standard wait $! emulation would be WaitForTaskCompletion $! 0 0 1 0 true false true false "${FUNCNAME[0]}"
+# Standard wait $! emulation would be WaitForTaskCompletion $! 0 0 1 0 true false true false
 
 function WaitForTaskCompletion {
 	local pids="${1}" # pids to wait for, separated by semi-colon
@@ -584,10 +638,10 @@ function WaitForTaskCompletion {
 	local counting="${6:-true}"	# Count time since function has been launched (true), or since script has been launched (false)
 	local spinner="${7:-true}"	# Show spinner (true), don't show anything (false)
 	local noErrorLog="${8:-false}"	# Log errors when reaching soft / hard max time (false), don't log errors on those triggers (true)
-	local callerName="${9}"		# Name of the function who called this function for debugging purposes, generally ${FUNCNAME[0]}
 
+	local callerName="${FUNCNAME[1]}"
 	Logger "${FUNCNAME[0]} called by [$callerName]." "PARANOIA_DEBUG"	#__WITH_PARANOIA_DEBUG
-	__CheckArguments 9 $# ${FUNCNAME[0]} "$@"				#__WITH_PARANOIA_DEBUG
+	__CheckArguments 8 $# "$@"				#__WITH_PARANOIA_DEBUG
 
 	local log_ttime=0 # local time instance for comparaison
 
@@ -679,8 +733,8 @@ function WaitForTaskCompletion {
 					wait $pid
 					retval=$?
 					if [ $retval -ne 0 ]; then
-						errorcount=$((errorcount+1))
 						Logger "${FUNCNAME[0]} called by [$callerName] finished monitoring [$pid] with exitcode [$retval]." "DEBUG"
+						errorcount=$((errorcount+1))
 						# Welcome to variable variable bash hell
 						if [ "$(eval echo \"\$WAIT_FOR_TASK_COMPLETION_$callerName\")" == "" ]; then
 							eval "WAIT_FOR_TASK_COMPLETION_$callerName=\"$pid:$retval\""
@@ -730,9 +784,9 @@ function ParallelExec {
 	local counting="${8:-true}"		# Count time since function has been launched (true), or since script has been launched (false)
 	local spinner="${9:-false}"		# Show spinner (true), don't show spinner (false)
 	local noErrorLog="${10:-false}"		# Log errors when reaching soft / hard max time (false), don't log errors on those triggers (true)
-	local callerName="${11:-false}"		# Name of the function who called this function for debugging purposes, generally ${FUNCNAME[0]}
 
-	__CheckArguments 2-11 $# ${FUNCNAME[0]} "$@"				#__WITH_PARANOIA_DEBUG
+	local callerName="${FUNCNAME[1]}"
+	__CheckArguments 2-10 $# "$@"				#__WITH_PARANOIA_DEBUG
 
 	local log_ttime=0 # local time instance for comparaison
 
@@ -753,7 +807,8 @@ function ParallelExec {
 
 	local hasPids=false # Are any valable pids given to function ?		#__WITH_PARANOIA_DEBUG
 
-	HARD_MAX_EXEC_TIME_REACHED=false
+	# Set global var default
+	eval "HARD_MAX_EXEC_TIME_REACHED_$callerName=false"
 
 	if [ $counting == true ]; then 	# If counting == false _SOFT_ALERT should be a global value so no more than one soft alert is shown
 		local _SOFT_ALERT=false # Does a soft alert need to be triggered, if yes, send an alert once
@@ -815,7 +870,7 @@ function ParallelExec {
 			if [ $noErrorLog != true ]; then
 				SendAlert true
 			fi
-			HARD_MAX_EXEC_TIME_REACHED=true
+			eval "HARD_MAX_EXEC_TIME_REACHED_$callerName=true"
 			# Return the number of commands that haven't run / finished run
 			return $(($commandCount - $counter + ${#pidsArray[@]}))
 		fi
@@ -827,7 +882,7 @@ function ParallelExec {
 				command="${commandsArray[$counter]}"
 			fi
 			Logger "Running command [$command]." "DEBUG"
-			eval "$command" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$callerName.$SCRIPT_PID" 2>&1 &
+			eval "$command" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$callerName.$SCRIPT_PID.$TSTAMP" 2>&1 &
 			pid=$!
 			pidsArray+=($pid)
 			commandsArrayPid[$pid]="$command"
@@ -871,12 +926,12 @@ function ParallelExec {
 }
 
 function CleanUp {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ "$_DEBUG" != "yes" ]; then
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID"
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
 		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.tmp"
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
 	fi
 }
 
@@ -919,8 +974,6 @@ function EscapeSpaces {
 function IsNumericExpand {
 	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
 
-	local re="^-?[0-9]+([.][0-9]+)?$"
-
 	if [[ $value =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
 		echo 1
 	else
@@ -939,6 +992,7 @@ function IsNumeric {
 	fi
 }
 
+#### IsInteger SUBSET ####
 function IsInteger {
 	local value="${1}"
 
@@ -948,7 +1002,9 @@ function IsInteger {
 		echo 0
 	fi
 }
+#### IsInteger SUBSET END ####
 
+#### HumanToNumeric SUBSET ####
 # Converts human readable sizes into integer kilobyte sizes
 # Usage numericSize="$(HumanToNumeric $humanSize)"
 function HumanToNumeric {
@@ -979,9 +1035,11 @@ function HumanToNumeric {
 
 	echo $value
 }
+#### HumanToNumeric SUBSET END ####
 
+#### UrlEncode SUBSET ####
 ## from https://gist.github.com/cdown/1163649
-function urlEncode {
+function UrlEncode {
 	local length="${#1}"
 
 	local LANG=C
@@ -997,31 +1055,37 @@ function urlEncode {
 		esac
 	done
 }
+#### UrlEncode SUBSET END ####
 
-function urlDecode {
+function UrlDecode {
 	local urlEncoded="${1//+/ }"
 
 	printf '%b' "${urlEncoded//%/\\x}"
 }
 
+#### ArrayContains SUBSET ####
 ## Modified version of http://stackoverflow.com/a/8574392
-## Usage: arrayContains "needle" "${haystack[@]}"
-arrayContains () {
+## Usage: [ $(ArrayContains "needle" "${haystack[@]}") -eq 1 ]
+function ArrayContains () {
+	local needle="${1}"
+	local haystack="${2}"
 	local e
 
-	if [ "$2" == "" ]; then
-		echo 0 && return 0
+	if [ "$needle" != "" ] && [ "$haystack" != "" ]; then
+		for e in "${@:2}"; do
+			if [ "$e" == "$needle" ]; then
+				echo 1
+				return
+			fi
+		done
 	fi
-
-	for e in "${@:2}"; do
-		[[ "$e" == "$1" ]] && echo 1 && return 1
-	done
-	echo 0 && return 0
+	echo 0
+	return
 }
+#### ArrayContains SUBSET END ####
 
+#### GetLocalOS SUBSET ####
 function GetLocalOS {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
-
 	local localOsVar
 
 	# There's no good way to tell if currently running in BusyBox shell. Using sluggish way.
@@ -1053,8 +1117,11 @@ function GetLocalOS {
 		*"BSD"*)
 		LOCAL_OS="BSD"
 		;;
-		*"MINGW32"*|*"CYGWIN"*)
+		*"MINGW32"*|*"MSYS"*)
 		LOCAL_OS="msys"
+		;;
+		*"CYGWIN"*)
+		LOCAL_OS="Cygwin"
 		;;
 		*"Microsoft"*)
 		LOCAL_OS="WinNT10"
@@ -1070,17 +1137,22 @@ function GetLocalOS {
 			Logger "Running on unknown local OS [$localOsVar]." "WARN"
 			return
 		fi
-		Logger "Running on >> $localOsVar << not supported. Please report to the author." "ERROR"
+		if [ "$_OFUNCTIONS_VERSION" != "" ]; then
+			Logger "Running on >> $localOsVar << not supported. Please report to the author." "ERROR"
+		fi
 		exit 1
 		;;
 	esac
-	Logger "Local OS: [$localOsVar]." "DEBUG"
+	if [ "$_OFUNCTIONS_VERSION" != "" ]; then
+		Logger "Local OS: [$localOsVar]." "DEBUG"
+	fi
 }
+#### GetLocalOS SUBSET END ####
 
-#### MINIMAL-FUNCTION-SET END ####
+#### OFUNCTIONS MINI SUBSET END ####
 
 function GetRemoteOS {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ "$REMOTE_OPERATION" != "yes" ]; then
 		return 0
@@ -1088,7 +1160,7 @@ function GetRemoteOS {
 
 	local remoteOsVar
 
-$SSH_CMD bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+$SSH_CMD bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 
 function GetOs {
 	local localOsVar
@@ -1117,8 +1189,8 @@ GetOs
 
 ENDSSH
 
-	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-		remoteOsVar=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID")
+	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+		remoteOsVar=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")
 		case $remoteOsVar in
 			*"Android"*)
 			REMOTE_OS="Android"
@@ -1129,8 +1201,11 @@ ENDSSH
 			*"BSD"*)
 			REMOTE_OS="BSD"
 			;;
-			*"MINGW32"*|*"CYGWIN"*)
+			*"MINGW32"*|*"MSYS"*)
 			REMOTE_OS="msys"
+			;;
+			*"CYGWIN"*)
+			REMOTE_OS="Cygwin"
 			;;
 			*"Microsoft"*)
 			REMOTE_OS="WinNT10"
@@ -1163,7 +1238,7 @@ ENDSSH
 function RunLocalCommand {
 	local command="${1}" # Command to run
 	local hardMaxTime="${2}" # Max time to wait for command to compleet
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ $_DRYRUN == true ]; then
 		Logger "Dryrun: Local command [$command] not run." "NOTICE"
@@ -1171,9 +1246,9 @@ function RunLocalCommand {
 	fi
 
 	Logger "Running command [$command] on local host." "NOTICE"
-	eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
+	eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
 
-	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -1182,7 +1257,7 @@ function RunLocalCommand {
 	fi
 
 	if [ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ]; then
-		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "NOTICE"
+		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 	fi
 
 	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]; then
@@ -1195,7 +1270,7 @@ function RunLocalCommand {
 function RunRemoteCommand {
 	local command="${1}" # Command to run
 	local hardMaxTime="${2}" # Max time to wait for command to compleet
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
@@ -1205,10 +1280,10 @@ function RunRemoteCommand {
 	fi
 
 	Logger "Running command [$command] on remote host." "NOTICE"
-	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
-	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -1216,9 +1291,9 @@ function RunRemoteCommand {
 		Logger "Command failed." "ERROR"
 	fi
 
-	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ] && ([ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ])
+	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ] && ([ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ])
 	then
-		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "NOTICE"
+		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 	fi
 
 	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]; then
@@ -1228,7 +1303,7 @@ function RunRemoteCommand {
 }
 
 function RunBeforeHook {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local pids
 
@@ -1242,12 +1317,12 @@ function RunBeforeHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false
 	fi
 }
 
 function RunAfterHook {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local pids
 
@@ -1261,12 +1336,12 @@ function RunAfterHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false
 	fi
 }
 
 function CheckConnectivityRemoteHost {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local retval
 
@@ -1274,7 +1349,7 @@ function CheckConnectivityRemoteHost {
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
-			WaitForTaskCompletion $! 60 180 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+			WaitForTaskCompletion $! 60 180 $SLEEP_TIME $KEEP_LOGGING true true false
 			retval=$?
 			if [ $retval != 0 ]; then
 				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "WARN"
@@ -1285,7 +1360,7 @@ function CheckConnectivityRemoteHost {
 }
 
 function CheckConnectivity3rdPartyHosts {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local remote3rdPartySuccess
 	local retval
@@ -1297,7 +1372,7 @@ function CheckConnectivity3rdPartyHosts {
 			for i in $REMOTE_3RD_PARTY_HOSTS
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
-				WaitForTaskCompletion $! 180 360 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+				WaitForTaskCompletion $! 180 360 $SLEEP_TIME $KEEP_LOGGING true true false
 				retval=$?
 				if [ $retval != 0 ]; then
 					Logger "Cannot ping 3rd party host [$i]. Return code [$retval]." "NOTICE"
@@ -1323,31 +1398,32 @@ function __CheckArguments {
 	if [ "$_DEBUG" == "yes" ]; then
 		local numberOfArguments="${1}" # Number of arguments the tested function should have, can be a number of a range, eg 0-2 for zero to two arguments
 		local numberOfGivenArguments="${2}" # Number of arguments that have been passed
-		local functionName="${3}" # Function name that called __CheckArguments
 
 		local minArgs
 		local maxArgs
 
-		# All arguments of the function to check are passed as array in ${4} (the function call waits for $@)
+		# All arguments of the function to check are passed as array in ${3} (the function call waits for $@)
 		# If any of the arguments contains spaces, bash things there are two aguments
-		# In order to avoid this, we need to iterate over ${4} and count
+		# In order to avoid this, we need to iterate over ${3} and count
 
-		local iterate=4
+		callerName="${FUNCNAME[1]}"
+
+		local iterate=3
 		local fetchArguments=true
 		local argList=""
 		local countedArguments
 		while [ $fetchArguments == true ]; do
 			cmd='argument=${'$iterate'}'
 			eval $cmd
-			if [ "$argument" = "" ]; then
+			if [ "$argument" == "" ]; then
 				fetchArguments=false
 			else
-				argList="$argList[Argument $(($iterate-3)): $argument] "
+				argList="$argList[Argument $(($iterate-2)): $argument] "
 				iterate=$(($iterate+1))
 			fi
 		done
 
-		countedArguments=$((iterate-4))
+		countedArguments=$((iterate-3))
 
 		if [ $(IsInteger "$numberOfArguments") -eq 1 ]; then
 			minArgs=$numberOfArguments
@@ -1356,13 +1432,15 @@ function __CheckArguments {
 			IFS='-' read minArgs maxArgs <<< "$numberOfArguments"
 		fi
 
-		Logger "Entering function [$functionName]." "PARANOIA_DEBUG"
+		Logger "Entering function [$callerName]." "PARANOIA_DEBUG"
 
 		if ! ([ $countedArguments -ge $minArgs ] && [ $countedArguments -le $maxArgs ]); then
 			Logger "Function $functionName may have inconsistent number of arguments. Expected min: $minArgs, max: $maxArgs, count: $countedArguments, bash seen: $numberOfGivenArguments. see log file." "ERROR"
-			Logger "Arguments passed: $argList" "ERROR"
+			Logger "$callerName arguments: $argList" "ERROR"
 		else
-			Logger "Arguments passed: $argList" "PARANOIA_DEBUG"
+			if [ ! -z "$argList" ]; then
+				Logger "$callerName arguments: $argList" "PARANOIA_DEBUG"
+			fi
 		fi
 	fi
 }
@@ -1372,7 +1450,7 @@ function __CheckArguments {
 function RsyncPatternsAdd {
 	local patternType="${1}"	# exclude or include
 	local pattern="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local rest
 
@@ -1384,7 +1462,7 @@ function RsyncPatternsAdd {
 		# Take the string until first occurence until $PATH_SEPARATOR_CHAR
 		str="${rest%%$PATH_SEPARATOR_CHAR*}"
 		# Handle the last case
-		if [ "$rest" = "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
+		if [ "$rest" == "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
 			rest=
 		else
 			# Cut everything before the first occurence of $PATH_SEPARATOR_CHAR
@@ -1402,7 +1480,7 @@ function RsyncPatternsAdd {
 function RsyncPatternsFromAdd {
 	local patternType="${1}"
 	local patternFrom="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	## Check if the exclude list has a full path, and if not, add the config file path if there is one
 	if [ "$(basename $patternFrom)" == "$patternFrom" ]; then
@@ -1415,7 +1493,7 @@ function RsyncPatternsFromAdd {
 }
 
 function RsyncPatterns {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
        if [ "$RSYNC_PATTERN_FIRST" == "exclude" ]; then
 		if [ "$RSYNC_EXCLUDE_PATTERN" != "" ]; then
@@ -1450,7 +1528,7 @@ function RsyncPatterns {
 }
 
 function PreInit {
-	 __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	 __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local compressionString
 
@@ -1478,7 +1556,7 @@ function PreInit {
 		else
 			RSYNC_PATH="sudo $RSYNC_EXECUTABLE"
 		fi
-		COMMAND_SUDO="sudo"
+		COMMAND_SUDO="sudo -E"
 	else
 		if [ "$RSYNC_REMOTE_PATH" != "" ]; then
 			RSYNC_PATH="$RSYNC_REMOTE_PATH/$RSYNC_EXECUTABLE"
@@ -1495,7 +1573,7 @@ function PreInit {
 }
 
 function PostInit {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	# Define remote commands
 	if [ -f "$SSH_RSA_PRIVATE_KEY" ]; then
@@ -1515,13 +1593,13 @@ function PostInit {
 }
 
 function InitLocalOSDependingSettings {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	## If running under Msys, some commands do not run the same way
 	## Using mingw version of find instead of windows one
 	## Getting running processes is quite different
 	## Ping command is not the same
-	if [ "$LOCAL_OS" == "msys" ]; then
+	if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
 		FIND_CMD=$(dirname $BASH)/find
 		PING_CMD='$SYSTEMROOT\system32\ping -n 2'
 	else
@@ -1529,7 +1607,7 @@ function InitLocalOSDependingSettings {
 		PING_CMD="ping -c 2 -i .2"
 	fi
 
-	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$LOCAL_OS" == "msys" ]; then
+	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
 		PROCESS_STATE_CMD="echo none"
 		DF_CMD="df"
 	else
@@ -1551,9 +1629,9 @@ function InitLocalOSDependingSettings {
 }
 
 function InitRemoteOSDependingSettings {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$REMOTE_OS" == "msys" ]; then
+	if [ "$REMOTE_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
 		REMOTE_FIND_CMD=$(dirname $BASH)/find
 	else
 		REMOTE_FIND_CMD=find
@@ -1590,24 +1668,36 @@ function InitRemoteOSDependingSettings {
 	if [ "$PRESERVE_EXECUTABILITY" != "no" ]; then
 		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" --executability"
 	fi
-	if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
-		if [ "$PRESERVE_ACL" == "yes" ]; then
+	if [ "$PRESERVE_ACL" == "yes" ]; then
+		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "msys" ] && [ "$LOCAL_OS" != "Cygwin" ] && [ "$REMOTE_OS" != "Cygwin" ] && [ "$LOCAL_OS" != "BusyBox" ] && [ "$REMOTE_OS" != "BusyBox" ] && [ "$LOCAL_OS" != "Android" ] && [ "$REMOTE_OS" != "Android" ]; then
 			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
+		else
+			Logger "Disabling ACL synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
+
 		fi
-		if [ "$PRESERVE_XATTR" == "yes" ]; then
+	fi
+	if [ "$PRESERVE_XATTR" == "yes" ]; then
+		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "msys" ] && [ "$LOCAL_OS" != "Cygwin" ] && [ "$REMOTE_OS" != "Cygwin" ] && [ "$LOCAL_OS" != "BusyBox" ] && [ "$REMOTE_OS" != "BusyBox" ]; then
 			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -X"
+		else
+			Logger "Disabling extended attributes synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
 		fi
-	else
-		Logger "Disabling ACL and extended attributes synchronization on [$LOCAL_OS]." "NOTICE"
 	fi
 	if [ "$RSYNC_COMPRESS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -z"
+		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
+			RSYNC_ARGS=$RSYNC_ARGS" -zz --skip-compress=gz/xz/lz/lzma/lzo/rz/jpg/mp3/mp4/7z/bz2/rar/zip/sfark/s7z/ace/apk/arc/cab/dmg/jar/kgb/lzh/lha/lzx/pak/sfx"
+		else
+			Logger "Disabling compression skips on synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
+		fi
 	fi
 	if [ "$COPY_SYMLINKS" == "yes" ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" -L"
 	fi
 	if [ "$KEEP_DIRLINKS" == "yes" ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" -K"
+	fi
+	if [ "$RSYNC_OPTIONAL_ARGS" != "" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" "$RSYNC_OPTIONAL_ARGS
 	fi
 	if [ "$PRESERVE_HARDLINKS" == "yes" ]; then
 		RSYNC_ARGS=$RSYNC_ARGS" -H"
@@ -1691,4 +1781,4 @@ function ParentPid {
 	fi
 }
 
-## END Generic functions
+#### OFUNCTIONS FULL SUBSET END ####
