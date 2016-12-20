@@ -10,10 +10,10 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016121901
+PROGRAM_BUILD=2016122001
 IS_STABLE=no
 
-source "./ofunctions.sh"
+include #### OFUNCTIONS FULL SUBSET ####
 
 _LOGGER_PREFIX="time"
 
@@ -168,7 +168,6 @@ function CheckCurrentConfig {
 		fi
 	fi
 
-	#TODO-v2.1(ongoing WIP): Add runtime variable tests (RSYNC_ARGS etc)
 	if [ "$REMOTE_OPERATION" == "yes" ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
 		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY]. Cannot connect to remote system." "CRITICAL"
 		exit 1
@@ -373,27 +372,28 @@ function _ListRecursiveBackupDirectoriesLocal {
 function _ListRecursiveBackupDirectoriesRemote {
         __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
 
-	local cmd
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env RECURSIVE_DIRECTORY_LIST="'$RECURSIVE_DIRECTORY_LIST'" env PATH_SEPARATOR_CHAR="'$PATH_SEPARATOR_CHAR'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$replicaType.$SCRIPT_PID.$TSTAMP" 2>&1
+include #### DEBUG SUBSET ####
+include #### TrapError SUBSET ####
+include #### RemoteLogger SUBSET ####
+
+function _ListRecursiveBackupDirectoriesRemoteSub {
 	local directories
 	local directory
 	local retval
 
-	#TODO(high): refactor this using bash heredoc in order to have all those find commands in one big ssh call
-	#TODO(high): add command_sudo to the heredoc and remove it from find cmd
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
-		#TODO(med): Uses local home directory for remote lookup...
-		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP
-		Logger "cmd: $cmd" "DEBUG"
-		eval "$cmd" &
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+		$REMOTE_FIND_CMD -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP
 		if  [ $? != 0 ]; then
-			Logger "Could not enumerate directories in [$directory]." "ERROR"
+			RemoteLogger "Could not enumerate directories in [$directory]." "ERROR"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+				RemoteLogger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+				RemoteLogger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			retval=1
 		else
@@ -401,6 +401,10 @@ function _ListRecursiveBackupDirectoriesRemote {
 		fi
 	done
 	return $retval
+}
+ENDSSH
+
+
 }
 
 function ListRecursiveBackupDirectories {
