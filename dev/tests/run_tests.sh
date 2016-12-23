@@ -204,6 +204,7 @@ function oneTimeSetUp () {
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
 		# Config value didn't have S at the end in old files
                 SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_3RD_PARTY_HOST" ""
+
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" "no"
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" "no"
                 SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" "no"
@@ -215,6 +216,7 @@ function oneTimeSetUp () {
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
 		# Config value didn't have S at the end in old files
                 SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_3RD_PARTY_HOST" "\"www.kernel.org www.google.com\""
+
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" "yes"
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" "yes"
                 SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" "yes"
@@ -651,9 +653,66 @@ function test_EncryptPushRun () {
 	SetEncryption "$CONF_DIR/$PUSH_CONF" false
 }
 
-function test_localMaxExecTime () {
-	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
-	assertEquals "Max exec time reached in obackup Return code" "1" $?
+function test_timed_execution () {
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 2
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_TOTAL" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_TOTAL" 1000
+
+	SLEEP_TIME=1 REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
+	assertEquals "Soft max exec time db reached in obackup Return code" "2" $?
+
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_DB_TASK" 2
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_TOTAL" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_TOTAL" 1000
+
+	SLEEP_TIME=1 REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
+	assertEquals "Hard max exec time db reached in obackup Return code" "1" $?
+
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_FILE_TASK" 2
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_TOTAL" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_TOTAL" 1000
+
+	SLEEP_TIME=1 REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
+	assertEquals "Soft max exec time file reached in obackup Return code" "2" $?
+
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_FILE_TASK" 2
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_TOTAL" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_TOTAL" 1000
+
+	SLEEP_TIME=1 REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
+	assertEquals "Hard max exec time file reached in obackup Return code" "1" $?
+
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_TOTAL" 2
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_TOTAL" 1000
+
+	SLEEP_TIME=1 REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
+	assertEquals "Soft max exec time total reached in obackup Return code" "2" $?
+
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_DB_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_FILE_TASK" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_TOTAL" 1000
+	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "HARD_MAX_EXEC_TIME_TOTAL" 2
+
+	SLEEP_TIME=1 REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
+	assertEquals "Hard max exec time total reached in obackup Return code" "1" $?
 }
 
 function test_WaitForTaskCompletion () {
