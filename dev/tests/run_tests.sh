@@ -765,6 +765,10 @@ function test_UpgradeConfPullRun () {
 
 	./$OBACKUP_UPGRADE "$CONF_DIR/$TMP_OLD_CONF"
 	assertEquals "Conf file upgrade" "0" $?
+
+        # Update remote conf files with SSH port
+        sed -i.tmp 's#ssh://.*@localhost:[0-9]*/#ssh://'$REMOTE_USER'@localhost:'$SSH_PORT'/#' "$CONF_DIR/$TMP_OLD_CONF"
+
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$TMP_OLD_CONF"
 	assertEquals "Upgraded conf file execution test" "0" $?
 
