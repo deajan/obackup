@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122303
+PROGRAM_BUILD=2016122304
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -678,7 +678,8 @@ function GetDiskSpaceRemote {
 
 	local cmd
 
-	#TODO(med): if -d will fail if cannot traverse above directories. Consider using heredoc here.
+	#TODO(med): if -d will fail if cannot traverse above directories. Consider using heredoc here in order to be able to use sudo
+	#TODO(high): max exec time should be total and not db
 	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' '$DF_CMD' \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
@@ -1255,8 +1256,7 @@ function CheckTotalExecutionTime {
 
 	#### Check if max execution time of whole script as been reached
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
-		Logger "Max soft execution time of the whole backup exceeded." "ERROR"
-		WARN_ALERT=true
+		Logger "Max soft execution time of the whole backup exceeded." "WARN"
 		SendAlert true
 		if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
 			Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
