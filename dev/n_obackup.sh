@@ -916,7 +916,7 @@ function _BackupDatabaseRemoteToLocal {
 	local exportOptions="${2}" # export options
 	local encrypt="${3:-false}" # Does the file need to be encrypted ?
 
-        __CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local encryptOptions
 	local encryptExtension
