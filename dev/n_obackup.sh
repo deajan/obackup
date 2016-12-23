@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-#TODO(low): add --no-prefix switch
 #TODO: missing files says Backup succeed
 #TODO: ListingDatabases fail succeed
 #TODO: Add .gpg extesion to RotateFiles ?
@@ -1594,6 +1593,7 @@ function Usage {
 	echo ""
 	echo "OPTIONS:"
 	echo "--dry             will run obackup without actually doing anything, just testing"
+        echo "--no-prefix       Will suppress time / date suffix from output"
 	echo "--silent          will run obackup without any output to stdout, usefull for cron backups"
 	echo "--errors-only     Output only errors (can be combined with silent or verbose)"
 	echo "--verbose         adds command outputs"
@@ -1679,6 +1679,9 @@ function GetCommandlineArguments {
 			--errors-only)
 			_LOGGER_ERR_ONLY=true
 			;;
+                	--no-prefix)
+                	_LOGGER_PREFIX=""
+                	;;
 		esac
 	done
 }
