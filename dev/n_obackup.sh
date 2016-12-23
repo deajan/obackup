@@ -47,10 +47,10 @@ function TrapQuit {
 
         # Get ERROR / WARN alert flags from subprocesses that call Logger
         if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
-                WARN_ALERT=1
+                WARN_ALERT=true
         fi
         if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
-                ERROR_ALERT=1
+                ERROR_ALERT=true
         fi
 
 	if [ $ERROR_ALERT == true ]; then
@@ -1257,7 +1257,7 @@ function CheckTotalExecutionTime {
 	#### Check if max execution time of whole script as been reached
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
 		Logger "Max soft execution time of the whole backup exceeded." "ERROR"
-		WARN_ALERT=1
+		WARN_ALERT=true
 		SendAlert true
 		if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
 			Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
