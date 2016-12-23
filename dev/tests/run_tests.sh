@@ -14,7 +14,7 @@ LOCAL_CONF="local.conf"
 PULL_CONF="pull.conf"
 PUSH_CONF="push.conf"
 OLD_CONF="old.conf"
-MAX_EXEC_CONF="local-max-exec-time.conf"
+MAX_EXEC_CONF="max-exec-time.conf"
 TMP_OLD_CONF="tmp.old.conf"
 
 OBACKUP_EXECUTABLE="obackup.sh"
