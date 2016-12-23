@@ -7,7 +7,7 @@
 ###### GENERAL BACKUP OPTIONS
 
 ## Backup identification string.
-INSTANCE_ID="local-test"
+INSTANCE_ID="push-test"
 
 ## Log file location. Leaving this empty will create log file at /var/log/obackup.INSTANCE_ID.log (or current directory if /var/log doesn't exist).
 LOGFILE=""
@@ -18,20 +18,20 @@ FILE_BACKUP=yes
 
 ## Backups can be done local, pulled from another server or pushed to a backup server. Available options are [local,pull,push].
 ## Pulled backups are the safest option, as the backup server contains the RSA key and cannot be compromised by another server.
-BACKUP_TYPE=local
+BACKUP_TYPE=push
 
 ###### BACKUP STORAGE
 
 ## Storage paths of the backups (absolute paths of the local or remote system)
-SQL_STORAGE="${HOME}/obackup-storage/sql"
-FILE_STORAGE="${HOME}/obackup-storage/files"
+SQL_STORAGE="${HOME}/obackup-storage/sql-push"
+FILE_STORAGE="${HOME}/obackup-storage/files-push"
 
 ## Encryption
-ENCRYPTION=yes
+ENCRYPTION=no
 
 ## Backup encryption needs a temporary storage space in order to encrypt files before sending them (absolute paths of the local or remote system)
 CRYPT_STORAGE="${HOME}/obackup-storage/crypt"
- 
+
 ## GPG recipient (pubkey for this recipient must exist, see gpg2 --list-keys or gpg --list-keys
 GPG_RECIPIENT="John Doe"
 
@@ -56,10 +56,10 @@ FILE_WARN_MIN_SPACE=1048576
 ###### REMOTE ONLY OPTIONS
 
 ## In case of pulled or pushed backups, remote system URI needs to be supplied.
-REMOTE_SYSTEM_URI="ssh://backupuser@remote.system.tld:22/"
+REMOTE_SYSTEM_URI="ssh://root@localhost:22/"
 
 ## You can specify a RSA key (please use full path). If not defined, the default ~/.ssh/id_rsa will be used. See documentation for further information.
-SSH_RSA_PRIVATE_KEY="${HOME}/.ssh/id_rsa"
+SSH_RSA_PRIVATE_KEY="${HOME}/.ssh/id_rsa_local"
 
 ## ssh compression should be used unless your remote connection is good enough (LAN)
 SSH_COMPRESSION=yes

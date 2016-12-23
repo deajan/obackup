@@ -1,23 +1,15 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016113001
+## obackup basic tests suite 2016122301
 
 #TODO: Must recreate files before each test set
-#TODO: Improve this by backcopying from osync tests
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
 DEV_DIR="$OBACKUP_DIR/dev"
 TESTS_DIR="$DEV_DIR/tests"
 
-if [ "$TRAVIS_RUN" == true ]; then
-	echo "Running with travis settings"
-	CONF_DIR="$TESTS_DIR/conf-travis"
-else
-	echo "Running with local settings"
-	CONF_DIR="$TESTS_DIR/conf-local"
-fi
-
+CONF_DIR="$TESTS_DIR/conf"
 LOCAL_CONF="local.conf"
 PULL_CONF="pull.conf"
 PUSH_CONF="push.conf"
@@ -70,21 +62,69 @@ ROTATE_1_EXTENSION=".obackup.1"
 PASSFILE="passfile"
 CRYPT_TEST_FILE="testfile"
 
-function SetStableToYes () {
-	if grep "^IS_STABLE=YES" "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" > /dev/null; then
-		IS_STABLE=yes
-	else
-		IS_STABLE=no
-		sed -i.tmp 's/^IS_STABLE=no/IS_STABLE=yes/' "$OBACKUP_DIR/$OBACKUP_EXECUTABLE"
-		assertEquals "Set stable to yes" "0" $?
-	fi
+# Later populated variables
+OBACKUP_VERSION=2.x
+OBACKUP_MIN_VERSION=x
+OBACKUP_IS_STABLE=maybe
+
+# Setup an array with all function modes
+#declare -Ag osyncParameters
+
+function GetConfFileValue () {
+        local file="${1}"
+        local name="${2}"
+        local value
+
+        value=$(grep "^$name=" "$file")
+        if [ $? == 0 ]; then
+                value="${value##*=}"
+                echo "$value"
+        else
+            	assertEquals "$name does not exist in [$file]." "1" "0"
+        fi
 }
 
-function SetStableToOrigin () {
-	if [ "$IS_STABLE" == "no" ]; then
-		sed -i.tmp 's/^IS_STABLE=yes/IS_STABLE=no/' "$OBACKUP_DIR/$OBACKUP_EXECUTABLE"
-		assertEquals "Set stable to origin value" "0" $?
-	fi
+function SetConfFileValue () {
+        local file="${1}"
+        local name="${2}"
+        local value="${3}"
+
+        if grep "^$name=" "$file" > /dev/null; then
+                # Using -i.tmp for BSD compat
+                sed -i.tmp "s/^$name=.*/$name=$value/" "$file"
+                rm -f "$file.tmp"
+                assertEquals "Set $name to [$value]." "0" $?
+        else
+            	assertEquals "$name does not exist in [$file]." "1" "0"
+        fi
+}
+
+function SetupSSH {
+        echo -e  'y\n'| ssh-keygen -t rsa -b 2048 -N "" -f "${HOME}/.ssh/id_rsa_local"
+        if ! grep "$(cat ${HOME}/.ssh/id_rsa_local.pub)" "${HOME}/.ssh/authorized_keys"; then
+                cat "${HOME}/.ssh/id_rsa_local.pub" >> "${HOME}/.ssh/authorized_keys"
+        fi
+	chmod 600 "${HOME}/.ssh/authorized_keys"
+
+        # Add localhost to known hosts so self connect works
+        if [ -z "$(ssh-keygen -F localhost)" ]; then
+                ssh-keyscan -H localhost >> "${HOME}/.ssh/known_hosts"
+        fi
+
+        # Update remote conf files with SSH port
+        sed -i.tmp 's#ssh://.*@localhost:[0-9]*/#ssh://'$REMOTE_USER'@localhost:'$SSH_PORT'/#' "$CONF_DIR/$PULL_CONF"
+        sed -i.tmp 's#ssh://.*@localhost:[0-9]*/#ssh://'$REMOTE_USER'@localhost:'$SSH_PORT'/#' "$CONF_DIR/$PUSH_CONF"
+}
+
+function RemoveSSH {
+        local pubkey
+
+        if [ -f "${HOME}/.ssh/id_rsa_local" ]; then
+
+                pubkey=$(cat "${HOME}/.ssh/id_rsa_local.pub")
+                sed -i.bak "#$pubkey#d" "${HOME}/.ssh/authorized_keys"
+                rm -f "${HOME}/.ssh/{id_rsa_local.pub,id_rsa_local}"
+        fi
 }
 
 function SetEncryption () {
@@ -146,22 +186,58 @@ EOF
 	echo "PassPhrase123" > "$TESTS_DIR/$PASSFILE"
 }
 
-function SetupSSH {
-	echo -e  'y\n'| ssh-keygen -t rsa -b 2048 -N "" -f "${HOME}/.ssh/id_rsa_local"
-	cat "${HOME}/.ssh/id_rsa_local.pub" >> "${HOME}/.ssh/authorized_keys"
-	chmod 600 "${HOME}/.ssh/authorized_keys"
-
-	# Add localhost to known hosts so self connect works
-	if [ -z $(ssh-keygen -F localhost) ]; then
-		ssh-keyscan -H localhost >> ~/.ssh/known_hosts
-	fi
-}
-
 function oneTimeSetUp () {
+	START_TIME=$SECONDS
+
 	source "$DEV_DIR/ofunctions.sh"
+	GetLocalOS
+
+	echo "Detected OS: $LOCAL_OS"
+
+        # Set some travis related changes
+        if [ "$TRAVIS_RUN" == true ]; then
+        echo "Running with travis settings"
+                REMOTE_USER="travis"
+                SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
+                SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
+        else
+            	echo "Running with local settings"
+                REMOTE_USER="root"
+                SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
+                SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
+        fi
+
+        # Get default ssh port from env
+        if [ "$SSH_PORT" == "" ]; then
+                SSH_PORT=22
+        fi
+
 	SetupGPG
 	SetupSSH
+
+	# Get OBACKUP version
+        OBACKUP_VERSION=$(GetConfFileValue "$OBACKUP_DIR/$OBACKUP_DEV_EXECUTABLE" "PROGRAM_VERSION")
+        OBACKUP_VERSION="${OBACKUP_VERSION##*=}"
+        OBACKUP_MIN_VERSION="${OBACKUP_VERSION:2:1}"
+
+        OBACKUP_IS_STABLE=$(GetConfFileValue "$OBACKUP_DIR/$OBACKUP_DEV_EXECUTABLE" "IS_STABLE")
+
+        echo "Running with $OBACKUP_VERSION ($OBACKUP_MIN_VERSION) STABLE=$OBACKUP_IS_STABLE"
 }
+
+function oneTimeTearDown () {
+	SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" "$OBACKUP_IS_STABLE"
+
+	RemoveSSH
+
+	#TODO: uncomment this when dev is done
+	rm -rf "$OBACKUP_TEST_DIR"
+	rm -f "$TMP_FILE"
+
+        ELAPSED_TIME=$(($SECONDS - $START_TIME))
+        echo "It took $ELAPSED_TIME seconds to run these tests."
+}
+
 
 function setUp () {
 	rm -rf "$SOURCE_DIR"
@@ -208,17 +284,16 @@ function setUp () {
 	)
 }
 
-function oneTimeTearDown () {
-	SetStableToOrigin
-}
-
 function test_Merge () {
 	cd "$DEV_DIR"
 	./merge.sh
 	assertEquals "Merging code" "0" $?
-	SetStableToYes
+
+	# Set obackup version to stable while testing to avoid warning message
+        SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" "yes"
 }
 
+# Check this for $TESTS_DIR should maybe not be this directory but $SOURCE_DIR or $DEST_DIR
 # Keep this function to check Travis environment GPG behavior
 function disabled_test_GPG () {
 	echo "Encrypting file"
