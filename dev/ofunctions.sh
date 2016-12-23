@@ -3,7 +3,7 @@
 #### OFUNCTIONS MINI SUBSET ####
 
 _OFUNCTIONS_VERSION=2.1-RC1+dev
-_OFUNCTIONS_BUILD=2016121902
+_OFUNCTIONS_BUILD=2016122301
 #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
 _OFUNCTIONS_BOOTSTRAP=true
 #### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
@@ -113,6 +113,13 @@ function Dummy {
 
 #### Logger SUBSET ####
 #### RemoteLogger SUBSET ####
+
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
+}
+
 # Sub function of Logger
 function _Logger {
 	local logValue="${1}"		# Log to file
@@ -617,11 +624,6 @@ function Spinner {
 	fi
 }
 
-# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
-# usage: joinString separaratorChar Array
-function joinString {
-	local IFS="$1"; shift; echo "$*";
-}
 
 # Time control function for background processes, suitable for multiple synchronous processes
 # Fills a global variable called WAIT_FOR_TASK_COMPLETION_$callerName that contains list of failed pids in format pid1:result1;pid2:result2
