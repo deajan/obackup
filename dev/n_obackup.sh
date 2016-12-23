@@ -83,7 +83,7 @@ function TrapQuit {
 }
 
 function CheckEnvironment {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$REMOTE_OPERATION" == "yes" ]; then
 		if ! type ssh > /dev/null 2>&1 ; then
@@ -135,7 +135,7 @@ function CheckCryptEnvironnment {
 }
 
 function CheckCurrentConfig {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$INSTANCE_ID" == "" ]; then
 		Logger "No INSTANCE_ID defined in config file." "CRITICAL"
@@ -207,7 +207,7 @@ function CheckCurrentConfig {
 }
 
 function CheckRunningInstances {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ -f "$RUN_DIR/$PROGRAM.$INSTANCE_ID" ]; then
 		pid=$(cat "$RUN_DIR/$PROGRAM.$INSTANCE_ID")
@@ -221,7 +221,7 @@ function CheckRunningInstances {
 }
 
 function _ListDatabasesLocal {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local sqlCmd=
 
@@ -242,7 +242,7 @@ function _ListDatabasesLocal {
 }
 
 function _ListDatabasesRemote {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local sqlCmd=
 
@@ -264,7 +264,7 @@ function _ListDatabasesRemote {
 }
 
 function ListDatabases {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local outputFile	# Return of subfunction
 	local dbName
@@ -339,7 +339,7 @@ function ListDatabases {
 }
 
 function _ListRecursiveBackupDirectoriesLocal {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 	local directories
@@ -370,7 +370,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 }
 
 function _ListRecursiveBackupDirectoriesRemote {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 #WIP: Check run_dir files output
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
@@ -412,7 +412,7 @@ ENDSSH
 }
 
 function ListRecursiveBackupDirectories {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local output_file
 	local file_exclude
@@ -482,7 +482,7 @@ function ListRecursiveBackupDirectories {
 
 function _GetDirectoriesSizeLocal {
 	local dir_list="${1}"
-        __CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
@@ -517,7 +517,7 @@ function _GetDirectoriesSizeLocal {
 
 function _GetDirectoriesSizeRemote {
 	local dir_list="${1}"
-        __CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
@@ -550,7 +550,7 @@ function _GetDirectoriesSizeRemote {
 }
 
 function GetDirectoriesSize {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
         Logger "Getting files size" "NOTICE"
 
@@ -567,7 +567,7 @@ function GetDirectoriesSize {
 
 function _CreateDirectoryLocal {
 	local dir_to_create="${1}"
-	        __CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ ! -d "$dir_to_create" ]; then
 		# No sudo, you should have all necessary rights
@@ -584,7 +584,7 @@ function _CreateDirectoryLocal {
 
 function _CreateDirectoryRemote {
 	local dir_to_create="${1}"
-	        __CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
@@ -603,7 +603,7 @@ function _CreateDirectoryRemote {
 }
 
 function CreateStorageDirectories {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
@@ -650,7 +650,7 @@ function GetDiskSpaceLocal {
 	# GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
 	# GLOBAL VARIABLE DRIVE to pass variable to parent function
 	local path_to_check="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
         if [ -d "$path_to_check" ]; then
 		# Not elegant solution to make df silent on errors
@@ -676,7 +676,7 @@ function GetDiskSpaceLocal {
 function GetDiskSpaceRemote {
 	# USE GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
 	local path_to_check="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
@@ -702,7 +702,7 @@ function GetDiskSpaceRemote {
 function CheckDiskSpace {
 	# USE OF GLOBAL VARIABLES TOTAL_DATABASES_SIZE, TOTAL_FILES_SIZE, BACKUP_SIZE_MINIMUM, STORAGE_WARN_SIZE, STORAGE_SPACE
 
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
@@ -845,7 +845,7 @@ function _BackupDatabaseLocalToLocal {
 	local sqlCmd
 	local retval
 
-        __CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ $encrypt == true ]; then
 		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
@@ -877,7 +877,7 @@ function _BackupDatabaseLocalToRemote {
 	local exportOptions="${2}" # export options
 	local encrypt="${3:-false}" # Does the file need to be encrypted
 
-        __CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local encryptOptions
 	local encryptExtension
@@ -919,7 +919,7 @@ function _BackupDatabaseRemoteToLocal {
 	local exportOptions="${2}" # export options
 	local encrypt="${3:-false}" # Does the file need to be encrypted ?
 
-        __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local encryptOptions
 	local encryptExtension
@@ -958,7 +958,7 @@ function _BackupDatabaseRemoteToLocal {
 
 function BackupDatabase {
 	local database="${1}"
-        __CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local mysqlOptions
 	local encrypt=false
@@ -993,7 +993,7 @@ function BackupDatabase {
 }
 
 function BackupDatabases {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local database
 
@@ -1013,7 +1013,7 @@ function EncryptFiles {
 	local recursive="${4:-true}" # Is recursive ?
 	local keepFullPath="${5:-false}" # Should destpath become destpath + sourcepath ?
 
-	__CheckArguments 5 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 5 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local successCounter=0
 	local errorCounter=0
@@ -1069,7 +1069,7 @@ function DecryptFiles {
 	local passphraseFile="${2}"  # Passphrase file to decrypt files
 	local passphrase="${3}"	# Passphrase to decrypt files
 
-	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local options
 	local secret
@@ -1123,7 +1123,7 @@ function Rsync {
 	local backupDirectory="${1}"	# Which directory to backup
 	local recursive="${2:-true}"	# Backup only files at toplevel of directory
 
-        __CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local fileStoragePath
 	local withoutCryptPath
@@ -1182,7 +1182,7 @@ function Rsync {
 }
 
 function FilesBackup {
-        __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local backupTask
 	local backupTasks
@@ -1253,7 +1253,7 @@ function FilesBackup {
 }
 
 function CheckTotalExecutionTime {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	#### Check if max execution time of whole script as been reached
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
@@ -1270,7 +1270,7 @@ function CheckTotalExecutionTime {
 function _RotateBackupsLocal {
 	local backup_path="${1}"
 	local rotate_copies="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local backup
 	local copy
@@ -1342,7 +1342,7 @@ function _RotateBackupsLocal {
 function _RotateBackupsRemote {
 	local backup_path="${1}"
 	local rotate_copies="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 #TODO(high): add _LOGGER_* env variables here
 $SSH_CMD env PROGRAM=$PROGRAM env REMOTE_OPERATION=$REMOTE_OPERATION env _DEBUG=$_DEBUG env rotate_copies=$rotate_copies env backup_path="$backup_path" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
@@ -1462,7 +1462,7 @@ ENDSSH
 function RotateBackups {
 	local backup_path="${1}"
 	local rotate_copies="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	Logger "Rotating backups in [$backup_path] for [$rotate_copies] copies." "NOTICE"
 
@@ -1474,7 +1474,7 @@ function RotateBackups {
 }
 
 function Init {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local uri
 	local hosturiandpath
@@ -1535,7 +1535,7 @@ function Init {
 }
 
 function Main {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
 		ListDatabases
@@ -1580,7 +1580,7 @@ function Main {
 }
 
 function Usage {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 
 	if [ "$IS_STABLE" != "yes" ]; then
