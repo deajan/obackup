@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016122302
+## obackup basic tests suite 2016122303
 
 #TODO: Must recreate files before each test set
 
@@ -202,16 +202,22 @@ function oneTimeSetUp () {
 		RHOST_PING="no"
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
+		# Config value didn't have S at the end in old files
+                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_3RD_PARTY_HOST" ""
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" "no"
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" "no"
+                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" "no"
         else
             	echo "Running with local settings"
                 REMOTE_USER="root"
 		RHOST_PING="yes"
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
+		# Config value didn't have S at the end in old files
+                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_3RD_PARTY_HOST" "\"www.kernel.org www.google.com\""
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" "yes"
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" "yes"
+                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" "yes"
         fi
 
         # Get default ssh port from env
