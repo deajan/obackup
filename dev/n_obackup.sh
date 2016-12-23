@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122302
+PROGRAM_BUILD=2016122303
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -1608,7 +1608,7 @@ function Usage {
 	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase-file=/path/to/passphrase"
 	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase=MySecretPassPhrase (security risk)"
 	echo ""
-	echo "Batch encrypt a directory in separate gpg files"
+	echo "Batch encrypt directories in separate gpg files"
 	echo "$0 --encrypt=/path/to/files --destination=/path/to/encrypted/files --recipient=\"Your Name\""
 	exit 128
 }
@@ -1686,12 +1686,14 @@ function GetCommandlineArguments {
 GetCommandlineArguments "$@"
 if [ "$_DECRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
+	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION decrypt mode begin." "ALWAYS"
 	DecryptFiles "$DECRYPT_PATH" "$PASSPHRASE_FILE" "$PASSPHRASE"
 	exit $?
 fi
 
 if [ "$_ENCRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
+	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION encrypt mode begin." "ALWAYS"
 	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 	exit $?
 fi
