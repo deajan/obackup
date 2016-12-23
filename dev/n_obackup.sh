@@ -344,7 +344,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 	local cmd
 	local directories
 	local directory
-	local retval
+	local retval=0
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
@@ -362,8 +362,6 @@ function _ListRecursiveBackupDirectoriesLocal {
 				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			retval=1
-		else
-			retval=0
 		fi
 	done
 	return $retval
@@ -383,7 +381,7 @@ include #### RemoteLogger SUBSET ####
 function _ListRecursiveBackupDirectoriesRemoteSub {
 	local directories
 	local directory
-	local retval
+	local retval=0
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
@@ -397,8 +395,6 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 				RemoteLogger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			retval=1
-		else
-			retval=0
 		fi
 	done
 	return $retval
@@ -419,6 +415,7 @@ function ListRecursiveBackupDirectories {
 	local excluded
 	local fileArray
 
+	#TODO: Even with $? != 0, we should try to continue here if let's say retval=2 (or unless retval != 1 which would mean that no find command was successful)
 	Logger "Listing directories to backup." "NOTICE"
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		_ListRecursiveBackupDirectoriesLocal
