@@ -14,6 +14,7 @@ LOCAL_CONF="local.conf"
 PULL_CONF="pull.conf"
 PUSH_CONF="push.conf"
 OLD_CONF="old.conf"
+MAX_EXEC_CONF="local-max-exec-time.conf"
 TMP_OLD_CONF="tmp.old.conf"
 
 OBACKUP_EXECUTABLE="obackup.sh"
@@ -198,11 +199,13 @@ function oneTimeSetUp () {
         if [ "$TRAVIS_RUN" == true ]; then
         echo "Running with travis settings"
                 REMOTE_USER="travis"
+		RHOST_PING="no"
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
         else
             	echo "Running with local settings"
                 REMOTE_USER="root"
+		RHOST_PING="yes"
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
         fi
@@ -330,7 +333,7 @@ function test_LocalRun () {
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -360,7 +363,7 @@ function test_LocalRun () {
 
 	# Tests presence of rotated files
 
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -378,7 +381,7 @@ function test_PullRun () {
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -409,7 +412,7 @@ function test_PullRun () {
 	# Tests presence of rotated files
 
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -427,7 +430,7 @@ function test_PushRun () {
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -457,7 +460,7 @@ function test_PushRun () {
 
 	# Tests presence of rotated files
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -474,7 +477,7 @@ function test_EncryptLocalRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" true
 
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
 
 	for file in "${FilePresence[@]}"; do
 		[ -f "$TARGET_DIR_FILE_LOCAL/$file$CRYPT_EXTENSION" ]
@@ -506,7 +509,7 @@ function test_EncryptLocalRun () {
 	# Tests presence of rotated files
 
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -517,10 +520,10 @@ function test_EncryptLocalRun () {
 	[ -d "$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_LOCAL]" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
 
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
@@ -531,7 +534,7 @@ function test_EncryptPullRun () {
 	SetEncryption "$CONF_DIR/$PULL_CONF" true
 
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -562,7 +565,7 @@ function test_EncryptPullRun () {
 	# Tests presence of rotated files
 
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -573,10 +576,10 @@ function test_EncryptPullRun () {
 	[ -d "$TARGET_DIR_FILE_CRYPT/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_CRYPT/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PULL]" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
 
 	SetEncryption "$CONF_DIR/$PULL_CONF" false
@@ -587,7 +590,7 @@ function test_EncryptPushRun () {
 	SetEncryption "$CONF_DIR/$PUSH_CONF" true
 
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
@@ -618,7 +621,7 @@ function test_EncryptPushRun () {
 	# Tests presence of rotated files
 
 	cd "$OBACKUP_DIR"
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
@@ -629,13 +632,18 @@ function test_EncryptPushRun () {
 	[ -d "$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	_PARANOIA_DEBUG=yes ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE" --verbose
+	_PARANOIA_DEBUG=yes REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE" --verbose
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PUSH]" "0" $?
 
-	./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
 
 	SetEncryption "$CONF_DIR/$PUSH_CONF" false
+}
+
+function test_localMaxExecTime () {
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$MAX_EXEC_CONF"
+	assertEquals "Max exec time reached in obackup Return code" "1" $?
 }
 
 function test_WaitForTaskCompletion () {
@@ -753,7 +761,7 @@ function test_UpgradeConfPullRun () {
 
 	./$OBACKUP_UPGRADE "$CONF_DIR/$TMP_OLD_CONF"
 	assertEquals "Conf file upgrade" "0" $?
-	./$OBACKUP_EXECUTABLE "$CONF_DIR/$TMP_OLD_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$TMP_OLD_CONF"
 	assertEquals "Upgraded conf file execution test" "0" $?
 
 	rm -f "$CONF_DIR/$TMP_OLD_CONF"
