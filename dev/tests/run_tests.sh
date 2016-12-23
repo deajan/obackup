@@ -61,7 +61,7 @@ CRYPT_EXTENSION=".obackup.gpg"
 ROTATE_1_EXTENSION=".obackup.1"
 
 PASSFILE="passfile"
-CRYPT_TEST_FILE="testfile"
+CRYPT_TESTFILE="testfile"
 
 # Later populated variables
 OBACKUP_VERSION=2.x
@@ -246,7 +246,8 @@ function oneTimeTearDown () {
 	RemoveSSH
 
 	#TODO: uncomment this when dev is done
-	rm -rf "$OBACKUP_TEST_DIR"
+	#rm -rf "$SOURCE_DIR"
+	#rm -rf "$TARGET_DIR"
 	rm -f "$TMP_FILE"
 
         ELAPSED_TIME=$(($SECONDS - $START_TIME))
@@ -312,31 +313,31 @@ function test_Merge () {
 # Keep this function to check Travis environment GPG behavior
 function disabled_test_GPG () {
 	echo "Encrypting file"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION" --recipient "John Doe" --batch --yes --encrypt "$TESTS_DIR/$PASSFILE"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION" --recipient "John Doe" --batch --yes --encrypt "$TESTS_DIR/$PASSFILE"
 	assertEquals "Encrypt file" "0" $?
 
 	echo "Decrypt using passphrase file"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passfile" "0" $?
 
 	echo "Decrypt using passphrase"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase file with cat"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase file --no-use-agent"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --no-use-agent --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase --no-use-agent"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --no-use-agent --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase file with cat --no-use-agent"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TEST_FILE" --no-use-agent --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TEST_FILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --no-use-agent --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 }
 
