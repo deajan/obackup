@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122401
+PROGRAM_BUILD=2016122402
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -20,7 +20,7 @@ _LOGGER_PREFIX="time"
 PARTIAL_DIR=".obackup_workdir_partial"
 
 ## File extension for encrypted files
-CRYPT_FILE_EXTENSION=".obackup.gpg"
+CRYPT_FILE_EXTENSION=".$PROGRAM.gpg"
 
 # List of runtime created global variables
 # $SQL_DISK_SPACE, disk space available on target for sql backups
@@ -33,6 +33,7 @@ CRYPT_FILE_EXTENSION=".obackup.gpg"
 # $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes for local command
 # $FILE_SIZE_LIST_REMOTE, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
 
+# Assume that anything can be backed up unless proven otherwise
 CAN_BACKUP_SQL=true
 CAN_BACKUP_FILES=true
 
@@ -681,11 +682,10 @@ function GetDiskSpaceRemote {
 	local cmd
 
 	#TODO(med): if -d will fail if cannot traverse above directories. Consider using heredoc here in order to be able to use sudo
-	#TODO(high): max exec time should be total and not db
 	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' '$DF_CMD' \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
         	DISK_SPACE=0
 		Logger "Cannot get disk space in [$path_to_check] on remote system." "ERROR"
@@ -1049,6 +1049,7 @@ function EncryptFiles {
 		fi
 
 		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
+		#TODO: if ParallelExec, we should redirect with >> instead of >
 		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot encrypt [$sourceFile]." "ERROR"
@@ -1269,8 +1270,8 @@ function CheckTotalExecutionTime {
 }
 
 function _RotateBackupsLocal {
-	local backup_path="${1}"
-	local rotate_copies="${2}"
+	local backupPath="${1}"
+	local rotateCopies="${2}"
 	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local backup
@@ -1279,10 +1280,10 @@ function _RotateBackupsLocal {
 	local path
 
 	#TODO: Replace this -name with regex .*$PROGRAM\.[1-9][0-9]+
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
-		copy=$rotate_copies
+	find "$backupPath" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
+		copy=$rotateCopies
 		while [ $copy -gt 1 ]; do
-			if [ $copy -eq $rotate_copies ]; then
+			if [ $copy -eq $rotateCopies ]; then
 				path="$backup.$PROGRAM.$copy"
 				if [ -f "$path" ] || [ -d "$path" ]; then
 					cmd="rm -rf \"$path\""
@@ -1341,58 +1342,24 @@ function _RotateBackupsLocal {
 }
 
 function _RotateBackupsRemote {
-	local backup_path="${1}"
-	local rotate_copies="${2}"
+	local backupPath="${1}"
+	local rotateCopies="${2}"
 	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-#TODO(high): add _LOGGER_* env variables here
-$SSH_CMD env PROGRAM=$PROGRAM env REMOTE_OPERATION=$REMOTE_OPERATION env _DEBUG=$_DEBUG env rotate_copies=$rotate_copies env backup_path="$backup_path" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
-
-#TODO(high): replace this with include statements
-function _RemoteLogger {
-        local value="${1}" # What to log
-        echo -e "$value"
-}
-
-function RemoteLogger {
-        local value="${1}" # Sentence to log (in double quotes)
-        local level="${2}" # Log level: PARANOIA_DEBUG, DEBUG, NOTICE, WARN, ERROR, CRITIAL
-
-	prefix="REMOTE TIME: $SECONDS - "
-
-        if [ "$level" == "CRITICAL" ]; then
-                _RemoteLogger "$prefix\e[41m$value\e[0m"
-                return
-        elif [ "$level" == "ERROR" ]; then
-                _RemoteLogger "$prefix\e[91m$value\e[0m"
-                return
-        elif [ "$level" == "WARN" ]; then
-                _RemoteLogger "$prefix\e[93m$value\e[0m"
-                return
-        elif [ "$level" == "NOTICE" ]; then
-                _RemoteLogger "$prefix$value"
-                return
-        elif [ "$level" == "DEBUG" ]; then
-                if [ "$_DEBUG" == "yes" ]; then
-                        _RemoteLogger "$prefix$value"
-                        return
-                fi
-        elif [ "$level" == "PARANOIA_DEBUG" ]; then             	#__WITH_PARANOIA_DEBUG
-                if [ "$_PARANOIA_DEBUG" == "yes" ]; then        	#__WITH_PARANOIA_DEBUG
-                        _RemoteLogger "$prefix$value"                 	#__WITH_PARANOIA_DEBUG
-                        return                                  	#__WITH_PARANOIA_DEBUG
-                fi                                              	#__WITH_PARANOIA_DEBUG
-        else
-                _RemoteLogger "\e[41mLogger function called without proper loglevel.\e[0m"
-                _RemoteLogger "$prefix$value"
-        fi
-}
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env rotateCopies="'$rotateCopies'" env backupPath="'$backupPath'" \
+$COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+include #### DEBUG SUBSET ####
+include #### TrapError SUBSET ####
+include #### RemoteLogger SUBSET ####
 
 function _RotateBackupsRemoteSSH {
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
-		copy=$rotate_copies
+	#TODO(low): same regex replace
+	find "$backupPath" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
+		copy=$rotateCopies
 		while [ $copy -gt 1 ]; do
-			if [ $copy -eq $rotate_copies ]; then
+			if [ $copy -eq $rotateCopies ]; then
 				path="$backup.$PROGRAM.$copy"
 				if [ -f "$path" ] || [ -d "$path" ]; then
 					cmd="rm -rf \"$path\""
@@ -1450,7 +1417,7 @@ ENDSSH
 
 	WaitForTaskCompletion $! 1800 0 $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
-                Logger "Could not rotate backups in [$backup_path]." "ERROR"
+                Logger "Could not rotate backups in [$backupPath]." "ERROR"
                 Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
         else
                 Logger "Remote rotation succeed." "NOTICE"
@@ -1461,16 +1428,16 @@ ENDSSH
 }
 
 function RotateBackups {
-	local backup_path="${1}"
-	local rotate_copies="${2}"
+	local backupPath="${1}"
+	local rotateCopies="${2}"
 	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	Logger "Rotating backups in [$backup_path] for [$rotate_copies] copies." "NOTICE"
+	Logger "Rotating backups in [$backupPath] for [$rotateCopies] copies." "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		_RotateBackupsLocal "$backup_path" "$rotate_copies"
+		_RotateBackupsLocal "$backupPath" "$rotateCopies"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		_RotateBackupsRemote "$backup_path" "$rotate_copies"
+		_RotateBackupsRemote "$backupPath" "$rotateCopies"
 	fi
 }
 
@@ -1595,9 +1562,9 @@ function Usage {
 	echo "General usage: $0 /path/to/backup.conf [OPTIONS]"
 	echo ""
 	echo "OPTIONS:"
-	echo "--dry             will run obackup without actually doing anything, just testing"
+	echo "--dry             will run $PROGRAM without actually doing anything, just testing"
         echo "--no-prefix       Will suppress time / date suffix from output"
-	echo "--silent          will run obackup without any output to stdout, usefull for cron backups"
+	echo "--silent          will run $PROGRAM without any output to stdout, usefull for cron backups"
 	echo "--errors-only     Output only errors (can be combined with silent or verbose)"
 	echo "--verbose         adds command outputs"
 	echo "--stats           Adds rsync transfer statistics to verbose output"
