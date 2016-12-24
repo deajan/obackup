@@ -9,7 +9,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122304
+PROGRAM_BUILD=2016122401
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -222,13 +222,15 @@ function CheckRunningInstances {
 function _ListDatabasesLocal {
         __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sqlCmd=
+	local retval
+	local sqlCmd
 
         sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
         Logger "cmd: $sqlCmd" "DEBUG"
         eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-        if [ $? -eq 0 ]; then
+	retval=$?
+        if [ $retval -eq 0 ]; then
                 Logger "Listing databases succeeded." "NOTICE"
         else
                 Logger "Listing databases failed." "ERROR"
@@ -1258,10 +1260,11 @@ function CheckTotalExecutionTime {
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
 		Logger "Max soft execution time of the whole backup exceeded." "WARN"
 		SendAlert true
-		if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
-			Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
-			exit 1
-		fi
+	fi
+
+	if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
+		Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
+		exit 1
 	fi
 }
 
