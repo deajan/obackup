@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016122303
+## obackup basic tests suite 2016122401
 
 #TODO: Must recreate files before each test set
 
@@ -309,9 +309,8 @@ function test_Merge () {
         SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" "yes"
 }
 
-# Check this for $TESTS_DIR should maybe not be this directory but $SOURCE_DIR or $DEST_DIR
-# Keep this function to check Travis environment GPG behavior
-function disabled_nope_test_GPG () {
+# Keep this function to check Travis environment GPG behavior. No need to run this test otherwise.
+function disabled_test_GPG () {
 	echo "Encrypting file"
 	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION" --recipient "John Doe" --batch --yes --encrypt "$TESTS_DIR/$PASSFILE"
 	assertEquals "Encrypt file" "0" $?
@@ -341,7 +340,7 @@ function disabled_nope_test_GPG () {
 	assertEquals "Decrypt file using passphrase" "0" $?
 }
 
-function nope_test_LocalRun () {
+function test_LocalRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
 
 	# Basic return code tests. Need to go deep into file presence testing
@@ -389,7 +388,7 @@ function nope_test_LocalRun () {
 
 }
 
-function nope_test_PullRun () {
+function test_PullRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
 
 	# Basic return code tests. Need to go deep into file presence testing
@@ -438,7 +437,7 @@ function nope_test_PullRun () {
 
 }
 
-function nope_test_PushRun () {
+function test_PushRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
 
 	# Basic return code tests. Need to go deep into file presence testing
@@ -486,7 +485,7 @@ function nope_test_PushRun () {
 
 }
 
-function nope_test_EncryptLocalRun () {
+function test_EncryptLocalRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" true
 
 	cd "$OBACKUP_DIR"
@@ -542,7 +541,7 @@ function nope_test_EncryptLocalRun () {
 	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
 }
 
-function nope_test_EncryptPullRun () {
+function test_EncryptPullRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	SetEncryption "$CONF_DIR/$PULL_CONF" true
 
@@ -598,7 +597,7 @@ function nope_test_EncryptPullRun () {
 	SetEncryption "$CONF_DIR/$PULL_CONF" false
 }
 
-function nope_test_EncryptPushRun () {
+function test_EncryptPushRun () {
 	# Basic return code tests. Need to go deep into file presence testing
 	SetEncryption "$CONF_DIR/$PUSH_CONF" true
 
@@ -718,7 +717,7 @@ function test_timed_execution () {
 	assertEquals "Hard max exec time total reached in obackup Return code" "1" $?
 }
 
-function nope_test_WaitForTaskCompletion () {
+function test_WaitForTaskCompletion () {
 	local pids
 	# Standard wait
 	sleep 1 &
@@ -765,7 +764,7 @@ function nope_test_WaitForTaskCompletion () {
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
 
-function nope_test_ParallelExec () {
+function test_ParallelExec () {
 	local cmd
 
 	# Test if parallelExec works correctly in array mode
@@ -822,7 +821,7 @@ function nope_test_ParallelExec () {
 
 }
 
-function nope_test_UpgradeConfPullRun () {
+function test_UpgradeConfPullRun () {
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
