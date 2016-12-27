@@ -2,14 +2,15 @@
 
 #TODO: missing files says Backup succeed
 #TODO: ListingDatabases fail succeed
-#TODO: Add .gpg extesion to RotateFiles ?
+
+#TODO: do we rotate encrypted files too or only temp files in storage dir (pull / local question)
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122402
+PROGRAM_BUILD=2016122701
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -91,6 +92,11 @@ function CheckEnvironment {
 			exit 1
 		fi
 
+		if [ "$SSH_PASSWORD_FILE" != "" ] && ! type sshpass > /dev/null 2>&1 ; then
+                        Logger "sshpass not present. Cannot use password authentication." "CRITICAL"
+                        exit 1
+                fi
+	else
 		if [ "$SQL_BACKUP" != "no" ]; then
 			if ! type mysqldump > /dev/null 2>&1 ; then
 				Logger "mysqldump not present. Cannot backup SQL." "CRITICAL"
@@ -101,11 +107,6 @@ function CheckEnvironment {
 				CAN_BACKUP_SQL=false
 			fi
 		fi
-
-		if [ "$SSH_PASSWORD_FILE" != "" ] && ! type sshpass > /dev/null 2>&1 ; then
-                        Logger "sshpass not present. Cannot use password authentication." "CRITICAL"
-                        exit 1
-                fi
 	fi
 
 	if [ "$FILE_BACKUP" != "no" ]; then
@@ -326,7 +327,7 @@ function ListDatabases {
 				else
 				SQL_BACKUP_TASKS="$dbName"
 				fi
-				TOTAL_DATABASES_SIZE=$((TOTAL_DATABASES_SIZE+$dbSize))
+				TOTAL_DATABASES_SIZE=$((TOTAL_DATABASES_SIZE+dbSize))
 			else
 				SQL_EXCLUDED_TASKS="$SQL_EXCLUDED_TASKS $dbName"
 			fi
@@ -346,17 +347,18 @@ function _ListRecursiveBackupDirectoriesLocal {
 	local cmd
 	local directories
 	local directory
-	local retval=0
+	local retval
+	local successfulRun=false
+	local failuresPresent=false
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		# No sudo here, assuming you should have all necessary rights for local checks
 		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		Logger "cmd: $cmd" "DEBUG"
-		eval "$cmd" &
-		# Move WaitForTaskCompletion to upper level function
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-		if  [ $? != 0 ]; then
+		eval "$cmd"
+		retval=$?
+		if  [ $retval != 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -364,10 +366,18 @@ function _ListRecursiveBackupDirectoriesLocal {
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-			retval=1
+			failuresPresent=true
+		else
+			successfulRun=true
 		fi
 	done
-	return $retval
+	if [ $successfulRun == true ] && [ $failuresPresent == true ]; then
+		return 2
+	elif [ $successfulRun == true ] && [ $failuresPresent == false ]; then
+		return 0
+	else
+		return 1
+	fi
 }
 
 function _ListRecursiveBackupDirectoriesRemote {
@@ -385,12 +395,15 @@ include #### RemoteLogger SUBSET ####
 function _ListRecursiveBackupDirectoriesRemoteSub {
 	local directories
 	local directory
-	local retval=0
+	local retval
+	local successfulRun=false
+	local failuresPresent=false
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		$REMOTE_FIND_CMD -L "$directory"/ -mindepth 1 -maxdepth 1 -type d
-		if  [ $? != 0 ]; then
+		retval=$?
+		if  [ $retval != 0 ]; then
 			RemoteLogger "Could not enumerate directories in [$directory]." "ERROR"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				RemoteLogger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -398,17 +411,23 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
 				RemoteLogger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-			retval=1
+			failuresPresent=true
+		else
+			successfulRun=true
 		fi
 	done
-	return $retval
+	if [ $successfulRun == true ] && [ $failuresPresent == true ]; then
+		return 2
+	elif [ $successfulRun == true ] && [ $failuresPresent == false ]; then
+		return 0
+	else
+		return 1
+	fi
 }
 _ListRecursiveBackupDirectoriesRemoteSub
 exit $?
 ENDSSH
-
-#TODO: Add WaitForTaskCompletion here
-
+	return $?
 }
 
 function ListRecursiveBackupDirectories {
@@ -419,18 +438,20 @@ function ListRecursiveBackupDirectories {
 	local excluded
 	local fileArray
 
-	#TODO: Even with $? != 0, we should try to continue here if let's say retval=2 (or unless retval != 1 which would mean that no find command was successful)
+	# Return values from subfunctions can be 0 (no error), 1 (only errors) or 2 (some errors). Do process output except on 1 return code
 	Logger "Listing directories to backup." "NOTICE"
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		_ListRecursiveBackupDirectoriesLocal
-		if [ $? != 0 ]; then
+		_ListRecursiveBackupDirectoriesLocal &
+		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+		if [ $? == 1 ]; then
 			output_file=""
 		else
 			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID.$TSTAMP"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_ListRecursiveBackupDirectoriesRemote
-		if [ $? != 0 ]; then
+		_ListRecursiveBackupDirectoriesRemote &
+		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+		if [ $? == 1 ]; then
 			output_file=""
 		else
 			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
@@ -482,14 +503,15 @@ function ListRecursiveBackupDirectories {
 }
 
 function _GetDirectoriesSizeLocal {
-	local dir_list="${1}"
+	local dirList="${1}"
+
         __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
 	# No sudo here, assuming you should have all the necessary rights
 	# This is not pretty, but works with all supported systems
-	cmd="du -cs $dir_list | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	cmd="du -cs $dirList | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 	Logger "cmd: $cmd" "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
@@ -517,28 +539,34 @@ function _GetDirectoriesSizeLocal {
 }
 
 function _GetDirectoriesSizeRemote {
-	local dir_list="${1}"
+	local dirList="${1}"
         __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
 	#TODO(med): check if heredoc needed for compat
 	# Error output is different from stdout because not all files in list may fail at once
-	cmd=$SSH_CMD' '$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP
-	Logger "cmd: $cmd" "DEBUG"
-        eval "$cmd" &
-        WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+$COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
+include #### DEBUG SUBSET ####
+include #### TrapError SUBSET ####
+
+	cmd="du -cs $dirList | tail -n1 | cut -f1"
+        eval "$cmd"
+ENDSSH
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
+        WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
         if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-                Logger "Could not get files size for some or all directories." "ERROR"
+                RemoteLogger "Could not get files size for some or all directories." "ERROR"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                        RemoteLogger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			RemoteLogger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
         else
-                Logger "File size fetched successfully." "NOTICE"
+                RemoteLogger "File size fetched successfully." "NOTICE"
 	fi
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
 		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
@@ -567,14 +595,15 @@ function GetDirectoriesSize {
 }
 
 function _CreateDirectoryLocal {
-	local dir_to_create="${1}"
+	local dirToCreate="${1}"
 	        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ ! -d "$dir_to_create" ]; then
+	if [ ! -d "$dirToCreate" ]; then
 		# No sudo, you should have all necessary rights
-                mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1
+                mkdir -p "$dirToCreate" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1 &
+	        WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
                 if [ $? != 0 ]; then
-                        Logger "Cannot create directory [$dir_to_create]" "CRITICAL"
+                        Logger "Cannot create directory [$dirToCreate]" "CRITICAL"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
@@ -584,21 +613,37 @@ function _CreateDirectoryLocal {
 }
 
 function _CreateDirectoryRemote {
-	local dir_to_create="${1}"
+	local dirToCreate="${1}"
 	        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
-	#TODO: compat bash freebsd 11 checks
-        cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir -p \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP' 2>&1'
-        Logger "cmd: $cmd" "DEBUG"
-        eval "$cmd" &
+
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env dirToCreate="'$dirToCreate'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
+include #### DEBUG SUBSET ####
+include #### TrapError SUBSET ####
+include #### RemoteLogger SUBSET ####
+
+	if [ ! -d "$dirToCreate" ]; then
+		# No sudo, you should have all necessary rights
+                mkdir -p "$dirToCreate" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1 &
+                if [ $? != 0 ]; then
+                        RemoteLogger "Cannot create directory [$dirToCreate]" "CRITICAL"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+				RemoteLogger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			fi
+                        return 1
+                fi
+        fi
+ENDSSH
         WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
-                Logger "Cannot create remote directory [$dir_to_create]." "CRITICAL"
-                Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                Logger "Cannot create remote directory [$dirToCreate]." "CRITICAL"
+                Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 return 1
         fi
 }
@@ -650,16 +695,16 @@ function CreateStorageDirectories {
 function GetDiskSpaceLocal {
 	# GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
 	# GLOBAL VARIABLE DRIVE to pass variable to parent function
-	local path_to_check="${1}"
+	local pathToCheck="${1}"
 	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-        if [ -d "$path_to_check" ]; then
+        if [ -d "$pathToCheck" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
-		$DF_CMD "$path_to_check" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+		$DF_CMD "$pathToCheck" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
         	if [ $? != 0 ]; then
         		DISK_SPACE=0
-			Logger "Cannot get disk space in [$path_to_check] on local system." "ERROR"
+			Logger "Cannot get disk space in [$pathToCheck] on local system." "ERROR"
 			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
         	else
                 	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
@@ -669,27 +714,46 @@ function GetDiskSpaceLocal {
 			fi
         	fi
         else
-                Logger "Storage path [$path_to_check] does not exist." "CRITICAL"
+                Logger "Storage path [$pathToCheck] does not exist." "CRITICAL"
 		return 1
 	fi
 }
 
 function GetDiskSpaceRemote {
 	# USE GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
-	local path_to_check="${1}"
+	local pathToCheck="${1}"
 	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 
-	#TODO(med): if -d will fail if cannot traverse above directories. Consider using heredoc here in order to be able to use sudo
-	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' '$DF_CMD' \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
-	Logger "cmd: $cmd" "DEBUG"
-	eval "$cmd" &
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env DF_CMD="'$DF_CMD'" \
+env pathToCheck="'$pathToCheck'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
+include #### DEBUG SUBSET ####
+include #### TrapError SUBSET ####
+include #### RemoteLogger SUBSET ####
+
+function _GetDiskSpaceRemoteSub {
+        if [ -d "$pathToCheck" ]; then
+		# Not elegant solution to make df silent on errors
+		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
+		$DF_CMD "$pathToCheck"
+        else
+                RemoteLogger "Storage path [$pathToCheck] does not exist." "CRITICAL"
+		return 1
+	fi
+}
+
+_GetDiskSpaceRemoteSub
+exit $?
+ENDSSH
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
         	DISK_SPACE=0
-		Logger "Cannot get disk space in [$path_to_check] on remote system." "ERROR"
+		Logger "Cannot get disk space in [$pathToCheck] on remote system." "ERROR"
 		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		return 1
         else
                	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
@@ -831,7 +895,7 @@ function CheckDiskSpace {
 		Logger "Crypt storage space: $CRYPT_DISK_SPACE Ko" "NOTICE"
 	fi
 
-	if [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
+	if [ $BACKUP_SIZE_MINIMUM -gt $((TOTAL_DATABASES_SIZE+TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
 		Logger "Backup size is smaller than expected." "WARN"
 	fi
 }
@@ -1005,7 +1069,7 @@ function BackupDatabases {
 	done
 }
 
-#TODO: exclusions don't work for encrypted files
+#TODO: exclusions don't work for encrypted files, check if we can add exclusions to find command
 #TODO: add ParallelExec here ?
 function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
@@ -1030,6 +1094,8 @@ function EncryptFiles {
 		recursiveArgs="-mindepth 1 -maxdepth 1"
 	fi
 
+# /root/obackup-storage/files-pull//root/obackup-testdata/testData/dir rect ory/some file] to [/root/obackup-storage/crypt//dir rect ory/some file.obackup.gpg
+	Logger "Encrypting files in [$filePath]." "NOTICE" #WIP level = vERBOSe
 	while IFS= read -r -d $'\0' sourceFile; do
 		# Get path of sourcefile
 		path="$(dirname "$sourceFile")"
@@ -1048,7 +1114,7 @@ function EncryptFiles {
 			mkdir -p "$path"
 		fi
 
-		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
+		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "NOTICE"
 		#TODO: if ParallelExec, we should redirect with >> instead of >
 		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 		if [ $? != 0 ]; then
@@ -1058,8 +1124,14 @@ function EncryptFiles {
 		else
 			successCounter=$((successCounter+1))
 		fi
-	done < <(find "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
-	Logger "Encrypted [$successCounter] files successfully." "NOTICE"
+	done < <($FIND_CMD "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
+
+	if [ $successCounter -gt 0 ]; then
+		Logger "Encrypted [$successCounter] files successfully." "NOTICE"
+	elif [ $successCounter -eq 0 ] && [ $errorCounter -eq 0 ]; then
+		Logger "There were no files to encrypt." "WARN"
+	fi
+
 	if [ $errorCounter -gt 0 ]; then
 		Logger "Failed to encrypt [$errorCounter] files." "CRITICAL"
 	fi
@@ -1113,8 +1185,14 @@ function DecryptFiles {
 				Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
 			fi
 		fi
-	done < <(find "$filePath" -type f -name "*$cryptFileExtension" -print0)
-	Logger "Decrypted [$successCounter] files successfully." "NOTICE"
+	done < <($FIND_CMD "$filePath" -type f -name "*$cryptFileExtension" -print0)
+
+	if [ $successCounter -gt 0 ]; then
+		Logger "Decrypted [$successCounter] files successfully." "NOTICE"
+	elif [ $successCounter -eq 0 ] && [ $errorCounter -eq 0 ]; then
+		Logger "There were no files to decrypt." "WARN"
+	fi
+
 	if [ $errorCounter -gt 0 ]; then
 		Logger "Failed to decrypt [$errorCounter] files." "CRITICAL"
 	fi
@@ -1202,7 +1280,7 @@ function FilesBackup {
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+				EncryptFiles "$FILE_STORAGE/$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 			fi
 		else
 			Rsync "$backupTask" true
@@ -1216,14 +1294,15 @@ function FilesBackup {
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" false true
+				#TODO why was there another true param ?Rsync "$CRYPT_STORAGE/$backupTask" false true
+				Rsync "$CRYPT_STORAGE/$backupTask" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" false
 			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false false
+				EncryptFiles "$FILE_STORAGE/$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false false
 			fi
 		else
 			Rsync "$backupTask" false
@@ -1238,14 +1317,16 @@ function FilesBackup {
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" true true
+				#TODO same as above Rsync "$CRYPT_STORAGE/$backupTask" true true
+				Rsync "$CRYPT_STORAGE/$backupTask" true
+				# Where is output checking here ?
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" true
 			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+				EncryptFiles "$FILE_STORAGE/$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 			fi
 		else
 			Rsync "$backupTask" true
@@ -1279,8 +1360,7 @@ function _RotateBackupsLocal {
 	local cmd
 	local path
 
-	#TODO: Replace this -name with regex .*$PROGRAM\.[1-9][0-9]+
-	find "$backupPath" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
+	$FIND_CMD "$backupPath" -mindepth 1 -maxdepth 1 ! -regex ".*\.$PROGRAM\.[0-9]+"  -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotateCopies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotateCopies ]; then
@@ -1296,7 +1376,7 @@ function _RotateBackupsLocal {
 				fi
 			fi
 
-			path="$backup.$PROGRAM.$(($copy-1))"
+			path="$backup.$PROGRAM.$((copy-1))"
 			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				Logger "cmd: $cmd" "DEBUG"
@@ -1307,7 +1387,7 @@ function _RotateBackupsLocal {
 				fi
 
 			fi
-			copy=$(($copy-1))
+			copy=$((copy-1))
 		done
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
@@ -1348,15 +1428,14 @@ function _RotateBackupsRemote {
 
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
 env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
-env rotateCopies="'$rotateCopies'" env backupPath="'$backupPath'" \
+env REMOTE_FIND_CMD="'$REMOTE_FIND_CMD'" env rotateCopies="'$rotateCopies'" env backupPath="'$backupPath'" \
 $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
 include #### RemoteLogger SUBSET ####
 
 function _RotateBackupsRemoteSSH {
-	#TODO(low): same regex replace
-	find "$backupPath" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
+	$REMOTE_FIND_CMD "$backupPath" -mindepth 1 -maxdepth 1 ! -regex ".*\.$PROGRAM\.[0-9]+"  -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotateCopies
 		while [ $copy -gt 1 ]; do
 			if [ $copy -eq $rotateCopies ]; then
@@ -1370,7 +1449,7 @@ function _RotateBackupsRemoteSSH {
 					fi
 				fi
 			fi
-			path="$backup.$PROGRAM.$(($copy-1))"
+			path="$backup.$PROGRAM.$((copy-1))"
 			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
@@ -1380,7 +1459,7 @@ function _RotateBackupsRemoteSSH {
 				fi
 
 			fi
-			copy=$(($copy-1))
+			copy=$((opy-1))
 		done
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
@@ -1427,9 +1506,11 @@ ENDSSH
 
 }
 
+#TODO: test find cmd for backup rotation with regex on busybox / mac 
 function RotateBackups {
 	local backupPath="${1}"
 	local rotateCopies="${2}"
+
 	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	Logger "Rotating backups in [$backupPath] for [$rotateCopies] copies." "NOTICE"
@@ -1659,6 +1740,8 @@ function GetCommandlineArguments {
 GetCommandlineArguments "$@"
 if [ "$_DECRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
+	GetLocalOS
+	InitLocalOSDependingSettings
 	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION decrypt mode begin." "ALWAYS"
 	DecryptFiles "$DECRYPT_PATH" "$PASSPHRASE_FILE" "$PASSPHRASE"
 	exit $?
@@ -1666,6 +1749,8 @@ fi
 
 if [ "$_ENCRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
+	GetLocalOS
+	InitLocalOSDependingSettings
 	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION encrypt mode begin." "ALWAYS"
 	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 	exit $?
