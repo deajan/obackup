@@ -1164,11 +1164,11 @@ function DecryptFiles {
 
 	# Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
 	cryptToolVersion=$($CRYPT_TOOL --version | head -1 | awk '{print $3}')
-	cryptToolMajorVersion={$cryptToolVersion%%.*}
+	cryptToolMajorVersion=${cryptToolVersion%%.*}
 	cryptToolSubVersion=${cryptToolVersion#*.}
 	cryptToolSubVersion=${cryptToolSubVersion%.*}
 
-	if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolsubVersion -ge 1 ]; then
+	if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
 		additionalParameters="--pinentry-mode loopback"
 	fi
 
