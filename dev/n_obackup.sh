@@ -622,7 +622,7 @@ function _CreateDirectoryRemote {
 
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
 env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
-env dirToCreate="'$dirToCreate'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2&1 &
+env dirToCreate="'$dirToCreate'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
 include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
 include #### RemoteLogger SUBSET ####
@@ -638,7 +638,6 @@ include #### RemoteLogger SUBSET ####
 ENDSSH
         WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
         if [ $? != 0 ]; then
-                Logger "Cannot create remote directory [$dirToCreate]." "CRITICAL"
                 Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 return 1
         fi
