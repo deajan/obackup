@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016122401
-
-#TODO: Must recreate files before each test set
+## obackup basic tests suite 2016122801
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -13,6 +11,7 @@ CONF_DIR="$TESTS_DIR/conf"
 LOCAL_CONF="local.conf"
 PULL_CONF="pull.conf"
 PUSH_CONF="push.conf"
+
 OLD_CONF="old.conf"
 MAX_EXEC_CONF="max-exec-time.conf"
 TMP_OLD_CONF="tmp.old.conf"
@@ -25,16 +24,18 @@ TMP_FILE="$DEV_DIR/tmp"
 SOURCE_DIR="${HOME}/obackup-testdata"
 TARGET_DIR="${HOME}/obackup-storage"
 
-TARGET_DIR_SQL_LOCAL="$TARGET_DIR/sql"
-TARGET_DIR_FILE_LOCAL="$TARGET_DIR/files"
+TARGET_DIR_SQL_LOCAL="$TARGET_DIR/sql-local"
+TARGET_DIR_FILE_LOCAL="$TARGET_DIR/files-local"
+TARGET_DIR_CRYPT_LOCAL="$TARGET_DIR/crypt-local"
 
 TARGET_DIR_SQL_PULL="$TARGET_DIR/sql-pull"
 TARGET_DIR_FILE_PULL="$TARGET_DIR/files-pull"
+TARGET_DIR_CRYPT_PULL="$TARGET_DIR/crypt-pull"
 
 TARGET_DIR_SQL_PUSH="$TARGET_DIR/sql-push"
 TARGET_DIR_FILE_PUSH="$TARGET_DIR/files-push"
+TARGET_DIR_CRYPT_PUSH="$TARGET_DIR/crypt-push"
 
-TARGET_DIR_FILE_CRYPT="$TARGET_DIR/crypt"
 
 SIMPLE_DIR="testData"
 RECURSIVE_DIR="testDataRecursive"
@@ -128,19 +129,6 @@ function RemoveSSH {
         fi
 }
 
-function SetEncryption () {
-	local confFile="${1}"
-	local value="${2}"
-
-	if [ $value == true ]; then
-		sed -i 's/^ENCRYPTION=no/ENCRYPTION=yes/' "$confFile"
-		assertEquals "Enable encryption in $file" "0" $?
-	else
-		sed -i 's/^ENCRYPTION=yes/ENCRYPTION=no/' "$confFile"
-		assertEquals "Disable encryption in $file" "0" $?
-	fi
-}
-
 function SetupGPG {
 	if type gpg2 > /dev/null; then
 		CRYPT_TOOL=gpg2
@@ -228,7 +216,9 @@ function oneTimeSetUp () {
         fi
 
 	SetupGPG
-	SetupSSH
+	if [ "$SKIP_REMOTE" != "yes" ]; then
+		SetupSSH
+	fi
 
 	# Get OBACKUP version
         OBACKUP_VERSION=$(GetConfFileValue "$OBACKUP_DIR/$OBACKUP_DEV_EXECUTABLE" "PROGRAM_VERSION")
@@ -341,7 +331,7 @@ function disabled_test_GPG () {
 }
 
 function test_LocalRun () {
-	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
+	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" "no"
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
@@ -373,6 +363,10 @@ function test_LocalRun () {
 		assertEquals "Directory Excluded [$TARGET_DIR_FILE_LOCAL/$directory]" "1" $?
 	done
 
+	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-local/$SOURCE_DIR" | grep -i Exclu
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-local/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	assertEquals "Diff should only output excluded files" "0" $?
+
 	# Tests presence of rotated files
 
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
@@ -389,7 +383,11 @@ function test_LocalRun () {
 }
 
 function test_PullRun () {
-	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
+	if [ "$SKIP_REMOTE" == "yes" ]; then
+		return 0
+	fi
+
+	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" "no"
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
@@ -421,6 +419,10 @@ function test_PullRun () {
 		assertEquals "Directory Excluded [$TARGET_DIR_FILE_PULL/$directory]" "1" $?
 	done
 
+	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	assertEquals "Diff should only output excluded files" "0" $?
+
 	# Tests presence of rotated files
 
 	cd "$OBACKUP_DIR"
@@ -438,7 +440,11 @@ function test_PullRun () {
 }
 
 function test_PushRun () {
-	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
+	if [ "$SKIP_REMOTE" == "yes" ]; then
+		return 0
+	fi
+
+	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" "no"
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
@@ -470,6 +476,10 @@ function test_PushRun () {
 		assertEquals "Directory Excluded [$TARGET_DIR_FILE_PUSH/$directory]" "1" $?
 	done
 
+	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-push/$SOURCE_DIR" | grep -i Exclu
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-push/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	assertEquals "Diff should only output excluded files" "0" $?
+
 	# Tests presence of rotated files
 	cd "$OBACKUP_DIR"
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
@@ -486,20 +496,20 @@ function test_PushRun () {
 }
 
 function test_EncryptLocalRun () {
-	SetEncryption "$CONF_DIR/$LOCAL_CONF" true
+	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" "yes"
 
 	cd "$OBACKUP_DIR"
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
 
 	for file in "${FilePresence[@]}"; do
-		[ -f "$TARGET_DIR_FILE_LOCAL/$file$CRYPT_EXTENSION" ]
-		assertEquals "File Presence [$TARGET_DIR_FILE_LOCAL/$file$CRYPT_EXTENSION]" "0" $?
+		[ -f "$TARGET_DIR_CRYPT_LOCAL/$file$CRYPT_EXTENSION" ]
+		assertEquals "File Presence [$TARGET_DIR_CRYPT_LOCAL/$file$CRYPT_EXTENSION]" "0" $?
 	done
 
 # TODO: Exclusion lists don't work with encrypted files yet
 #	for file in "${FileExcluded[@]}"; do
-#		[ -f "$TARGET_DIR_FILE_LOCAL/$file$CRYPT_EXTENSION" ]
-#		assertEquals "File Excluded [$TARGET_DIR_FILE_LOCAL/$file$CRYPT_EXTENSION]" "1" $?
+#		[ -f "$TARGET_DIR_CRYPT_LOCAL/$file$CRYPT_EXTENSION" ]
+#		assertEquals "File Excluded [$TARGET_DIR_CRYPT_LOCAL/$file$CRYPT_EXTENSION]" "1" $?
 #	done
 
 	for file in "${DatabasePresence[@]}"; do
@@ -513,10 +523,13 @@ function test_EncryptLocalRun () {
 #	done
 
 #	for directory in "${DirectoriesExcluded[@]}"; do
-#		[ -d "$TARGET_DIR_FILE_LOCAL/$directory" ]
-#		assertEquals "Directory Excluded [$TARGET_DIR_FILE_LOCAL/$directory]" "1" $?
+#		[ -d "$TARGET_DIR_CRYPT_LOCAL/$directory" ]
+#		assertEquals "Directory Excluded [$TARGET_DIR_CRYPT_LOCAL/$directory]" "1" $?
 #	done
 
+	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-local/$SOURCE_DIR" | grep -i Exclu
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-local/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 5 ]
+	assertEquals "Diff should only output excluded files" "0" $?
 
 	# Tests presence of rotated files
 
@@ -529,34 +542,37 @@ function test_EncryptLocalRun () {
 		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_LOCAL/$file$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 	done
 
-	[ -d "$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
-	assertEquals "File rotated Presence [$TARGET_DIR_FILE_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
+	[ -d "$TARGET_DIR_CRYPT_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
+	assertEquals "File rotated Presence [$TARGET_DIR_CRYPT_LOCAL/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_LOCAL]" "0" $?
 
-	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
-
-	SetEncryption "$CONF_DIR/$LOCAL_CONF" false
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_CRYPT_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	assertEquals "Decrypt file storage in [$TARGET_DIR_CRYPT_LOCAL]" "0" $?
 }
 
 function test_EncryptPullRun () {
+	if [ "$SKIP_REMOTE" == "yes" ]; then
+		return 0
+	fi
+
 	# Basic return code tests. Need to go deep into file presence testing
-	SetEncryption "$CONF_DIR/$PULL_CONF" true
+	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" "yes"
+
 
 	cd "$OBACKUP_DIR"
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${FilePresence[@]}"; do
-		[ -f "$TARGET_DIR_FILE_CRYPT/$file$CRYPT_EXTENSION" ]
-		assertEquals "File Presence [$TARGET_DIR_FILE_CRYPT/$file$CRYPT_EXTENSION]" "0" $?
+		[ -f "$TARGET_DIR_CRYPT_PULL/$file$CRYPT_EXTENSION" ]
+		assertEquals "File Presence [$TARGET_DIR_CRYPT_PULL/$file$CRYPT_EXTENSION]" "0" $?
 	done
 
 #	for file in "${FileExcluded[@]}"; do
-#		[ -f "$TARGET_DIR_FILE_CRYPT/$file$CRYPT_EXTENSION" ]
-#		assertEquals "File Excluded [$TARGET_DIR_FILE_PULL/$file$CRYPT_EXTENSION]" "1" $?
+#		[ -f "$TARGET_DIR_CRYPT_PULL/$file$CRYPT_EXTENSION" ]
+#		assertEquals "File Excluded [$TARGET_DIR_CRYPT_PULL/$file$CRYPT_EXTENSION]" "1" $?
 #	done
 
 	for file in "${DatabasePresence[@]}"; do
@@ -573,6 +589,11 @@ function test_EncryptPullRun () {
 #		[ -d "$TARGET_DIR_FILE_PULL/$directory" ]
 #		assertEquals "Directory Excluded [$TARGET_DIR_FILE_PULL/$directory]" "1" $?
 #	done
+
+	# Only excluded files should be listed here
+	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	assertEquals "Diff should only output excluded files" "0" $?
 
 	# Tests presence of rotated files
 
@@ -591,20 +612,24 @@ function test_EncryptPullRun () {
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PULL]" "0" $?
 
-	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_CRYPT" --passphrase-file="$TESTS_DIR/$PASSFILE"
-	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_CRYPT]" "0" $?
-
-	SetEncryption "$CONF_DIR/$PULL_CONF" false
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_CRYPT_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
+	assertEquals "Decrypt file storage in [$TARGET_DIR_CRYPT_PULL]" "0" $?
 }
 
 function test_EncryptPushRun () {
+	if [ "$SKIP_REMOTE" == "yes" ]; then
+		return 0
+	fi
+
 	# Basic return code tests. Need to go deep into file presence testing
-	SetEncryption "$CONF_DIR/$PUSH_CONF" true
+	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" "yes"
+
 
 	cd "$OBACKUP_DIR"
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
 	assertEquals "Return code" "0" $?
 
+	# Same here, why do we check for crypt extension in file_push instead of file_crypt
 	for file in "${FilePresence[@]}"; do
 		[ -f "$TARGET_DIR_FILE_PUSH/$file$CRYPT_EXTENSION" ]
 		assertEquals "File Presence [$TARGET_DIR_FILE_PUSH/$file$CRYPT_EXTENSION]" "0" $?
@@ -630,6 +655,9 @@ function test_EncryptPushRun () {
 #		assertEquals "Directory Excluded [$TARGET_DIR_FILE_PUSH/$directory]" "1" $?
 #	done
 
+	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-push/$SOURCE_DIR" | grep -i Exclu
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-push/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 5 ]
+	assertEquals "Diff should only output excluded files" "0" $?
 	# Tests presence of rotated files
 
 	cd "$OBACKUP_DIR"
@@ -644,16 +672,14 @@ function test_EncryptPushRun () {
 	[ -d "$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION" ]
 	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$CRYPT_EXTENSION$ROTATE_1_EXTENSION]" "0" $?
 
-	_PARANOIA_DEBUG=yes REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE" --verbose
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_SQL_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE" --verbose
 	assertEquals "Decrypt sql storage in [$TARGET_DIR_SQL_PUSH]" "0" $?
 
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
-
-	SetEncryption "$CONF_DIR/$PUSH_CONF" false
 }
 
-function test_timed_execution () {
+function nope_test_timed_execution () {
 	cd "$OBACKUP_DIR"
 
 	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 1
@@ -717,7 +743,7 @@ function test_timed_execution () {
 	assertEquals "Hard max exec time total reached in obackup Return code" "1" $?
 }
 
-function test_WaitForTaskCompletion () {
+function nope_test_WaitForTaskCompletion () {
 	local pids
 	# Standard wait
 	sleep 1 &
@@ -764,7 +790,7 @@ function test_WaitForTaskCompletion () {
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
 
-function test_ParallelExec () {
+function nope_test_ParallelExec () {
 	local cmd
 
 	# Test if parallelExec works correctly in array mode
@@ -821,7 +847,7 @@ function test_ParallelExec () {
 
 }
 
-function test_UpgradeConfPullRun () {
+function nope_test_UpgradeConfPullRun () {
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
