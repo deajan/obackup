@@ -679,7 +679,7 @@ function test_EncryptPushRun () {
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
 }
 
-function nope_test_timed_execution () {
+function test_timed_execution () {
 	cd "$OBACKUP_DIR"
 
 	SetConfFileValue "$CONF_DIR/$MAX_EXEC_CONF" "SOFT_MAX_EXEC_TIME_DB_TASK" 1
@@ -743,7 +743,7 @@ function nope_test_timed_execution () {
 	assertEquals "Hard max exec time total reached in obackup Return code" "1" $?
 }
 
-function nope_test_WaitForTaskCompletion () {
+function test_WaitForTaskCompletion () {
 	local pids
 	# Standard wait
 	sleep 1 &
@@ -790,7 +790,7 @@ function nope_test_WaitForTaskCompletion () {
 	assertEquals "WaitForTaskCompletion test 5" "2" $?
 }
 
-function nope_test_ParallelExec () {
+function test_ParallelExec () {
 	local cmd
 
 	# Test if parallelExec works correctly in array mode
@@ -847,7 +847,7 @@ function nope_test_ParallelExec () {
 
 }
 
-function nope_test_UpgradeConfPullRun () {
+function test_UpgradeConfPullRun () {
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
