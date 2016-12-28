@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122802
+PROGRAM_BUILD=2016122803
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -1774,7 +1774,7 @@ if [ "$_ENCRYPT_MODE" == true ]; then
 	GetLocalOS
 	InitLocalOSDependingSettings
 	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION encrypt mode begin." "ALWAYS"
-	EncryptFiles "" "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 	exit $?
 fi
 
