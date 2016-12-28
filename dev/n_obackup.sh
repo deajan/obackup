@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122803
+PROGRAM_BUILD=2016122804
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -1152,11 +1152,24 @@ function DecryptFiles {
 	local secret
 	local successCounter=0
 	local errorCounter=0
+	local cryptToolVersion
+	local cryptToolMajorVersion
+	local cryptToolSubVersion
 	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
 
 	if [ ! -w "$filePath" ]; then
 		Logger "Directory [$filePath] is not writable. Cannot decrypt files." "CRITICAL"
 		exit 1
+	fi
+
+	# Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
+	cryptToolVersion=$($CRYPT_TOOL --version | head -1 | awk '{print $3}')
+	cryptToolMajorVersion={$cryptToolVersion%%.*}
+	cryptToolSubVersion=${cryptToolVersion#*.}
+	cryptToolSubVersion=${cryptToolSubVersion%.*}
+
+	if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolsubVersion -ge 1 ]; then
+		additionalParameters="--pinentry-mode loopback"
 	fi
 
 	if [ -f "$passphraseFile" ]; then
@@ -1176,7 +1189,7 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 		if [ $? != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
 			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
