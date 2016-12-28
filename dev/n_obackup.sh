@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122701
+PROGRAM_BUILD=2016122801
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -544,7 +544,6 @@ function _GetDirectoriesSizeRemote {
 
 	local cmd
 
-	#TODO(med): check if heredoc needed for compat
 	# Error output is different from stdout because not all files in list may fail at once
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
 env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
@@ -1085,6 +1084,14 @@ function EncryptFiles {
 	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
 	local recursiveArgs=""
 
+	if [ ! -d "$destPath" ]; then
+		mkdir -p "$destPath"
+		if [ $? -ne 0 ]; then
+			Logger "Cannot create crypt storage path [$destPath]." "ERROR"
+			return 1
+		fi
+	fi
+
 	if [ ! -w "$destPath" ]; then
 		Logger "Cannot write to crypt storage path [$destPath]." "ERROR"
 		return 1
@@ -1095,7 +1102,7 @@ function EncryptFiles {
 	fi
 
 # /root/obackup-storage/files-pull//root/obackup-testdata/testData/dir rect ory/some file] to [/root/obackup-storage/crypt//dir rect ory/some file.obackup.gpg
-	Logger "Encrypting files in [$filePath]." "NOTICE" #WIP level = vERBOSe
+	Logger "Encrypting files in [$filePath]." "VERBOSE"
 	while IFS= read -r -d $'\0' sourceFile; do
 		# Get path of sourcefile
 		path="$(dirname "$sourceFile")"
@@ -1200,26 +1207,14 @@ function DecryptFiles {
 }
 
 function Rsync {
-	local backupDirectory="${1}"	# Which directory to backup
+	local sourceDir="${1}"		# Source directory
+	local destinationDir="${2}"	# Destination directory
 	local recursive="${2:-true}"	# Backup only files at toplevel of directory
 
         __CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	local fileStoragePath
-	local withoutCryptPath
 	local rsyncCmd
 	local retval
-
-	if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
-		if [ "$ENCRYPTION" == "yes" ]; then
-			withoutCryptPath="${backupDirectory#$CRYPT_STORAGE}"
-			fileStoragePath=$(dirname "$FILE_STORAGE/${withoutCryptPath#/}")
-		else
-			fileStoragePath=$(dirname "$FILE_STORAGE/${backupDirectory#/}")
-		fi
-	else
-		fileStoragePath="$FILE_STORAGE"
-	fi
 
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
 	if [ $recursive == false ]; then
@@ -1229,22 +1224,25 @@ function Rsync {
 		RSYNC_NO_RECURSE_ARGS=""
 	fi
 
+	Logger "Beginning file backup of [$sourceDir] to [$destinationDir]." "VERBOSE"
+
+
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
-		_CreateDirectoryLocal "$fileStoragePath"
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+		_CreateDirectoryLocal "$destinationDir"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$sourceDir\" \"$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_CreateDirectoryLocal "$fileStoragePath"
+		_CreateDirectoryLocal "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		backupDirectory=$(EscapeSpaces "$backupDirectory")
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+		sourceDir=$(EscapeSpaces "$sourceDir")
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$sourceDir\" \"$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		fileStoragePath=$(EscapeSpaces "$fileStoragePath")
-		_CreateDirectoryRemote "$fileStoragePath"
+		destinationDir=$(EscapeSpaces "$destinationDir")
+		_CreateDirectoryRemote "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backupDirectory\" \"$REMOTE_USER@$REMOTE_HOST:$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$sourceDir\" \"$REMOTE_USER@$REMOTE_HOST:$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	fi
 
 	Logger "cmd: $rsyncCmd" "DEBUG"
@@ -1252,7 +1250,7 @@ function Rsync {
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ $retval != 0 ]; then
-		Logger "Failed to backup [$backupDirectory] to [$fileStoragePath]." "ERROR"
+		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
@@ -1266,46 +1264,66 @@ function FilesBackup {
 
 	local backupTask
 	local backupTasks
+	local destinationDir
+	local withoutCryptPath
+
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
-		Logger "Beginning file backup of [$backupTask]." "NOTICE"
+
+		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
+		else
+			destinationDir="$FILE_STORAGE"
+			encryptDir="$FILE_STORAGE"
+		fi
+
+		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" true
+				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
-			Rsync "$backupTask" true
+			Rsync "$backupTask" "$destinationDir" true
 			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE/$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
 			fi
 		else
-			Rsync "$backupTask" true
+			Rsync "$backupTask" "$destinationDir" true
 		fi
 		CheckTotalExecutionTime
 	done
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
-		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
+
+		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
+		else
+			destinationDir="$FILE_STORAGE"
+			encryptDir="$FILE_STORAGE"
+		fi
+
+		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? == 0 ]; then
-				#TODO why was there another true param ?Rsync "$CRYPT_STORAGE/$backupTask" false true
-				Rsync "$CRYPT_STORAGE/$backupTask" false
+				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
-			Rsync "$backupTask" false
+			Rsync "$backupTask" "$destinationDir" false
 			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE/$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false false
+				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" false false
 			fi
 		else
-			Rsync "$backupTask" false
+			Rsync "$backupTask" "$destinationDir" false
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1313,23 +1331,31 @@ function FilesBackup {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_RECURSIVE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup sub directories of recursive directories
-		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
+
+		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
+		else
+			destinationDir="$FILE_STORAGE"
+			encryptDir="$FILE_STORAGE"
+		fi
+
+		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? == 0 ]; then
-				#TODO same as above Rsync "$CRYPT_STORAGE/$backupTask" true true
-				Rsync "$CRYPT_STORAGE/$backupTask" true
-				# Where is output checking here ?
+				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
+				#TODO Where is output checking here ?
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
-			Rsync "$backupTask" true
+			Rsync "$backupTask" "$destinationDir" true
 			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE/$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
 			fi
 		else
-			Rsync "$backupTask" true
+			Rsync "$backupTask" "$destinationDir" true
 		fi
 		CheckTotalExecutionTime
 	done
@@ -1506,7 +1532,7 @@ ENDSSH
 
 }
 
-#TODO: test find cmd for backup rotation with regex on busybox / mac 
+#TODO: test find cmd for backup rotation with regex on busybox / mac
 function RotateBackups {
 	local backupPath="${1}"
 	local rotateCopies="${2}"
@@ -1752,7 +1778,7 @@ if [ "$_ENCRYPT_MODE" == true ]; then
 	GetLocalOS
 	InitLocalOSDependingSettings
 	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION encrypt mode begin." "ALWAYS"
-	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+	EncryptFiles "" "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 	exit $?
 fi
 
