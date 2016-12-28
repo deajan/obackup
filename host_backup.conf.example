@@ -27,6 +27,8 @@ SQL_STORAGE="/home/storage/backup/sql"
 FILE_STORAGE="/home/storage/backup/files"
 
 ## Backup encryption using GPG and rsync.
+## Push backups get encrypted locally in CRYPT_STORAGE before they are sent to the remote system
+## Local and pull backups get encrypted after backup, in CRYPT_STORAGE
 ENCRYPTION=no
 
 ## Backup encryption needs a temporary storage space in order to encrypt files before sending them (absolute paths of the local or remote system)
