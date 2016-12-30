@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2016122801
+#TODO Encrypted Pull runs on F25 fail for decryption
+
+## obackup basic tests suite 2016123001
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -137,6 +139,8 @@ function SetupGPG {
 	else
 		echo "No gpg support"
 	fi
+
+	echo "Crypt tool=$CRYPT_TOOL"
 
 	if ! $CRYPT_TOOL --list-keys | grep "John Doe" > /dev/null; then
 
@@ -299,34 +303,52 @@ function test_Merge () {
         SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" "yes"
 }
 
-# Keep this function to check Travis environment GPG behavior. No need to run this test otherwise.
-function disabled_test_GPG () {
+# Keep this function to check GPG behavior depending on OS. (GPG 2.1 / GPG 2.0x / GPG 1.4 don't behave the same way)
+function test_GPG () {
 	echo "Encrypting file"
 	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION" --recipient "John Doe" --batch --yes --encrypt "$TESTS_DIR/$PASSFILE"
 	assertEquals "Encrypt file" "0" $?
 
+
+        # Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
+        cryptToolVersion=$($CRYPT_TOOL --version | head -1 | awk '{print $3}')
+        cryptToolMajorVersion=${cryptToolVersion%%.*}
+        cryptToolSubVersion=${cryptToolVersion#*.}
+        cryptToolSubVersion=${cryptToolSubVersion%.*}
+
+        if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
+                additionalParameters="--pinentry-mode loopback"
+        fi
+
+	if [ "$CRYPT_TOOL" == "gpg2" ]; then
+                options="--batch --yes"
+        elif [ "$CRYPT_TOOL" == "gpg" ]; then
+                options="--no-use-agent --batch"
+        fi
+
+
 	echo "Decrypt using passphrase file"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passfile" "0" $?
 
 	echo "Decrypt using passphrase"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase file with cat"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase file --no-use-agent"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --no-use-agent --batch --yes --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase --no-use-agent"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --no-use-agent --batch --yes --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 
 	echo "Decrypt using passphrase file with cat --no-use-agent"
-	$CRYPT_TOOL --out "$TESTS_DIR/$CRYPT_TESTFILE" --no-use-agent --batch --yes --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
+	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
 }
 
