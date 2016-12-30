@@ -338,18 +338,6 @@ function test_GPG () {
 	echo "Decrypt using passphrase file with cat"
 	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passphrase" "0" $?
-
-	echo "Decrypt using passphrase file --no-use-agent"
-	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
-	assertEquals "Decrypt file using passphrase" "0" $?
-
-	echo "Decrypt using passphrase --no-use-agent"
-	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase PassPhrase123 --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
-	assertEquals "Decrypt file using passphrase" "0" $?
-
-	echo "Decrypt using passphrase file with cat --no-use-agent"
-	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase $(cat "$TESTS_DIR/$PASSFILE") --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
-	assertEquals "Decrypt file using passphrase" "0" $?
 }
 
 function test_LocalRun () {
