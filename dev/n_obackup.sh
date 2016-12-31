@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016122804
+PROGRAM_BUILD=2016123101
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -1157,8 +1157,10 @@ function DecryptFiles {
 	local cryptToolSubVersion
 	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
 
+	local retval
+
 	if [ ! -w "$filePath" ]; then
-		Logger "Directory [$filePath] is not writable. Cannot decrypt files." "CRITICAL"
+		Logger "Path [$filePath] is not writable or does not exist. Cannot decrypt files." "CRITICAL"
 		exit 1
 	fi
 
@@ -1190,9 +1192,10 @@ function DecryptFiles {
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
 		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
-		if [ $? != 0 ]; then
+		retval=$?
+		if [ $retval != 0 ]; then
 			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
-			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 			errorCounter=$((errorCounter+1))
 		else
 			successCounter=$((successCounter+1))
