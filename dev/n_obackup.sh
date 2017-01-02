@@ -602,6 +602,7 @@ env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
 $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
 include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
+incldue #### RemoteLogger SUBSET ####
 
 	cmd="du -cs $dirList | tail -n1 | cut -f1"
 	RemoteLogger "cmd: $cmd" "DEBUG"
