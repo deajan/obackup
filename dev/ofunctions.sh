@@ -3,7 +3,7 @@
 #### OFUNCTIONS MINI SUBSET ####
 
 _OFUNCTIONS_VERSION=2.1-RC1+dev
-_OFUNCTIONS_BUILD=2016122701
+_OFUNCTIONS_BUILD=2017010201
 #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
 _OFUNCTIONS_BOOTSTRAP=true
 #### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
@@ -586,7 +586,7 @@ function TrapError {
 	local code="${2:-1}"
 
 	if [ $_LOGGER_SILENT == false ]; then
-		echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m"
+		(>&2 echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m")
 	fi
 }
 #### TrapError SUBSET END ####
