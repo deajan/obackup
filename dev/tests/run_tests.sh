@@ -2,7 +2,7 @@
 
 #TODO Encrypted Pull runs on F25 fail for decryption
 
-## obackup basic tests suite 2016123001
+## obackup basic tests suite 2017010201
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -15,8 +15,8 @@ PULL_CONF="pull.conf"
 PUSH_CONF="push.conf"
 
 OLD_CONF="old.conf"
-MAX_EXEC_CONF="max-exec-time.conf"
 TMP_OLD_CONF="tmp.old.conf"
+MAX_EXEC_CONF="max-exec-time.conf"
 
 OBACKUP_EXECUTABLE="obackup.sh"
 OBACKUP_DEV_EXECUTABLE="dev/n_obackup.sh"
@@ -95,7 +95,7 @@ function SetConfFileValue () {
 
         if grep "^$name=" "$file" > /dev/null; then
                 # Using -i.tmp for BSD compat
-                sed -i.tmp "s/^$name=.*/$name=$value/" "$file"
+                sed -i.tmp "s#^$name=.*#$name=$value#" "$file"
                 rm -f "$file.tmp"
                 assertEquals "Set $name to [$value]." "0" $?
         else
@@ -232,6 +232,17 @@ function oneTimeSetUp () {
         OBACKUP_IS_STABLE=$(GetConfFileValue "$OBACKUP_DIR/$OBACKUP_DEV_EXECUTABLE" "IS_STABLE")
 
         echo "Running with $OBACKUP_VERSION ($OBACKUP_MIN_VERSION) STABLE=$OBACKUP_IS_STABLE"
+
+	# Set basic values that could get changed later
+	for i in "$LOCAL_CONF" "$PULL_CONF" "$PUSH_CONF"; do
+		SetConfFileValue "$CONF_DIR/$i" "ENCRYPTION" "no"
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_LIST" "mysql"
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "DIRECTORY_LIST" "${HOME}/obackup-testdata/testData"
+		SetConfFileValue "$CONF_DIR/$i" "RECURSIVE_DIRECTORY_LIST" "${HOME}/obackup-testdata/testDataRecursive"
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "yes"
+	done
 }
 
 function oneTimeTearDown () {
@@ -560,6 +571,8 @@ function test_EncryptLocalRun () {
 
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_CRYPT_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_CRYPT_LOCAL]" "0" $?
+
+	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" "no"
 }
 
 function test_EncryptPullRun () {
@@ -624,6 +637,8 @@ function test_EncryptPullRun () {
 
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_CRYPT_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_CRYPT_PULL]" "0" $?
+
+	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" "no"
 }
 
 function test_EncryptPushRun () {
@@ -687,6 +702,44 @@ function test_EncryptPushRun () {
 
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
+
+	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" "no"
+}
+
+function test_missing_databases () {
+	cd "$OBACKUP_DIR"
+
+	# Prepare files for missing databases
+	for i in "$LOCAL_CONF" "$PUSH_CONF" "$PULL_CONF"; do
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" "no"
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_LIST" "\"zorglub;mysql\""
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "no"
+
+		_DEBUG=yes REMOTE_HOST=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$i" --verbose
+		assertEquals "Missing databases should trigger error with [$i]" "1" $?
+
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_LIST" "mysql"
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "yes"
+
+	done
+
+	for i in "$LOCAL_CONF" "$PUSH_CONF" "$PULL_CONF"; do
+		SetConfFileValue "$CONF_DIR/$i" "DIRECTORY_LIST" "${HOME}/obackup-testdata/nonPresentData"
+		SetConfFileValue "$CONF_DIR/$i" "RECURSIVE_DIRECTORY_LIST" "${HOME}/obackup-testdata/nonPresentDataRecursive"
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "no"
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "yes"
+
+		REMOTE_HOST=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$i"
+		assertEquals "Missing files should trigger error with [$i]" "1" $?
+		echo "glob"
+		return
+		echo "nope"
+		SetConfFileValue "$CONF_DIR/$i" "DIRECTORY_LIST" "${HOME}/obackup-testdata/testData"
+		SetConfFileValue "$CONF_DIR/$i" "RECURSIVE_DIRECTORY_LIST" "${HOME}/obackup-testdata/testDataRecursive"
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "yes"
+	done
 }
 
 function test_timed_execution () {
