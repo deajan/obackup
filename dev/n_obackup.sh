@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010205
+PROGRAM_BUILD=2017010206
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -455,70 +455,74 @@ function ListRecursiveBackupDirectories {
 	local excluded
 	local fileArray
 
-	if [ "$RECURSIVE_DIRECTORY_LIST" == "" ]; then
-	fi
-	# Return values from subfunctions can be 0 (no error), 1 (only errors) or 2 (some errors). Do process output except on 1 return code
-	Logger "Listing directories to backup." "NOTICE"
-	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		_ListRecursiveBackupDirectoriesLocal &
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-		if [ $? -eq 1 ]; then
-			output_file=""
-		else
-			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID.$TSTAMP"
-		fi
-	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_ListRecursiveBackupDirectoriesRemote &
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-		if [ $? -eq 1 ]; then
-			output_file=""
-		else
-			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
-		fi
-	fi
+	if [ "$RECURSIVE_DIRECTORY_LIST" != "" ]; then
 
-	if [ -f "$output_file" ]; then
-		while read -r line; do
-			file_exclude=0
-			IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$RECURSIVE_EXCLUDE_LIST"
-			for excluded in "${fileArray[@]}"; do
-				if [ "$excluded" == "$line" ]; then
-					file_exclude=1
-				fi
-			done
-
-			if [ $file_exclude -eq 0 ]; then
-				if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
-					FILE_SIZE_LIST_LOCAL="\"$line\""
-					FILE_SIZE_LIST_REMOTE="\'$line\'"
-					FILE_RECURSIVE_BACKUP_TASKS="$line"
-				else
-					FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$line\""
-					FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$line\'"
-					FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
-				fi
+		# Return values from subfunctions can be 0 (no error), 1 (only errors) or 2 (some errors). Do process output except on 1 return code
+		Logger "Listing directories to backup." "NOTICE"
+		if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
+			_ListRecursiveBackupDirectoriesLocal &
+			WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+			if [ $? -eq 1 ]; then
+				output_file=""
 			else
-				FILE_RECURSIVE_EXCLUDED_TASKS="$FILE_RECURSIVE_EXCLUDED_TASKS$PATH_SEPARATOR_CHAR$line"
+				output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID.$TSTAMP"
 			fi
-		done < "$output_file"
+		elif [ "$BACKUP_TYPE" == "pull" ]; then
+			_ListRecursiveBackupDirectoriesRemote &
+			WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+			if [ $? -eq 1 ]; then
+				output_file=""
+			else
+			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
+			fi
+		fi
+
+		if [ -f "$output_file" ]; then
+			while read -r line; do
+				file_exclude=0
+				IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$RECURSIVE_EXCLUDE_LIST"
+				for excluded in "${fileArray[@]}"; do
+					if [ "$excluded" == "$line" ]; then
+						file_exclude=1
+					fi
+				done
+
+				if [ $file_exclude -eq 0 ]; then
+					if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
+						FILE_SIZE_LIST_LOCAL="\"$line\""
+						FILE_SIZE_LIST_REMOTE="\'$line\'"
+						FILE_RECURSIVE_BACKUP_TASKS="$line"
+					else
+						FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$line\""
+					FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$line\'"
+						FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
+					fi
+				else
+					FILE_RECURSIVE_EXCLUDED_TASKS="$FILE_RECURSIVE_EXCLUDED_TASKS$PATH_SEPARATOR_CHAR$line"
+				fi
+			done < "$output_file"
+		fi
 	fi
 
-	IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
-	for directory in "${fileArray[@]}"; do
-		if [ "$FILE_SIZE_LIST_LOCAL" == "" ]; then
-			FILE_SIZE_LIST_LOCAL="\"$directory\""
-			FILE_SIZE_LIST_REMOTE="\'$directory\'"
-		else
-			FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$directory\""
-			FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$directory\'"
-		fi
+	if [ "$DIRECTORY_LIST" != "" ]; then
 
-		if [ "$FILE_BACKUP_TASKS" == "" ]; then
-			FILE_BACKUP_TASKS="$directory"
-		else
-			FILE_BACKUP_TASKS="$FILE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$directory"
-		fi
-	done
+		IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
+		for directory in "${fileArray[@]}"; do
+			if [ "$FILE_SIZE_LIST_LOCAL" == "" ]; then
+				FILE_SIZE_LIST_LOCAL="\"$directory\""
+				FILE_SIZE_LIST_REMOTE="\'$directory\'"
+			else
+				FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$directory\""
+				FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$directory\'"
+			fi
+
+			if [ "$FILE_BACKUP_TASKS" == "" ]; then
+				FILE_BACKUP_TASKS="$directory"
+			else
+				FILE_BACKUP_TASKS="$FILE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$directory"
+			fi
+		done
+	fi
 }
 
 function _GetDirectoriesSizeLocal {
