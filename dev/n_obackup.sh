@@ -1230,17 +1230,18 @@ function DecryptFiles {
 		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
 			echo "$CRYPT_TOOL $options --out \"${encryptedFile%%$cryptFileExtension}\" $additionalParameters $secret --decrypt \"$encryptedFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
-		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
-		retval=$?
-		if [ $retval != 0 ]; then
-			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
-			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
-			errorCounter=$((errorCounter+1))
-		else
-			successCounter=$((successCounter+1))
-			rm -f "$encryptedFile"
-			if [ $? != 0 ]; then
-				Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
+			$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+			retval=$?
+			if [ $retval != 0 ]; then
+				Logger "Cannot decrypt [$encryptedFile]." "ERROR"
+				Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
+				errorCounter=$((errorCounter+1))
+			else
+				successCounter=$((successCounter+1))
+				rm -f "$encryptedFile"
+				if [ $? != 0 ]; then
+					Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
+				fi
 			fi
 		fi
 	done < <($FIND_CMD "$filePath" -type f -name "*$cryptFileExtension" -print0)
