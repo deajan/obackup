@@ -716,7 +716,7 @@ function test_missing_databases () {
 		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "yes"
 		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "no"
 
-		_DEBUG=yes REMOTE_HOST=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$i" --verbose
+		REMOTE_HOST=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$i"
 		assertEquals "Missing databases should trigger error with [$i]" "1" $?
 
 		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" "yes"
