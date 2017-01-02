@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010204
+PROGRAM_BUILD=2017010205
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -244,7 +244,8 @@ function _ListDatabasesLocal {
 function _ListDatabasesRemote {
         __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sqlCmd=
+	local sqlCmd
+	local retval
 
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
@@ -252,14 +253,15 @@ function _ListDatabasesRemote {
         Logger "cmd: $sqlCmd" "DEBUG"
         eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-        if [ $? -eq 0 ]; then
+	retval=$?
+        if [ $retval -eq 0 ]; then
                 Logger "Listing databases succeeded." "NOTICE"
         else
                 Logger "Listing databases failed." "ERROR"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
-                return 1
+                return $retval
         fi
 }
 
@@ -283,14 +285,14 @@ function ListDatabases {
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		_ListDatabasesLocal
-		if [ $? != 0 ]; then
+		if [ $? -ne 0 ]; then
 			outputFile=""
 		else
 			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesLocal.$SCRIPT_PID.$TSTAMP"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_ListDatabasesRemote
-		if [ $? != 0 ]; then
+		if [ $? -ne 0 ]; then
 			outputFile=""
 		else
 			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesRemote.$SCRIPT_PID.$TSTAMP"
@@ -369,7 +371,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 		Logger "cmd: $cmd" "DEBUG"
 		eval "$cmd"
 		retval=$?
-		if  [ $retval != 0 ]; then
+		if  [ $retval -ne 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -415,7 +417,7 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 	for directory in "${directories[@]}"; do
 		$REMOTE_FIND_CMD -L "$directory"/ -mindepth 1 -maxdepth 1 -type d
 		retval=$?
-		if  [ $retval != 0 ]; then
+		if  [ $retval -ne 0 ]; then
 			RemoteLogger "Could not enumerate directories in [$directory]." "ERROR"
 			failuresPresent=true
 		else
@@ -458,7 +460,7 @@ function ListRecursiveBackupDirectories {
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		_ListRecursiveBackupDirectoriesLocal &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-		if [ $? == 1 ]; then
+		if [ $? -ne 0 ]; then
 			output_file=""
 		else
 			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID.$TSTAMP"
@@ -466,7 +468,7 @@ function ListRecursiveBackupDirectories {
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_ListRecursiveBackupDirectoriesRemote &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-		if [ $? == 1 ]; then
+		if [ $? -ne 0 ]; then
 			output_file=""
 		else
 			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
@@ -523,6 +525,7 @@ function _GetDirectoriesSizeLocal {
         __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
 	# No sudo here, assuming you should have all the necessary rights
 	# This is not pretty, but works with all supported systems
@@ -531,7 +534,8 @@ function _GetDirectoriesSizeLocal {
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
-        if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+	retval=$?
+        if  [ $retval -ne  0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
                 Logger "Could not get files size for some or all directories." "ERROR"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -558,6 +562,7 @@ function _GetDirectoriesSizeRemote {
         __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
 	# Error output is different from stdout because not all files in list may fail at once
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
@@ -571,7 +576,8 @@ include #### TrapError SUBSET ####
 ENDSSH
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-        if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+	retval=$?
+        if  [ $retval -ne 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
                 RemoteLogger "Could not get files size for some or all directories." "ERROR"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         RemoteLogger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -612,16 +618,19 @@ function _CreateDirectoryLocal {
 	local dirToCreate="${1}"
 	        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
+	local retval
+
 	if [ ! -d "$dirToCreate" ]; then
 		# No sudo, you should have all necessary rights
                 mkdir -p "$dirToCreate" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1 &
 	        WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
-                if [ $? != 0 ]; then
+		retval=$?
+                if [ $retval -ne 0 ]; then
                         Logger "Cannot create directory [$dirToCreate]" "CRITICAL"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-                        return 1
+                        return $retval
                 fi
         fi
 }
@@ -631,6 +640,7 @@ function _CreateDirectoryRemote {
 	        __CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
@@ -645,16 +655,18 @@ include #### RemoteLogger SUBSET ####
 	if [ ! -d "$dirToCreate" ]; then
 		# No sudo, you should have all necessary rights
                 mkdir -p "$dirToCreate"
-                if [ $? != 0 ]; then
+		retval=$?
+                if [ $retval -ne 0 ]; then
                         RemoteLogger "Cannot create directory [$dirToCreate]" "CRITICAL"
-                        return 1
+                        return $retval
                 fi
         fi
 ENDSSH
         WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
-        if [ $? != 0 ]; then
+	retval=$?
+        if [ $retval -ne 0 ]; then
                 Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
-                return 1
+                return $retval
         fi
 }
 
@@ -664,38 +676,38 @@ function CreateStorageDirectories {
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryLocal "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateDirectoryLocal "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 		if [ "$ENCRYPTION" == "yes" ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 		if [ "$ENCRYPTION" == "yes" ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
@@ -706,13 +718,17 @@ function GetDiskSpaceLocal {
 	# GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
 	# GLOBAL VARIABLE DRIVE to pass variable to parent function
 	local pathToCheck="${1}"
+
 	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
+
+	local retval
 
         if [ -d "$pathToCheck" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
 		$DF_CMD "$pathToCheck" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
-        	if [ $? != 0 ]; then
+		retval=$?
+        	if [ $retval -ne 0 ]; then
         		DISK_SPACE=0
 			Logger "Cannot get disk space in [$pathToCheck] on local system." "ERROR"
 			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -732,9 +748,11 @@ function GetDiskSpaceLocal {
 function GetDiskSpaceRemote {
 	# USE GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
 	local pathToCheck="${1}"
+
 	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
 env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
@@ -759,12 +777,13 @@ _GetDiskSpaceRemoteSub
 exit $?
 ENDSSH
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false
-        if [ $? != 0 ]; then
+	retval=$?
+        if [ $retval -ne 0 ]; then
         	DISK_SPACE=0
 		Logger "Cannot get disk space in [$pathToCheck] on remote system." "ERROR"
 		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
-		return 1
+		return $retval
         else
                	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
                	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
@@ -782,7 +801,7 @@ function CheckDiskSpace {
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			GetDiskSpaceLocal "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
 				CAN_BACKUP_SQL=false
 			else
@@ -792,7 +811,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			GetDiskSpaceLocal "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
 				CAN_BACKUP_FILES=false
 			else
@@ -802,7 +821,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$ENCRYPTION" != "no" ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
 				CAN_BACKUP_FILES=false
 				CAN_BACKUP_SQL=false
@@ -814,7 +833,7 @@ function CheckDiskSpace {
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			GetDiskSpaceRemote "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
 			else
 				SQL_DISK_SPACE=$DISK_SPACE
@@ -823,7 +842,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			GetDiskSpaceRemote "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
 			else
 				FILE_DISK_SPACE=$DISK_SPACE
@@ -832,7 +851,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$ENCRYPTION" != "no" ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
 				CAN_BACKUP_FILES=false
 				CAN_BACKUP_SQL=false
@@ -1134,7 +1153,7 @@ function EncryptFiles {
 			echo "$CRYPT_TOOL --batch --yes --out \"$path/$file$cryptFileExtension\" --recipient=\"$recipient\" --encrypt \"$sourceFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
 			$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				Logger "Cannot encrypt [$sourceFile]." "ERROR"
 				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 				errorCounter=$((errorCounter+1))
@@ -1160,7 +1179,7 @@ function EncryptFiles {
 
 		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $softMaxExecTime $hardMaxExecTime $SLEEP_TIME $KEEP_LOGGING true true false
 		retval=$?
-		if [ $retval != 0 ]; then
+		if [ $retval -ne 0 ]; then
 			Logger "Encryption error.." "ERROR"
 			# Output file is defined in ParallelExec
 			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
@@ -1236,14 +1255,14 @@ function DecryptFiles {
 		else
 			$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 			retval=$?
-			if [ $retval != 0 ]; then
+			if [ $retval -ne 0 ]; then
 				Logger "Cannot decrypt [$encryptedFile]." "ERROR"
 				Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 				errorCounter=$((errorCounter+1))
 			else
 				successCounter=$((successCounter+1))
 				rm -f "$encryptedFile"
-				if [ $? != 0 ]; then
+				if [ $? -ne 0 ]; then
 					Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
 				fi
 			fi
@@ -1266,7 +1285,7 @@ function DecryptFiles {
 
 		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $softMaxExecTime $hardMaxExecTime $SLEEP_TIME $KEEP_LOGGING true true false
 		retval=$?
-		if [ $retval != 0 ]; then
+		if [ $retval -ne 0 ]; then
 			Logger "Decrypting error.." "ERROR"
 			# Output file is defined in ParallelExec
 			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
@@ -1330,7 +1349,7 @@ function Rsync {
 	eval "$rsyncCmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ $retval != 0 ]; then
+	if [ $retval -ne 0 ]; then
 		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
@@ -1364,14 +1383,14 @@ function FilesBackup {
 		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
-			if [ $? == 0 ]; then
+			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" true
-			if [ $? == 0 ]; then
+			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
 			fi
 		else
@@ -1395,14 +1414,14 @@ function FilesBackup {
 		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
-			if [ $? == 0 ]; then
+			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" false
-			if [ $? == 0 ]; then
+			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" false false
 			fi
 		else
@@ -1426,14 +1445,14 @@ function FilesBackup {
 		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
-			if [ $? == 0 ]; then
+			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" true
-			if [ $? == 0 ]; then
+			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
 			fi
 		else
@@ -1478,7 +1497,7 @@ function _RotateBackupsLocal {
 					Logger "cmd: $cmd" "DEBUG"
 					eval "$cmd" &
 					WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
-					if [ $? != 0 ]; then
+					if [ $? -ne 0 ]; then
 						Logger "Cannot delete oldest copy [$path]." "ERROR"
 					fi
 				fi
@@ -1490,7 +1509,7 @@ function _RotateBackupsLocal {
 				Logger "cmd: $cmd" "DEBUG"
 				eval "$cmd" &
 				WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
-				if [ $? != 0 ]; then
+				if [ $? -ne 0 ]; then
 					Logger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
 				fi
 
@@ -1504,7 +1523,7 @@ function _RotateBackupsLocal {
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
@@ -1513,7 +1532,7 @@ function _RotateBackupsLocal {
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				Logger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
@@ -1522,7 +1541,7 @@ function _RotateBackupsLocal {
 			Logger "cmd: $cmd" "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
  				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 		fi
@@ -1552,7 +1571,7 @@ function _RotateBackupsRemoteSSH {
 					cmd="rm -rf \"$path\""
 					RemoteLogger "cmd: $cmd" "DEBUG"
 					eval "$cmd"
-					if [ $? != 0 ]; then
+					if [ $? -ne 0 ]; then
 						RemoteLogger "Cannot delete oldest copy [$path]." "ERROR"
 					fi
 				fi
@@ -1562,7 +1581,7 @@ function _RotateBackupsRemoteSSH {
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				RemoteLogger "cmd: $cmd" "DEBUG"
 				eval "$cmd"
-				if [ $? != 0 ]; then
+				if [ $? -ne 0 ]; then
 					RemoteLogger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
 				fi
 
@@ -1575,7 +1594,7 @@ function _RotateBackupsRemoteSSH {
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "cmd: $cmd" "DEBUG"
 			eval "$cmd"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
@@ -1583,7 +1602,7 @@ function _RotateBackupsRemoteSSH {
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "cmd: $cmd" "DEBUG"
 			eval "$cmd"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				RemoteLogger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 
@@ -1591,7 +1610,7 @@ function _RotateBackupsRemoteSSH {
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "cmd: $cmd" "DEBUG"
 			eval "$cmd"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
  				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 			fi
 		fi
@@ -1603,7 +1622,7 @@ function _RotateBackupsRemoteSSH {
 ENDSSH
 
 	WaitForTaskCompletion $! 1800 0 $SLEEP_TIME $KEEP_LOGGING true true false
-        if [ $? != 0 ]; then
+        if [ $? -ne 0 ]; then
                 Logger "Could not rotate backups in [$backupPath]." "ERROR"
                 Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
         else
