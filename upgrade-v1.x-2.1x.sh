@@ -6,7 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-CONFIG_FILE_VERSION=2016121901
+CONFIG_FILE_VERSION=2017010201
 PROGRAM_BUILD=2016113001
 
 if ! type "$BASH" > /dev/null; then
@@ -29,6 +29,7 @@ FILE_STORAGE
 ENCRYPTION
 CRYPT_STORAGE
 GPG_RECIPIENT
+PARALLEL_ENCRYPTION_PROCESSES
 CREATE_DIRS
 KEEP_ABSOLUTE_PATHS
 BACKUP_SIZE_MINIMUM
@@ -114,6 +115,7 @@ local
 no
 /home/storage/crypt
 'Your Name used with GPG signature'
+''
 yes
 yes
 1024
