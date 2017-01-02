@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-#TODO: missing files says Backup succeed
-#TODO: ListingDatabases fail succeed
-
 #TODO: do we rotate encrypted files too or only temp files in storage dir (pull / local question)
 
 ###### Remote push/pull (or local) backup script for files & databases
@@ -10,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010201
+PROGRAM_BUILD=2017010202
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -1078,8 +1075,6 @@ function BackupDatabases {
 	done
 }
 
-#TODO: exclusions don't work for encrypted files, check if we can add exclusions to find command
-#TODO: add ParallelExec here ?
 function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
 	local destPath="${2}"    # Path to store encrypted files
@@ -1111,7 +1106,6 @@ function EncryptFiles {
 		recursiveArgs="-mindepth 1 -maxdepth 1"
 	fi
 
-# /root/obackup-storage/files-pull//root/obackup-testdata/testData/dir rect ory/some file] to [/root/obackup-storage/crypt//dir rect ory/some file.obackup.gpg
 	Logger "Encrypting files in [$filePath]." "VERBOSE"
 	while IFS= read -r -d $'\0' sourceFile; do
 		# Get path of sourcefile
@@ -1132,24 +1126,37 @@ function EncryptFiles {
 		fi
 
 		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "NOTICE"
-		#TODO: if ParallelExec, we should redirect with >> instead of >
-		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
-		if [ $? != 0 ]; then
-			Logger "Cannot encrypt [$sourceFile]." "ERROR"
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
-			errorCounter=$((errorCounter+1))
+		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+			echo "$CRYPT_TOOL --batch --yes --out \"$path/$file$cryptFileExtension\" --recipient=\"$recipient\" --encrypt \"$sourceFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
-			successCounter=$((successCounter+1))
+			$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+			if [ $? != 0 ]; then
+				Logger "Cannot encrypt [$sourceFile]." "ERROR"
+				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+				errorCounter=$((errorCounter+1))
+			else
+				successCounter=$((successCounter+1))
+			fi
 		fi
 	done < <($FIND_CMD "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
+
+	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false
+		retval=$?
+		if [ $retval != 0 ]; then
+			Logger "Cannot encrypt [$sourceFile]." "ERROR"
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+		fi
+		successCounter=$(( $(wc -l "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - $retval))
+		errorCounter=$retval
+	fi
 
 	if [ $successCounter -gt 0 ]; then
 		Logger "Encrypted [$successCounter] files successfully." "NOTICE"
 	elif [ $successCounter -eq 0 ] && [ $errorCounter -eq 0 ]; then
 		Logger "There were no files to encrypt." "WARN"
 	fi
-
-	if [ $errorCounter -gt 0 ]; then
+		if [ $errorCounter -gt 0 ]; then
 		Logger "Failed to encrypt [$errorCounter] files." "CRITICAL"
 	fi
 	return $errorCounter
@@ -1296,6 +1303,7 @@ function FilesBackup {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
+	# Backup directories from simple list
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
@@ -1326,6 +1334,7 @@ function FilesBackup {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
+	# Backup recursive directories withouht recursion
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
@@ -1371,7 +1380,6 @@ function FilesBackup {
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? == 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
-				#TODO Where is output checking here ?
 			else
 				Logger "backup failed." "ERROR"
 			fi
@@ -1705,6 +1713,7 @@ function Usage {
 	echo "--no-maxtime      disables any soft and hard execution time checks"
 	echo "--delete          Deletes files on destination that vanished on source"
 	echo "--dontgetsize     Does not try to evaluate backup size"
+	echo "--parallel=ncpu	Use n cpus to encrypt / decrypt files. Works in normal and batch processing mode."
 	echo ""
 	echo "Batch processing usage:"
 	echo -e "\e[93mDecrypt\e[0m a backup encrypted with $PROGRAM"
@@ -1785,6 +1794,11 @@ function GetCommandlineArguments {
                 	--no-prefix)
                 	_LOGGER_PREFIX=""
                 	;;
+			--parallel=*)
+			PARALLEL_ENCRYPTION_PROCESSES="${i##*=}"
+			if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -ne 1 ]; then
+				Logger "Bogus --parallel value. Using only one CPU." "WARN"
+			fi
 		esac
 	done
 }
