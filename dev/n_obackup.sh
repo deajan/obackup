@@ -10,6 +10,32 @@ PROGRAM_VERSION=2.1-dev
 PROGRAM_BUILD=2017010206
 IS_STABLE=no
 
+# Execution order					#__WITH_PARANOIA_DEBUG
+
+# GetLocalOS						#__WITH_PARANOIA_DEBUG
+# InitLocalOSDependingSettings				#__WITH_PARANOIA_DEBUG
+# CheckRunningInstances					#__WITH_PARANOIA_DEBUG
+# PreInit						#__WITH_PARANOIA_DEBUG
+# Init							#__WITH_PARANOIA_DEBUG
+# CheckEnvironment					#__WITH_PARANOIA_DEBUG
+# Postinit						#__WITH_PARANOIA_DEBUG
+# CheckCurrentConfig					#__WITH_PARANOIA_DEBUG
+# GetRemoteOS						#__WITH_PARANOIA_DEBUG
+# InitRemoteOSDependingSettings				#__WITH_PARANOIA_DEBUG
+# RunBeforeHook						#__WITH_PARANOIA_DEBUG
+# Main							#__WITH_PARANOIA_DEBUG
+#	ListDatabases					#__WITH_PARANOIA_DEBUG
+#	ListRecursiveBackupDirectories			#__WITH_PARANOIA_DEBUG
+#	GetDirectoriesSize				#__WITH_PARANOIA_DEBUG
+#	CreateSrorageDirectories			#__WITH_PARANOIA_DEBUG
+#	CheckDiskSpace					#__WITH_PARANOIA_DEBUG
+#	RotateBackups					#__WITH_PARANOIA_DEBUG
+#	BackupDatabases					#__WITH_PARANOIA_DEBUG
+#	RotateBackups					#__WITH_PARANOIA_DEBUG
+#	RsyncPatterns					#__WITH_PARANOIA_DEBUG
+#	FilesBackup					#__WITH_PARANOIA_DEBUG
+
+
 include #### OFUNCTIONS FULL SUBSET ####
 
 _LOGGER_PREFIX="time"
