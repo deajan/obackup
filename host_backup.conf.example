@@ -95,7 +95,7 @@ SQL_USER=root
 ## Every found database will be backed up as separate backup task.
 DATABASES_ALL=yes
 DATABASES_ALL_EXCLUDE_LIST="test;mysql"
-## Alternatively, if DATABASES_ALL=no, you can specify a list of databases to backup separated by spaces.
+## Alternatively, if DATABASES_ALL=no, you can specify a list of databases to backup separated by semi-colons.
 #DATABASES_LIST="somedatabase"
 
 ## Max backup execution time per Database task. Soft max exec time generates a warning only. Hard max exec time generates a warning and stops current backup task.
