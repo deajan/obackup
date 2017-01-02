@@ -604,6 +604,7 @@ include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
 
 	cmd="du -cs $dirList | tail -n1 | cut -f1"
+	RemoteLogger "cmd: $cmd" "DEBUG"
         eval "$cmd"
 ENDSSH
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
