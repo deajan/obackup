@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010203
+PROGRAM_BUILD=2017010204
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -394,7 +394,8 @@ function _ListRecursiveBackupDirectoriesLocal {
 function _ListRecursiveBackupDirectoriesRemote {
         __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-#WIP: Check run_dir files output
+	local retval
+
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
 env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
 env RECURSIVE_DIRECTORY_LIST="'$RECURSIVE_DIRECTORY_LIST'" env PATH_SEPARATOR_CHAR="'$PATH_SEPARATOR_CHAR'" \
@@ -416,12 +417,6 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 		retval=$?
 		if  [ $retval != 0 ]; then
 			RemoteLogger "Could not enumerate directories in [$directory]." "ERROR"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-				RemoteLogger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
-			fi
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-				RemoteLogger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
-			fi
 			failuresPresent=true
 		else
 			successfulRun=true
@@ -438,7 +433,16 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 _ListRecursiveBackupDirectoriesRemoteSub
 exit $?
 ENDSSH
-	return $?
+	retval=$?
+	if [ $retval -ne 0 ]; then
+		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		fi
+		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		fi
+	fi
+	return $retval
 }
 
 function ListRecursiveBackupDirectories {
