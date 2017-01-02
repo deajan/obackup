@@ -455,12 +455,14 @@ function ListRecursiveBackupDirectories {
 	local excluded
 	local fileArray
 
+	if [ "$RECURSIVE_DIRECTORY_LIST" == "" ]; then
+	fi
 	# Return values from subfunctions can be 0 (no error), 1 (only errors) or 2 (some errors). Do process output except on 1 return code
 	Logger "Listing directories to backup." "NOTICE"
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		_ListRecursiveBackupDirectoriesLocal &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-		if [ $? -ne 0 ]; then
+		if [ $? -eq 1 ]; then
 			output_file=""
 		else
 			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID.$TSTAMP"
@@ -468,7 +470,7 @@ function ListRecursiveBackupDirectories {
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_ListRecursiveBackupDirectoriesRemote &
 		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
-		if [ $? -ne 0 ]; then
+		if [ $? -eq 1 ]; then
 			output_file=""
 		else
 			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
