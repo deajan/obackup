@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010202
+PROGRAM_BUILD=2017010203
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -1106,7 +1106,7 @@ function EncryptFiles {
 		recursiveArgs="-mindepth 1 -maxdepth 1"
 	fi
 
-	Logger "Encrypting files in [$filePath]." "VERBOSE"
+	Logger "Encrypting files in [$filePath]." "NOTICE"
 	while IFS= read -r -d $'\0' sourceFile; do
 		# Get path of sourcefile
 		path="$(dirname "$sourceFile")"
@@ -1125,7 +1125,7 @@ function EncryptFiles {
 			mkdir -p "$path"
 		fi
 
-		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "NOTICE"
+		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
 		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
 			echo "$CRYPT_TOOL --batch --yes --out \"$path/$file$cryptFileExtension\" --recipient=\"$recipient\" --encrypt \"$sourceFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
@@ -1141,13 +1141,27 @@ function EncryptFiles {
 	done < <($FIND_CMD "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
 
 	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
-		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false
+		# Handle batch mode where SOFT /HARD MAX EXEC TIME TOTAL is not defined
+		if [ $(IsNumeric $SOFT_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			softMaxExecTime=$SOFT_MAX_EXEC_TIME_TOTAL
+		else
+			softMaxExecTime=0
+		fi
+
+		if [ $(IsNumeric $HARD_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			hardMaxExecTime=$HARD_MAX_EXEC_TIME_TOTAL
+		else
+			hardMaxExecTime=0
+		fi
+
+		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $softMaxExecTime $hardMaxExecTime $SLEEP_TIME $KEEP_LOGGING true true false
 		retval=$?
 		if [ $retval != 0 ]; then
-			Logger "Cannot encrypt [$sourceFile]." "ERROR"
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+			Logger "Encryption error.." "ERROR"
+			# Output file is defined in ParallelExec
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 		fi
-		successCounter=$(( $(wc -l "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - $retval))
+		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
 		errorCounter=$retval
 	fi
 
@@ -1212,6 +1226,10 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
+
+		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+			echo "$CRYPT_TOOL $options --out \"${encryptedFile%%$cryptFileExtension}\" $additionalParameters $secret --decrypt \"$encryptedFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
+		else
 		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 		retval=$?
 		if [ $retval != 0 ]; then
@@ -1226,6 +1244,31 @@ function DecryptFiles {
 			fi
 		fi
 	done < <($FIND_CMD "$filePath" -type f -name "*$cryptFileExtension" -print0)
+
+	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+		# Handle batch mode where SOFT /HARD MAX EXEC TIME TOTAL is not defined
+		if [ $(IsNumeric $SOFT_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			softMaxExecTime=$SOFT_MAX_EXEC_TIME_TOTAL
+		else
+			softMaxExecTime=0
+		fi
+
+		if [ $(IsNumeric $HARD_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			hardMaxExecTime=$HARD_MAX_EXEC_TIME_TOTAL
+		else
+			hardMaxExecTime=0
+		fi
+
+		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $softMaxExecTime $hardMaxExecTime $SLEEP_TIME $KEEP_LOGGING true true false
+		retval=$?
+		if [ $retval != 0 ]; then
+			Logger "Decrypting error.." "ERROR"
+			# Output file is defined in ParallelExec
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+		fi
+		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
+		errorCounter=$retval
+	fi
 
 	if [ $successCounter -gt 0 ]; then
 		Logger "Decrypted [$successCounter] files successfully." "NOTICE"
