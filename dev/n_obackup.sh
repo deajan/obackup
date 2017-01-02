@@ -10,7 +10,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016123101
+PROGRAM_BUILD=2017010201
 IS_STABLE=no
 
 include #### OFUNCTIONS FULL SUBSET ####
@@ -273,6 +273,7 @@ function ListDatabases {
 	local dbName
 	local dbSize
 	local dbBackup
+	local missingDatabases=false
 
 	local dbArray
 
@@ -304,24 +305,28 @@ function ListDatabases {
 			while read -r name size; do dbName=$name; dbSize=$size; done <<< "$line"
 
 			if [ "$DATABASES_ALL" == "yes" ]; then
-				dbBackup=1
+				dbBackup=true
 				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
-						dbBackup=0
+						dbBackup=false
 					fi
 				done
 			else
-				dbBackup=0
+				dbBackup=false
 				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
-						dbBackup=1
+						dbBackup=true
 					fi
 				done
+				if [ $dbBackup == false ]; then
+					missingDatabases=true
+				fi
+
 			fi
 
-			if [ $dbBackup -eq 1 ]; then
+			if [ $dbBackup == true ]; then
 				if [ "$SQL_BACKUP_TASKS" != "" ]; then
 					SQL_BACKUP_TASKS="$SQL_BACKUP_TASKS $dbName"
 				else
@@ -332,6 +337,15 @@ function ListDatabases {
 				SQL_EXCLUDED_TASKS="$SQL_EXCLUDED_TASKS $dbName"
 			fi
 		done < "$outputFile"
+
+		if [ $missingDatabases == true ]; then
+			IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
+			for i in "${dbArray[@]}"; do
+				if ! grep "$i" "$outputFile" > /dev/null 2>&1; then
+					Logger "Missing database [$i]." "CRITICAL"
+				fi
+			done
+		fi
 
 		Logger "Database backup list: $SQL_BACKUP_TASKS" "DEBUG"
 		Logger "Database exclude list: $SQL_EXCLUDED_TASKS" "DEBUG"
