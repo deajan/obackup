@@ -703,10 +703,10 @@ include #### RemoteLogger SUBSET ####
 		retval=$?
                 if [ $retval -ne 0 ]; then
                         RemoteLogger "Cannot create directory [$dirToCreate]" "CRITICAL"
-                        return $retval
+                        exit $retval
                 fi
         fi
-	return 0
+	exit 0
 ENDSSH
         WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
