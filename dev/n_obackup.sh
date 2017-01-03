@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010301
+PROGRAM_BUILD=2017010302
 IS_STABLE=no
 
 # Execution order					#__WITH_PARANOIA_DEBUG
@@ -37,6 +37,11 @@ IS_STABLE=no
 
 
 include #### OFUNCTIONS FULL SUBSET ####
+
+# If using "include" statements, make sure the script does not get executed unless it's loaded by bootstrap
+include #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
+[ "$_OFUNCTIONS_BOOTSTRAP" != true ] && echo "Please use bootstrap.sh to load this dev version of $(basename $0)" && exit 1
+
 
 _LOGGER_PREFIX="time"
 
