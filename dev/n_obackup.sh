@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010302
+PROGRAM_BUILD=2017010303
 IS_STABLE=no
 
 # Execution order					#__WITH_PARANOIA_DEBUG
@@ -522,7 +522,7 @@ function ListRecursiveBackupDirectories {
 						FILE_SIZE_LIST="\"$line\""
 						FILE_RECURSIVE_BACKUP_TASKS="$line"
 					else
-						FILE_SIZE_LIST="$FILE_SIZE_LIST_LOCAL \"$line\""
+						FILE_SIZE_LIST="$FILE_SIZE_LIST \"$line\""
 						FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
 					fi
 				else
@@ -539,7 +539,7 @@ function ListRecursiveBackupDirectories {
 			if [ "$FILE_SIZE_LIST" == "" ]; then
 				FILE_SIZE_LIST="\"$directory\""
 			else
-				FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST \"$directory\""
+				FILE_SIZE_LIST="$FILE_SIZE_LIST \"$directory\""
 			fi
 
 			if [ "$FILE_BACKUP_TASKS" == "" ]; then
