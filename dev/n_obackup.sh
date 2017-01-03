@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010303
+PROGRAM_BUILD=2017010304
 IS_STABLE=no
 
 # Execution order					#__WITH_PARANOIA_DEBUG
@@ -450,6 +450,7 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		cmd="$REMOTE_FIND_CMD -L \"$directory\"/ -mindepth 1 -maxdepth 1 -type d"
+		eval $cmd
 		retval=$?
 		if  [ $retval -ne 0 ]; then
 			RemoteLogger "Could not enumerate directories in [$directory]." "ERROR"
@@ -508,7 +509,7 @@ function ListRecursiveBackupDirectories {
 			if [ $? -eq 1 ]; then
 				output_file=""
 			else
-			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
+				output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
 			fi
 		fi
 
@@ -612,9 +613,11 @@ include #### RemoteLogger SUBSET ####
 
 	cmd="du -cs $dirList | tail -n1 | cut -f1"
         eval "$cmd"
-	if [ $? != 0 ]; then
+	retval=$?
+	if [ $retval != 0 ]; then
 		RemoteLogger "Command was [$cmd]." "WARN"
 	fi
+	exit $retval
 ENDSSH
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
@@ -703,6 +706,7 @@ include #### RemoteLogger SUBSET ####
                         return $retval
                 fi
         fi
+	return 0
 ENDSSH
         WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
@@ -808,7 +812,14 @@ function _GetDiskSpaceRemoteSub {
         if [ -d "$pathToCheck" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
-		$DF_CMD "$pathToCheck"
+		cmd="$DF_CMD \"$pathToCheck\""
+		if [ $? != 0 ]; then
+			RemoteLogger "Error getting [$pathToCheck] size." "CRITICAL"
+			RemoteLogger "Command was [$cmd]." "WARN"
+			return 1
+		else
+			return 0
+		fi
         else
                 RemoteLogger "Storage path [$pathToCheck] does not exist." "CRITICAL"
 		return 1
