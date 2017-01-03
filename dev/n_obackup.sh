@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010207
+PROGRAM_BUILD=2017010301
 IS_STABLE=no
 
 # Execution order					#__WITH_PARANOIA_DEBUG
@@ -54,8 +54,7 @@ CRYPT_FILE_EXTENSION=".$PROGRAM.gpg"
 # $FILE_BACKUP_TASKS list of directories to backup, found in config file
 # $FILE_RECURSIVE_BACKUP_TASKS, list of directories to backup, computed from config file recursive list
 # $FILE_RECURSIVE_EXCLUDED_TASKS, list of all directories excluded from recursive list
-# $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes for local command
-# $FILE_SIZE_LIST_REMOTE, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
+# $FILE_SIZE_LIST, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes
 
 # Assume that anything can be backed up unless proven otherwise
 CAN_BACKUP_SQL=true
@@ -515,12 +514,10 @@ function ListRecursiveBackupDirectories {
 
 				if [ $file_exclude -eq 0 ]; then
 					if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
-						FILE_SIZE_LIST_LOCAL="\"$line\""
-						FILE_SIZE_LIST_REMOTE="\'$line\'"
+						FILE_SIZE_LIST="\"$line\""
 						FILE_RECURSIVE_BACKUP_TASKS="$line"
 					else
-						FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$line\""
-					FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$line\'"
+						FILE_SIZE_LIST="$FILE_SIZE_LIST_LOCAL \"$line\""
 						FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
 					fi
 				else
@@ -534,12 +531,10 @@ function ListRecursiveBackupDirectories {
 
 		IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
 		for directory in "${fileArray[@]}"; do
-			if [ "$FILE_SIZE_LIST_LOCAL" == "" ]; then
-				FILE_SIZE_LIST_LOCAL="\"$directory\""
-				FILE_SIZE_LIST_REMOTE="\'$directory\'"
+			if [ "$FILE_SIZE_LIST" == "" ]; then
+				FILE_SIZE_LIST="\"$directory\""
 			else
-				FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$directory\""
-				FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$directory\'"
+				FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST \"$directory\""
 			fi
 
 			if [ "$FILE_BACKUP_TASKS" == "" ]; then
@@ -598,8 +593,8 @@ function _GetDirectoriesSizeRemote {
 
 	# Error output is different from stdout because not all files in list may fail at once
 $SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
-env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
-dirList="'$dirList'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" dirList="'$dirList'" \
+$COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
 include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
 include #### RemoteLogger SUBSET ####
@@ -638,11 +633,11 @@ function GetDirectoriesSize {
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST_LOCAL"
+			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST_REMOTE"
+			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST"
 		fi
 	fi
 }
