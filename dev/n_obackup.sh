@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2017010304
+PROGRAM_BUILD=2017010305
 IS_STABLE=no
 
 # Execution order					#__WITH_PARANOIA_DEBUG
@@ -813,6 +813,7 @@ function _GetDiskSpaceRemoteSub {
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
 		cmd="$DF_CMD \"$pathToCheck\""
+		eval $cmd
 		if [ $? != 0 ]; then
 			RemoteLogger "Error getting [$pathToCheck] size." "CRITICAL"
 			RemoteLogger "Command was [$cmd]." "WARN"
