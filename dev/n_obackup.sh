@@ -255,7 +255,7 @@ function _ListDatabasesLocal {
 	local sqlCmd
 
         sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
-        Logger "cmd: $sqlCmd" "DEBUG"
+        Logger "Launching command [$sqlCmd]." "DEBUG"
         eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
@@ -263,6 +263,7 @@ function _ListDatabasesLocal {
                 Logger "Listing databases succeeded." "NOTICE"
         else
                 Logger "Listing databases failed." "ERROR"
+	        Logger "Command was [$sqlCmd]." "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
@@ -280,7 +281,7 @@ function _ListDatabasesRemote {
         CheckConnectivity3rdPartyHosts
         CheckConnectivityRemoteHost
         sqlCmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
-        Logger "cmd: $sqlCmd" "DEBUG"
+        Logger "Command output: $sqlCmd" "DEBUG"
         eval "$sqlCmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
@@ -288,6 +289,7 @@ function _ListDatabasesRemote {
                 Logger "Listing databases succeeded." "NOTICE"
         else
                 Logger "Listing databases failed." "ERROR"
+	        Logger "Command output: $sqlCmd" "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
@@ -398,11 +400,12 @@ function _ListRecursiveBackupDirectoriesLocal {
 	for directory in "${directories[@]}"; do
 		# No sudo here, assuming you should have all necessary rights for local checks
 		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
-		Logger "cmd: $cmd" "DEBUG"
+		Logger "Launching command [$cmd]." "DEBUG"
 		eval "$cmd"
 		retval=$?
 		if  [ $retval -ne 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
+			Logger "Command was [$cmd]." "Warn"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
@@ -442,13 +445,15 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 	local retval
 	local successfulRun=false
 	local failuresPresent=false
+	local cmd
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
-		$REMOTE_FIND_CMD -L "$directory"/ -mindepth 1 -maxdepth 1 -type d
+		cmd="$REMOTE_FIND_CMD -L \"$directory\"/ -mindepth 1 -maxdepth 1 -type d"
 		retval=$?
 		if  [ $retval -ne 0 ]; then
 			RemoteLogger "Could not enumerate directories in [$directory]." "ERROR"
+			RemoteLogger "Command was [$cmd]." "WARN"
 			failuresPresent=true
 		else
 			successfulRun=true
@@ -562,20 +567,21 @@ function _GetDirectoriesSizeLocal {
 	# No sudo here, assuming you should have all the necessary rights
 	# This is not pretty, but works with all supported systems
 	cmd="du -cs $dirList | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
-	Logger "cmd: $cmd" "DEBUG"
+	Logger "Launching command [$cmd]." "DEBUG"
         eval "$cmd" &
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
 	retval=$?
         if  [ $retval -ne  0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
                 Logger "Could not get files size for some or all local directories." "ERROR"
+		Logger "Command was [$cmd]." "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
-        else
+        elsew
                 Logger "File size fetched successfully." "NOTICE"
         fi
 
@@ -606,6 +612,8 @@ include #### RemoteLogger SUBSET ####
 
 	cmd="du -cs $dirList | tail -n1 | cut -f1"
         eval "$cmd"
+	if [ $? != 0 ]; then
+		RemoteLogger "Command was [$cmd]." "WARN"
 ENDSSH
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
@@ -983,15 +991,22 @@ function _BackupDatabaseLocalToLocal {
 	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sqlCmd" "DEBUG"
+		Logger "Launching command [$sqlCmd]." "DEBUG"
 		eval "$sqlCmd" &
 	else
-		Logger "cmd: $drySqlCmd" "DEBUG"
+		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		if [ $_DRYRUN == false ]; then
+			Logger "Command was [$sqlCmd]." "WARN"
+			eval "$sqlCmd" &
+		else
+			Logger "Command was [$drySqlCmd]." "WARN"
+			eval "$drySqlCmd" &
+		fi
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
@@ -1025,15 +1040,22 @@ function _BackupDatabaseLocalToRemote {
 	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sqlCmd" "DEBUG"
+		Logger "Launching command [$sqlCmd]." "DEBUG"
 		eval "$sqlCmd" &
 	else
-		Logger "cmd: $drySqlCmd" "DEBUG"
+		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		if [ $_DRYRUN == false ]; then
+			Logger "Command was [$sqlCmd]." "WARN"
+			eval "$sqlCmd" &
+		else
+			Logger "Command was [$drySqlCmd]." "WARN"
+			eval "$drySqlCmd" &
+		fi
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
@@ -1067,15 +1089,22 @@ function _BackupDatabaseRemoteToLocal {
 	local sqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP'"'
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sqlCmd" "DEBUG"
+		Logger "Launching command [$sqlCmd]." "DEBUG"
 		eval "$sqlCmd" &
 	else
-		Logger "cmd: $drySqlCmd" "DEBUG"
+		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		if [ $_DRYRUN == false ]; then
+			Logger "Command was [$sqlCmd]." "WARN"
+			eval "$sqlCmd" &
+		else
+			Logger "Command was [$drySqlCmd]." "WARN"
+			eval "$drySqlCmd" &
+		fi
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
@@ -1378,12 +1407,13 @@ function Rsync {
 		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$sourceDir\" \"$REMOTE_USER@$REMOTE_HOST:$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	fi
 
-	Logger "cmd: $rsyncCmd" "DEBUG"
+	Logger "Launching command [$rsyncCmd]." "DEBUG"
 	eval "$rsyncCmd" &
 	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ $retval -ne 0 ]; then
 		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
+		Logger "Command was [$rsyncCmd]." "WARN"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
@@ -1527,11 +1557,12 @@ function _RotateBackupsLocal {
 				path="$backup.$PROGRAM.$copy"
 				if [ -f "$path" ] || [ -d "$path" ]; then
 					cmd="rm -rf \"$path\""
-					Logger "cmd: $cmd" "DEBUG"
+					Logger "Launching command [$cmd]." "DEBUG"
 					eval "$cmd" &
 					WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 					if [ $? -ne 0 ]; then
 						Logger "Cannot delete oldest copy [$path]." "ERROR"
+						Logger "Command was [$cmd]." "WARN"
 					fi
 				fi
 			fi
@@ -1539,11 +1570,12 @@ function _RotateBackupsLocal {
 			path="$backup.$PROGRAM.$((copy-1))"
 			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
-				Logger "cmd: $cmd" "DEBUG"
+				Logger "Launching command [$cmd]." "DEBUG"
 				eval "$cmd" &
 				WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 				if [ $? -ne 0 ]; then
 					Logger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
+					Logger "Command was [$cmd]." "WARN"
 				fi
 
 			fi
@@ -1553,29 +1585,32 @@ function _RotateBackupsLocal {
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]; then
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			Logger "cmd: $cmd" "DEBUG"
+			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				Logger "Command was [$cmd]." "WARN"
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
-			Logger "cmd: $cmd" "DEBUG"
+			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 			if [ $? -ne 0 ]; then
 				Logger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				Logger "Command was [$cmd]." "WARN"
 			fi
 
 		else
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			Logger "cmd: $cmd" "DEBUG"
+			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 			if [ $? -ne 0 ]; then
  				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				Logger "Command was [$cmd]." "WARN"
 			fi
 		fi
 	done
@@ -1602,20 +1637,22 @@ function _RotateBackupsRemoteSSH {
 				path="$backup.$PROGRAM.$copy"
 				if [ -f "$path" ] || [ -d "$path" ]; then
 					cmd="rm -rf \"$path\""
-					RemoteLogger "cmd: $cmd" "DEBUG"
+					RemoteLogger "Launching command [$cmd]." "DEBUG"
 					eval "$cmd"
 					if [ $? -ne 0 ]; then
 						RemoteLogger "Cannot delete oldest copy [$path]." "ERROR"
+						RemoteLogger "Command was [$cmd]." "WARN"
 					fi
 				fi
 			fi
 			path="$backup.$PROGRAM.$((copy-1))"
 			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
-				RemoteLogger "cmd: $cmd" "DEBUG"
+				RemoteLogger "Launching command [$cmd]." "DEBUG"
 				eval "$cmd"
 				if [ $? -ne 0 ]; then
 					RemoteLogger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
+					RemoteLogger "Command was [$cmd]." "WARN"
 				fi
 
 			fi
@@ -1625,26 +1662,29 @@ function _RotateBackupsRemoteSSH {
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]; then
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			RemoteLogger "cmd: $cmd" "DEBUG"
+			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
 			if [ $? -ne 0 ]; then
 				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
-			RemoteLogger "cmd: $cmd" "DEBUG"
+			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
 			if [ $? -ne 0 ]; then
 				RemoteLogger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 
 		else
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			RemoteLogger "cmd: $cmd" "DEBUG"
+			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
 			if [ $? -ne 0 ]; then
  				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 		fi
 	done
