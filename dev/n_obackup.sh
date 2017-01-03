@@ -568,7 +568,7 @@ function _GetDirectoriesSizeLocal {
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
 	retval=$?
         if  [ $retval -ne  0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-                Logger "Could not get files size for some or all directories." "ERROR"
+                Logger "Could not get files size for some or all local directories." "ERROR"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
@@ -611,7 +611,7 @@ ENDSSH
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
         if  [ $retval -ne 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-                Logger "Could not get files size for some or all directories." "ERROR"
+                Logger "Could not get files size for some or all remote directories." "ERROR"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
@@ -1344,7 +1344,7 @@ function Rsync {
 	local destinationDir="${2}"	# Destination directory
 	local recursive="${2:-true}"	# Backup only files at toplevel of directory
 
-        __CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
+        __CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local rsyncCmd
 	local retval
