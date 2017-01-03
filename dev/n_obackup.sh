@@ -614,6 +614,7 @@ include #### RemoteLogger SUBSET ####
         eval "$cmd"
 	if [ $? != 0 ]; then
 		RemoteLogger "Command was [$cmd]." "WARN"
+	fi
 ENDSSH
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
         WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
