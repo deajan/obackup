@@ -1,22 +1,47 @@
 #!/usr/bin/env bash
 
-#TODO: missing files says Backup succeed
-#TODO: ListingDatabases fail succeed
-#TODO: Add .gpg extesion to RotateFiles ?
+#TODO: do we rotate encrypted files too or only temp files in storage dir (pull / local question)
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
-AUTHOR="(C) 2013-2016 by Orsiris de Jong"
+AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.1-dev
-PROGRAM_BUILD=2016120401
+PROGRAM_VERSION=2.1-beta1
+PROGRAM_BUILD=2017010305
 IS_STABLE=no
 
-#### MINIMAL-FUNCTION-SET BEGIN ####
+# Execution order					#__WITH_PARANOIA_DEBUG
 
-_OFUNCTIONS_VERSION=2.0
-_OFUNCTIONS_BUILD=2016120401
-## BEGIN Generic bash functions written in 2013-2016 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
+# GetLocalOS						#__WITH_PARANOIA_DEBUG
+# InitLocalOSDependingSettings				#__WITH_PARANOIA_DEBUG
+# CheckRunningInstances					#__WITH_PARANOIA_DEBUG
+# PreInit						#__WITH_PARANOIA_DEBUG
+# Init							#__WITH_PARANOIA_DEBUG
+# CheckEnvironment					#__WITH_PARANOIA_DEBUG
+# Postinit						#__WITH_PARANOIA_DEBUG
+# CheckCurrentConfig					#__WITH_PARANOIA_DEBUG
+# GetRemoteOS						#__WITH_PARANOIA_DEBUG
+# InitRemoteOSDependingSettings				#__WITH_PARANOIA_DEBUG
+# RunBeforeHook						#__WITH_PARANOIA_DEBUG
+# Main							#__WITH_PARANOIA_DEBUG
+#	ListDatabases					#__WITH_PARANOIA_DEBUG
+#	ListRecursiveBackupDirectories			#__WITH_PARANOIA_DEBUG
+#	GetDirectoriesSize				#__WITH_PARANOIA_DEBUG
+#	CreateSrorageDirectories			#__WITH_PARANOIA_DEBUG
+#	CheckDiskSpace					#__WITH_PARANOIA_DEBUG
+#	RotateBackups					#__WITH_PARANOIA_DEBUG
+#	BackupDatabases					#__WITH_PARANOIA_DEBUG
+#	RotateBackups					#__WITH_PARANOIA_DEBUG
+#	RsyncPatterns					#__WITH_PARANOIA_DEBUG
+#	FilesBackup					#__WITH_PARANOIA_DEBUG
+
+
+
+_OFUNCTIONS_VERSION=2.1-RC1+dev
+_OFUNCTIONS_BUILD=2017010401
+_OFUNCTIONS_BOOTSTRAP=true
+
+## BEGIN Generic bash functions written in 2013-2017 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 ## To use in a program, define the following variables:
 ## PROGRAM=program-name
@@ -28,7 +53,7 @@ _OFUNCTIONS_BUILD=2016120401
 ## _LOGGER_PREFIX="date"/"time"/""
 
 ## Logger sets {ERROR|WARN}_ALERT variable when called with critical / error / warn loglevel
-## When called from subprocesses, variable of main process can't be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID
+## When called from subprocesses, variable of main process can't be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID.$TSTAMP
 
 if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -48,7 +73,7 @@ _LOGGER_VERBOSE=false
 _LOGGER_ERR_ONLY=false
 _LOGGER_PREFIX="date"
 if [ "$KEEP_LOGGING" == "" ]; then
-        KEEP_LOGGING=1801
+	KEEP_LOGGING=1801
 fi
 
 # Initial error status, logging 'WARN', 'ERROR' or 'CRITICAL' will enable alerts flags
@@ -74,6 +99,7 @@ if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as envi
 fi
 
 SCRIPT_PID=$$
+TSTAMP=$(date '+%Y%m%d%H%M%S%N')
 
 LOCAL_USER=$(whoami)
 LOCAL_HOST=$(hostname)
@@ -87,8 +113,10 @@ if [ -w /var/log ]; then
 	LOG_FILE="/var/log/$PROGRAM.log"
 elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
 	LOG_FILE="$HOME/$PROGRAM.log"
-else
+elif [ -w . ]; then
 	LOG_FILE="./$PROGRAM.log"
+else
+	LOG_FILE="/tmp/$PROGRAM.log"
 fi
 
 ## Default directory where to store temporary run files
@@ -102,7 +130,7 @@ fi
 
 
 # Default alert attachment filename
-ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.last.log"
+ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.$TSTAMP.last.log"
 
 # Set error exit code if a piped command fails
 	set -o pipefail
@@ -110,9 +138,17 @@ ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.last.log"
 
 
 function Dummy {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	sleep $SLEEP_TIME
+}
+
+#### Logger SUBSET ####
+
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
 }
 
 # Sub function of Logger
@@ -121,9 +157,11 @@ function _Logger {
 	local stdValue="${2}"		# Log to screeen
 	local toStderr="${3:-false}"	# Log to stderr instead of stdout
 
-	echo -e "$logValue" >> "$LOG_FILE"
-	# Current log file
-	echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+		# Current log file
+		echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+	fi
 
 	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
 		if [ $toStderr == true ]; then
@@ -136,11 +174,72 @@ function _Logger {
 	fi
 }
 
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
+	else
+		prefix=""
+	fi
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "" "$prefix\e[91m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger  "" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "" "$prefix$value"
+			return
+		fi
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
+	else
+		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "" "Value was: $prefix$value" true
+	fi
+}
+
 # General log function with log levels:
 
 # Environment variables
 # _LOGGER_SILENT: Disables any output to stdout & stderr
-# _LOGGER_STD_ERR: Disables any output to stdout except for ALWAYS loglevel
+# _LOGGER_ERR_ONLY: Disables any output to stdout except for ALWAYS loglevel
 # _LOGGER_VERBOSE: Allows VERBOSE loglevel messages to be sent to stdout
 
 # Loglevels
@@ -152,8 +251,9 @@ function _Logger {
 # ALWAYS is sent to stdout unless _LOGGER_SILENT = true
 # DEBUG & PARANOIA_DEBUG are only sent to stdout if _DEBUG=yes
 function Logger {
-	local value="${1}" # Sentence to log (in double quotes)
-	local level="${2}" # Log level
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -164,20 +264,20 @@ function Logger {
 	fi
 
 	if [ "$level" == "CRITICAL" ]; then
-		_Logger "$prefix($level):$value" "$prefix\e[41m$value\e[0m" true
+		_Logger "$prefix($level):$value" "$prefix\e[1;33;41m$value\e[0m" true
 		ERROR_ALERT=true
 		# ERROR_ALERT / WARN_ALERT isn't set in main when Logger is called from a subprocess. Need to keep this flag.
-		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "$prefix($level):$value" "$prefix\e[91m$value\e[0m" true
 		ERROR_ALERT=true
-		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "$prefix($level):$value" "$prefix\e[33m$value\e[0m" true
 		WARN_ALERT=true
-		echo "1" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.warn.$SCRIPT_PID"
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.warn.$SCRIPT_PID.$TSTAMP"
 		return
 	elif [ "$level" == "NOTICE" ]; then
 		if [ "$_LOGGER_ERR_ONLY" != true ]; then
@@ -190,7 +290,7 @@ function Logger {
 		fi
 		return
 	elif [ "$level" == "ALWAYS" ]; then
-		_Logger  "$prefix$value" "$prefix$value"
+		_Logger "$prefix$value" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
 		if [ "$_DEBUG" == "yes" ]; then
@@ -203,17 +303,16 @@ function Logger {
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
 	else
-		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m"
-		_Logger "Value was: $prefix$value"
+		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "Value was: $prefix$value" "Value was: $prefix$value" true
 	fi
 }
+#### Logger SUBSET END ####
 
 # QuickLogger subfunction, can be called directly
 function _QuickLogger {
 	local value="${1}"
 	local destination="${2}" # Destination: stdout, log, both
-
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
 
 	if ([ "$destination" == "log" ] || [ "$destination" == "both" ]); then
 		echo -e "$(date) - $value" >> "$LOG_FILE"
@@ -226,9 +325,7 @@ function _QuickLogger {
 function QuickLogger {
 	local value="${1}"
 
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
-
-	if [ $_LOGGER_SILENT == true ]; then
+	if [ "$_LOGGER_SILENT" == true ]; then
 		_QuickLogger "$value" "log"
 	else
 		_QuickLogger "$value" "stdout"
@@ -240,7 +337,7 @@ function KillChilds {
 	local pid="${1}" # Parent pid to kill childs
 	local self="${2:-false}" # Should parent be killed too ?
 
-
+	# Warning: pgrep does not exist in cygwin, have this checked in CheckEnvironment
 	if children="$(pgrep -P "$pid")"; then
 		for child in $children; do
 			Logger "Launching KillChilds \"$child\" true" "DEBUG"	#__WITH_PARANOIA_DEBUG
@@ -275,7 +372,7 @@ function KillAllChilds {
 	local pids="${1}" # List of parent pids to kill separated by semi-colon
 	local self="${2:-false}" # Should parent be killed too ?
 
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 1 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local errorcount=0
 
@@ -293,7 +390,7 @@ function KillAllChilds {
 function SendAlert {
 	local runAlert="${1:-false}" # Specifies if current message is sent while running or at the end of a run
 
-	__CheckArguments 0-1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0-1 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local attachment
 	local attachmentFile
@@ -309,13 +406,6 @@ function SendAlert {
 		return 0
 	fi
 
-	# <OSYNC SPECIFIC>
-	if [ "$_QUICK_SYNC" == "2" ]; then
-		Logger "Current task is a quicksync task. Will not send any alert." "NOTICE"
-		return 0
-	fi
-	# </OSYNC SPECIFIC>
-
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
 	if [ $? != 0 ]; then
 		Logger "Cannot create [$ALERT_LOG_FILE]" "WARN"
@@ -323,8 +413,8 @@ function SendAlert {
 	else
 		attachment=true
 	fi
-	if [ -e "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID" ]; then
-		body="$MAIL_ALERT_MSG"$'\n\n'"$(cat $RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID)"
+	if [ -e "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID.$TSTAMP" ]; then
+		body="$MAIL_ALERT_MSG"$'\n\n'"$(cat $RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID.$TSTAMP)"
 	fi
 
 	if [ $ERROR_ALERT == true ]; then
@@ -338,14 +428,14 @@ function SendAlert {
 	if [ $runAlert == true ]; then
 		subject="Currently runing - $subject"
 	else
-		subject="Fnished run - $subject"
+		subject="Finished run - $subject"
 	fi
 
 	if [ "$attachment" == true ]; then
 		attachmentFile="$ALERT_LOG_FILE"
 	fi
 
-	SendEmail "$subject" "$body" "$DESTINATION_MAILS" "$attachmentFile" "$SENDER_MAIL" "$SMTP_SERVER" "$SMTP_PORT" "$ENCRYPTION" "SMTP_USER" "$SMTP_PASSWORD"
+	SendEmail "$subject" "$body" "$DESTINATION_MAILS" "$attachmentFile" "$SENDER_MAIL" "$SMTP_SERVER" "$SMTP_PORT" "$SMTP_ENCRYPTION" "$SMTP_USER" "$SMTP_PASSWORD"
 
 	# Delete tmp log file
 	if [ "$attachment" == true ]; then
@@ -376,7 +466,7 @@ function SendEmail {
 	local smtpUser="${9}"
 	local smtpPassword="${10}"
 
-	__CheckArguments 3-10 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 3-10 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local mail_no_attachment=
 	local attachment_command=
@@ -392,13 +482,17 @@ function SendEmail {
 	fi
 
 	if [ "$LOCAL_OS" == "Busybox" ] || [ "$LOCAL_OS" == "Android" ]; then
+		if [ "$smtpPort" == "" ]; then
+			Logger "Missing smtp port, assuming 25." "WARN"
+			smtpPort=25
+		fi
 		if type sendmail > /dev/null 2>&1; then
-			if [ "$ENCRYPTION" == "tls" ]; then
-				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -H "exec openssl s_client -quiet -tls1_2 -starttls smtp -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
-			elif [ "$ENCRYPTION" == "ssl" ]; then
-				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -H "exec openssl s_client -quiet -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			if [ "$encryption" == "tls" ]; then
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderMail" -H "exec openssl s_client -quiet -tls1_2 -starttls smtp -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+			elif [ "$encryption" == "ssl" ]; then
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderMail" -H "exec openssl s_client -quiet -connect $smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
 			else
-				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$SenderMail" -S "$smtpServer:$SmtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
+				echo -e "Subject:$subject\r\n$message" | $(type -p sendmail) -f "$senderMail" -S "$smtpServer:$smtpPort" -au"$smtpUser" -ap"$smtpPassword" "$destinationMails"
 			fi
 
 			if [ $? != 0 ]; then
@@ -519,14 +613,14 @@ function TrapError {
 	local code="${2:-1}"
 
 	if [ $_LOGGER_SILENT == false ]; then
-		echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m"
+		(>&2 echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m")
 	fi
 }
 
 function LoadConfigFile {
 	local configFile="${1}"
 
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 1 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 
 	if [ ! -f "$configFile" ]; then
@@ -537,57 +631,31 @@ function LoadConfigFile {
 		exit 1
 	else
 		# Remove everything that is not a variable assignation
-		grep '^[^ ]*=[^;&]*' "$configFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
-		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID"
+		grep '^[^ ]*=[^;&]*' "$configFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
 	fi
 
 	CONFIG_FILE="$configFile"
 }
 
+_OFUNCTIONS_SPINNER="|/-\\"
 function Spinner {
 	if [ $_LOGGER_SILENT == true ] || [ "$_LOGGER_ERR_ONLY" == true ]; then
 		return 0
+	else
+		printf " [%c]  \b\b\b\b\b\b" "$_OFUNCTIONS_SPINNER"
+		#printf "\b\b\b\b\b\b"
+		_OFUNCTIONS_SPINNER=${_OFUNCTIONS_SPINNER#?}${_OFUNCTIONS_SPINNER%%???}
+		return 0
 	fi
-
-	case $_OFUNCTIONS_SPINNER_TOGGLE
-	in
-	1)
-	echo -n " \ "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=2
-	;;
-
-	2)
-	echo -n " | "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=3
-	;;
-
-	3)
-	echo -n " / "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=4
-	;;
-
-	*)
-	echo -n " - "
-	echo -ne "\r"
-	_OFUNCTIONS_SPINNER_TOGGLE=1
-	;;
-	esac
 }
 
-# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
-# usage: joinString separaratorChar Array
-function joinString {
-	local IFS="$1"; shift; echo "$*";
-}
 
 # Time control function for background processes, suitable for multiple synchronous processes
 # Fills a global variable called WAIT_FOR_TASK_COMPLETION_$callerName that contains list of failed pids in format pid1:result1;pid2:result2
 # Also sets a global variable called HARD_MAX_EXEC_TIME_REACHED_$callerName to true if hardMaxTime is reached
 
-# Standard wait $! emulation would be WaitForTaskCompletion $! 0 0 1 0 true false true false "${FUNCNAME[0]}"
+# Standard wait $! emulation would be WaitForTaskCompletion $! 0 0 1 0 true false true false
 
 function WaitForTaskCompletion {
 	local pids="${1}" # pids to wait for, separated by semi-colon
@@ -598,10 +666,10 @@ function WaitForTaskCompletion {
 	local counting="${6:-true}"	# Count time since function has been launched (true), or since script has been launched (false)
 	local spinner="${7:-true}"	# Show spinner (true), don't show anything (false)
 	local noErrorLog="${8:-false}"	# Log errors when reaching soft / hard max time (false), don't log errors on those triggers (true)
-	local callerName="${9}"		# Name of the function who called this function for debugging purposes, generally ${FUNCNAME[0]}
 
+	local callerName="${FUNCNAME[1]}"
 	Logger "${FUNCNAME[0]} called by [$callerName]." "PARANOIA_DEBUG"	#__WITH_PARANOIA_DEBUG
-	__CheckArguments 9 $# ${FUNCNAME[0]} "$@"				#__WITH_PARANOIA_DEBUG
+	__CheckArguments 8 $# "$@"				#__WITH_PARANOIA_DEBUG
 
 	local log_ttime=0 # local time instance for comparaison
 
@@ -638,7 +706,7 @@ function WaitForTaskCompletion {
 			Spinner
 		fi
 		if [ $counting == true ]; then
-			exec_time=$(($SECONDS - $seconds_begin))
+			exec_time=$((SECONDS - seconds_begin))
 		else
 			exec_time=$SECONDS
 		fi
@@ -693,8 +761,8 @@ function WaitForTaskCompletion {
 					wait $pid
 					retval=$?
 					if [ $retval -ne 0 ]; then
-						errorcount=$((errorcount+1))
 						Logger "${FUNCNAME[0]} called by [$callerName] finished monitoring [$pid] with exitcode [$retval]." "DEBUG"
+						errorcount=$((errorcount+1))
 						# Welcome to variable variable bash hell
 						if [ "$(eval echo \"\$WAIT_FOR_TASK_COMPLETION_$callerName\")" == "" ]; then
 							eval "WAIT_FOR_TASK_COMPLETION_$callerName=\"$pid:$retval\""
@@ -744,9 +812,9 @@ function ParallelExec {
 	local counting="${8:-true}"		# Count time since function has been launched (true), or since script has been launched (false)
 	local spinner="${9:-false}"		# Show spinner (true), don't show spinner (false)
 	local noErrorLog="${10:-false}"		# Log errors when reaching soft / hard max time (false), don't log errors on those triggers (true)
-	local callerName="${11:-false}"		# Name of the function who called this function for debugging purposes, generally ${FUNCNAME[0]}
 
-	__CheckArguments 2-11 $# ${FUNCNAME[0]} "$@"				#__WITH_PARANOIA_DEBUG
+	local callerName="${FUNCNAME[1]}"
+	__CheckArguments 2-10 $# "$@"				#__WITH_PARANOIA_DEBUG
 
 	local log_ttime=0 # local time instance for comparaison
 
@@ -767,7 +835,8 @@ function ParallelExec {
 
 	local hasPids=false # Are any valable pids given to function ?		#__WITH_PARANOIA_DEBUG
 
-	HARD_MAX_EXEC_TIME_REACHED=false
+	# Set global var default
+	eval "HARD_MAX_EXEC_TIME_REACHED_$callerName=false"
 
 	if [ $counting == true ]; then 	# If counting == false _SOFT_ALERT should be a global value so no more than one soft alert is shown
 		local _SOFT_ALERT=false # Does a soft alert need to be triggered, if yes, send an alert once
@@ -793,7 +862,7 @@ function ParallelExec {
 		fi
 
 		if [ $counting == true ]; then
-			exec_time=$(($SECONDS - $seconds_begin))
+			exec_time=$((SECONDS - seconds_begin))
 		else
 			exec_time=$SECONDS
 		fi
@@ -829,9 +898,9 @@ function ParallelExec {
 			if [ $noErrorLog != true ]; then
 				SendAlert true
 			fi
-			HARD_MAX_EXEC_TIME_REACHED=true
+			eval "HARD_MAX_EXEC_TIME_REACHED_$callerName=true"
 			# Return the number of commands that haven't run / finished run
-			return $(($commandCount - $counter + ${#pidsArray[@]}))
+			return $((commandCount - counter + ${#pidsArray[@]}))
 		fi
 
 		while [ $counter -lt "$commandCount" ] && [ ${#pidsArray[@]} -lt $numberOfProcesses ]; do
@@ -841,7 +910,7 @@ function ParallelExec {
 				command="${commandsArray[$counter]}"
 			fi
 			Logger "Running command [$command]." "DEBUG"
-			eval "$command" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$callerName.$SCRIPT_PID" 2>&1 &
+			eval "$command" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$callerName.$SCRIPT_PID.$TSTAMP" 2>&1 &
 			pid=$!
 			pidsArray+=($pid)
 			commandsArrayPid[$pid]="$command"
@@ -854,7 +923,6 @@ function ParallelExec {
 			if [ $(IsInteger $pid) -eq 1 ]; then
 				# Handle uninterruptible sleep state or zombies by ommiting them from running process array (How to kill that is already dead ? :)
 				if kill -0 $pid > /dev/null 2>&1; then
-					#pidState=$(ps -p$pid -o state= 2 > /dev/null)
 					pidState="$(eval $PROCESS_STATE_CMD)"
 					if [ "$pidState" != "D" ] && [ "$pidState" != "Z" ]; then
 						newPidsArray+=($pid)
@@ -878,25 +946,20 @@ function ParallelExec {
 		pidsArray=("${newPidsArray[@]}")
 
 		# Trivial wait time for bash to not eat up all CPU
-		sleep $SLEEP_TIME
+		sleep $sleepTime
 	done
 
 	return $errorCount
 }
 
 function CleanUp {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ "$_DEBUG" != "yes" ]; then
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID"
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
 		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.tmp"
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
 	fi
-}
-
-# obsolete, use StripQuotes
-function SedStripQuotes {
-	echo $(echo $1 | sed "s/^\([\"']\)\(.*\)\1\$/\2/g")
 }
 
 # Usage: var=$(StripSingleQuotes "$var")
@@ -932,8 +995,6 @@ function EscapeSpaces {
 
 function IsNumericExpand {
 	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
-
-	local re="^-?[0-9]+([.][0-9]+)?$"
 
 	if [[ $value =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
 		echo 1
@@ -995,7 +1056,7 @@ function HumanToNumeric {
 }
 
 ## from https://gist.github.com/cdown/1163649
-function urlEncode {
+function UrlEncode {
 	local length="${#1}"
 
 	local LANG=C
@@ -1012,30 +1073,32 @@ function urlEncode {
 	done
 }
 
-function urlDecode {
+function UrlDecode {
 	local urlEncoded="${1//+/ }"
 
 	printf '%b' "${urlEncoded//%/\\x}"
 }
 
 ## Modified version of http://stackoverflow.com/a/8574392
-## Usage: arrayContains "needle" "${haystack[@]}"
-arrayContains () {
+## Usage: [ $(ArrayContains "needle" "${haystack[@]}") -eq 1 ]
+function ArrayContains () {
+	local needle="${1}"
+	local haystack="${2}"
 	local e
 
-	if [ "$2" == "" ]; then
-		echo 0 && return 0
+	if [ "$needle" != "" ] && [ "$haystack" != "" ]; then
+		for e in "${@:2}"; do
+			if [ "$e" == "$needle" ]; then
+				echo 1
+				return
+			fi
+		done
 	fi
-
-	for e in "${@:2}"; do
-		[[ "$e" == "$1" ]] && echo 1 && return 1
-	done
-	echo 0 && return 0
+	echo 0
+	return
 }
 
 function GetLocalOS {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
-
 	local localOsVar
 
 	# There's no good way to tell if currently running in BusyBox shell. Using sluggish way.
@@ -1046,7 +1109,7 @@ function GetLocalOS {
 		if grep -i Microsoft /proc/sys/kernel/osrelease > /dev/null 2>&1; then
 			localOsVar="Microsoft"
 		else
-			localOsVar="$(uname -spio 2>&1)"
+			localOsVar="$(uname -spior 2>&1)"
 			if [ $? != 0 ]; then
 				localOsVar="$(uname -v 2>&1)"
 				if [ $? != 0 ]; then
@@ -1067,8 +1130,11 @@ function GetLocalOS {
 		*"BSD"*)
 		LOCAL_OS="BSD"
 		;;
-		*"MINGW32"*|*"CYGWIN"*)
+		*"MINGW32"*|*"MSYS"*)
 		LOCAL_OS="msys"
+		;;
+		*"CYGWIN"*)
+		LOCAL_OS="Cygwin"
 		;;
 		*"Microsoft"*)
 		LOCAL_OS="WinNT10"
@@ -1084,17 +1150,23 @@ function GetLocalOS {
 			Logger "Running on unknown local OS [$localOsVar]." "WARN"
 			return
 		fi
-		Logger "Running on >> $localOsVar << not supported. Please report to the author." "ERROR"
+		if [ "$_OFUNCTIONS_VERSION" != "" ]; then
+			Logger "Running on >> $localOsVar << not supported. Please report to the author." "ERROR"
+		fi
 		exit 1
 		;;
 	esac
-	Logger "Local OS: [$localOsVar]." "DEBUG"
+	if [ "$_OFUNCTIONS_VERSION" != "" ]; then
+		Logger "Local OS: [$localOsVar]." "DEBUG"
+	fi
+
+	# Add a global variable for statistics in installer
+	LOCAL_OS_FULL="$localOsVar"
 }
 
-#### MINIMAL-FUNCTION-SET END ####
 
 function GetRemoteOS {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ "$REMOTE_OPERATION" != "yes" ]; then
 		return 0
@@ -1102,7 +1174,7 @@ function GetRemoteOS {
 
 	local remoteOsVar
 
-$SSH_CMD bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
+$SSH_CMD bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 
 function GetOs {
 	local localOsVar
@@ -1115,7 +1187,7 @@ function GetOs {
 		if grep -i Microsoft /proc/sys/kernel/osrelease > /dev/null 2>&1; then
 			localOsVar="Microsoft"
 		else
-			localOsVar="$(uname -spio 2>&1)"
+			localOsVar="$(uname -spior 2>&1)"
 			if [ $? != 0 ]; then
 				localOsVar="$(uname -v 2>&1)"
 				if [ $? != 0 ]; then
@@ -1131,8 +1203,8 @@ GetOs
 
 ENDSSH
 
-	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-		remoteOsVar=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID")
+	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+		remoteOsVar=$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")
 		case $remoteOsVar in
 			*"Android"*)
 			REMOTE_OS="Android"
@@ -1143,8 +1215,11 @@ ENDSSH
 			*"BSD"*)
 			REMOTE_OS="BSD"
 			;;
-			*"MINGW32"*|*"CYGWIN"*)
+			*"MINGW32"*|*"MSYS"*)
 			REMOTE_OS="msys"
+			;;
+			*"CYGWIN"*)
+			REMOTE_OS="Cygwin"
 			;;
 			*"Microsoft"*)
 			REMOTE_OS="WinNT10"
@@ -1177,7 +1252,7 @@ ENDSSH
 function RunLocalCommand {
 	local command="${1}" # Command to run
 	local hardMaxTime="${2}" # Max time to wait for command to compleet
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ $_DRYRUN == true ]; then
 		Logger "Dryrun: Local command [$command] not run." "NOTICE"
@@ -1185,9 +1260,9 @@ function RunLocalCommand {
 	fi
 
 	Logger "Running command [$command] on local host." "NOTICE"
-	eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
+	eval "$command" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
 
-	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -1196,7 +1271,7 @@ function RunLocalCommand {
 	fi
 
 	if [ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ]; then
-		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "NOTICE"
+		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 	fi
 
 	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]; then
@@ -1209,7 +1284,7 @@ function RunLocalCommand {
 function RunRemoteCommand {
 	local command="${1}" # Command to run
 	local hardMaxTime="${2}" # Max time to wait for command to compleet
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
@@ -1219,10 +1294,10 @@ function RunRemoteCommand {
 	fi
 
 	Logger "Running command [$command] on remote host." "NOTICE"
-	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
+	cmd=$SSH_CMD' "$command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
-	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Command succeded." "NOTICE"
@@ -1230,9 +1305,9 @@ function RunRemoteCommand {
 		Logger "Command failed." "ERROR"
 	fi
 
-	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ] && ([ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ])
+	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ] && ([ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ])
 	then
-		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "NOTICE"
+		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 	fi
 
 	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]; then
@@ -1242,7 +1317,7 @@ function RunRemoteCommand {
 }
 
 function RunBeforeHook {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local pids
 
@@ -1256,12 +1331,12 @@ function RunBeforeHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false
 	fi
 }
 
 function RunAfterHook {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local pids
 
@@ -1275,12 +1350,12 @@ function RunAfterHook {
 		pids="$pids;$!"
 	fi
 	if [ "$pids" != "" ]; then
-		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+		WaitForTaskCompletion $pids 0 0 $SLEEP_TIME $KEEP_LOGGING true true false
 	fi
 }
 
 function CheckConnectivityRemoteHost {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local retval
 
@@ -1288,7 +1363,7 @@ function CheckConnectivityRemoteHost {
 
 		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
-			WaitForTaskCompletion $! 60 180 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+			WaitForTaskCompletion $! 60 180 $SLEEP_TIME $KEEP_LOGGING true true false
 			retval=$?
 			if [ $retval != 0 ]; then
 				Logger "Cannot ping [$REMOTE_HOST]. Return code [$retval]." "WARN"
@@ -1299,7 +1374,7 @@ function CheckConnectivityRemoteHost {
 }
 
 function CheckConnectivity3rdPartyHosts {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local remote3rdPartySuccess
 	local retval
@@ -1311,7 +1386,7 @@ function CheckConnectivity3rdPartyHosts {
 			for i in $REMOTE_3RD_PARTY_HOSTS
 			do
 				eval "$PING_CMD $i > /dev/null 2>&1" &
-				WaitForTaskCompletion $! 180 360 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+				WaitForTaskCompletion $! 180 360 $SLEEP_TIME $KEEP_LOGGING true true false
 				retval=$?
 				if [ $retval != 0 ]; then
 					Logger "Cannot ping 3rd party host [$i]. Return code [$retval]." "NOTICE"
@@ -1337,31 +1412,32 @@ function __CheckArguments {
 	if [ "$_DEBUG" == "yes" ]; then
 		local numberOfArguments="${1}" # Number of arguments the tested function should have, can be a number of a range, eg 0-2 for zero to two arguments
 		local numberOfGivenArguments="${2}" # Number of arguments that have been passed
-		local functionName="${3}" # Function name that called __CheckArguments
 
 		local minArgs
 		local maxArgs
 
-		# All arguments of the function to check are passed as array in ${4} (the function call waits for $@)
+		# All arguments of the function to check are passed as array in ${3} (the function call waits for $@)
 		# If any of the arguments contains spaces, bash things there are two aguments
-		# In order to avoid this, we need to iterate over ${4} and count
+		# In order to avoid this, we need to iterate over ${3} and count
 
-		local iterate=4
+		callerName="${FUNCNAME[1]}"
+
+		local iterate=3
 		local fetchArguments=true
 		local argList=""
 		local countedArguments
 		while [ $fetchArguments == true ]; do
 			cmd='argument=${'$iterate'}'
 			eval $cmd
-			if [ "$argument" = "" ]; then
+			if [ "$argument" == "" ]; then
 				fetchArguments=false
 			else
-				argList="$argList[Argument $(($iterate-3)): $argument] "
-				iterate=$(($iterate+1))
+				argList="$argList[Argument $((iterate-2)): $argument] "
+				iterate=$((iterate+1))
 			fi
 		done
 
-		countedArguments=$((iterate-4))
+		countedArguments=$((iterate-3))
 
 		if [ $(IsInteger "$numberOfArguments") -eq 1 ]; then
 			minArgs=$numberOfArguments
@@ -1370,13 +1446,15 @@ function __CheckArguments {
 			IFS='-' read minArgs maxArgs <<< "$numberOfArguments"
 		fi
 
-		Logger "Entering function [$functionName]." "PARANOIA_DEBUG"
+		Logger "Entering function [$callerName]." "PARANOIA_DEBUG"
 
 		if ! ([ $countedArguments -ge $minArgs ] && [ $countedArguments -le $maxArgs ]); then
-			Logger "Function $functionName may have inconsistent number of arguments. Expected min: $minArgs, max: $maxArgs, count: $countedArguments, bash seen: $numberOfGivenArguments. see log file." "ERROR"
-			Logger "Arguments passed: $argList" "ERROR"
+			Logger "Function $callerName may have inconsistent number of arguments. Expected min: $minArgs, max: $maxArgs, count: $countedArguments, bash seen: $numberOfGivenArguments." "ERROR"
+			Logger "$callerName arguments: $argList" "ERROR"
 		else
-			Logger "Arguments passed: $argList" "PARANOIA_DEBUG"
+			if [ ! -z "$argList" ]; then
+				Logger "$callerName arguments: $argList" "PARANOIA_DEBUG"
+			fi
 		fi
 	fi
 }
@@ -1386,7 +1464,7 @@ function __CheckArguments {
 function RsyncPatternsAdd {
 	local patternType="${1}"	# exclude or include
 	local pattern="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	local rest
 
@@ -1398,7 +1476,7 @@ function RsyncPatternsAdd {
 		# Take the string until first occurence until $PATH_SEPARATOR_CHAR
 		str="${rest%%$PATH_SEPARATOR_CHAR*}"
 		# Handle the last case
-		if [ "$rest" = "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
+		if [ "$rest" == "${rest/$PATH_SEPARATOR_CHAR/}" ]; then
 			rest=
 		else
 			# Cut everything before the first occurence of $PATH_SEPARATOR_CHAR
@@ -1416,7 +1494,7 @@ function RsyncPatternsAdd {
 function RsyncPatternsFromAdd {
 	local patternType="${1}"
 	local patternFrom="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	## Check if the exclude list has a full path, and if not, add the config file path if there is one
 	if [ "$(basename $patternFrom)" == "$patternFrom" ]; then
@@ -1429,7 +1507,7 @@ function RsyncPatternsFromAdd {
 }
 
 function RsyncPatterns {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
        if [ "$RSYNC_PATTERN_FIRST" == "exclude" ]; then
 		if [ "$RSYNC_EXCLUDE_PATTERN" != "" ]; then
@@ -1464,7 +1542,7 @@ function RsyncPatterns {
 }
 
 function PreInit {
-	 __CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	 __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local compressionString
 
@@ -1492,7 +1570,7 @@ function PreInit {
 		else
 			RSYNC_PATH="sudo $RSYNC_EXECUTABLE"
 		fi
-		COMMAND_SUDO="sudo"
+		COMMAND_SUDO="sudo -E"
 	else
 		if [ "$RSYNC_REMOTE_PATH" != "" ]; then
 			RSYNC_PATH="$RSYNC_REMOTE_PATH/$RSYNC_EXECUTABLE"
@@ -1509,7 +1587,7 @@ function PreInit {
 }
 
 function PostInit {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	# Define remote commands
 	if [ -f "$SSH_RSA_PRIVATE_KEY" ]; then
@@ -1528,122 +1606,7 @@ function PostInit {
 	fi
 }
 
-function InitLocalOSDependingSettings {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
-
-	## If running under Msys, some commands do not run the same way
-	## Using mingw version of find instead of windows one
-	## Getting running processes is quite different
-	## Ping command is not the same
-	if [ "$LOCAL_OS" == "msys" ]; then
-		FIND_CMD=$(dirname $BASH)/find
-		PING_CMD='$SYSTEMROOT\system32\ping -n 2'
-	else
-		FIND_CMD=find
-		PING_CMD="ping -c 2 -i .2"
-	fi
-
-	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$LOCAL_OS" == "msys" ]; then
-		PROCESS_STATE_CMD="echo none"
-		DF_CMD="df"
-	else
-		PROCESS_STATE_CMD='ps -p$pid -o state= 2 > /dev/null'
-		# CentOS 5 needs -P for one line output
-		DF_CMD="df -P"
-	fi
-
-	## Stat command has different syntax on Linux and FreeBSD/MacOSX
-	if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
-		# Tested on BSD and Mac
-		STAT_CMD="stat -f \"%Sm\""
-		STAT_CTIME_MTIME_CMD="stat -f %N;%c;%m"
-	else
-		# Tested on GNU stat, busybox and Cygwin
-		STAT_CMD="stat -c %y"
-		STAT_CTIME_MTIME_CMD="stat -c %n;%Z;%Y"
-	fi
-}
-
-function InitRemoteOSDependingSettings {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
-
-	if [ "$REMOTE_OS" == "msys" ]; then
-		REMOTE_FIND_CMD=$(dirname $BASH)/find
-	else
-		REMOTE_FIND_CMD=find
-	fi
-
-	## Stat command has different syntax on Linux and FreeBSD/MacOSX
-	if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
-		REMOTE_STAT_CMD="stat -f \"%Sm\""
-		REMOTE_STAT_CTIME_MTIME_CMD="stat -f \\\"%N;%c;%m\\\""
-	else
-		REMOTE_STAT_CMD="stat --format %y"
-		REMOTE_STAT_CTIME_MTIME_CMD="stat -c \\\"%n;%Z;%Y\\\""
-	fi
-
-	## Set rsync default arguments
-	RSYNC_ARGS="-rltD"
-	if [ "$_DRYRUN" == true ]; then
-		RSYNC_DRY_ARG="-n"
-		DRY_WARNING="/!\ DRY RUN "
-	else
-		RSYNC_DRY_ARG=""
-	fi
-
-	RSYNC_ATTR_ARGS=""
-	if [ "$PRESERVE_PERMISSIONS" != "no" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -p"
-	fi
-	if [ "$PRESERVE_OWNER" != "no" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -o"
-	fi
-	if [ "$PRESERVE_GROUP" != "no" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -g"
-	fi
-	if [ "$PRESERVE_EXECUTABILITY" != "no" ]; then
-		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" --executability"
-	fi
-	if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
-		if [ "$PRESERVE_ACL" == "yes" ]; then
-			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
-		fi
-		if [ "$PRESERVE_XATTR" == "yes" ]; then
-			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -X"
-		fi
-	else
-		Logger "Disabling ACL and extended attributes synchronization on [$LOCAL_OS]." "NOTICE"
-	fi
-	if [ "$RSYNC_COMPRESS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -z"
-	fi
-	if [ "$COPY_SYMLINKS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -L"
-	fi
-	if [ "$KEEP_DIRLINKS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -K"
-	fi
-	if [ "$PRESERVE_HARDLINKS" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -H"
-	fi
-	if [ "$CHECKSUM" == "yes" ]; then
-		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --checksum"
-	fi
-	if [ "$BANDWIDTH" != "" ] && [ "$BANDWIDTH" != "0" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
-	fi
-
-	if [ "$PARTIAL" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
-		RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
-	fi
-
-	if [ "$DELTA_COPIES" != "no" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --no-whole-file"
-	else
-		RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
-	fi
-
+function SetCompression {
 	## Busybox fix (Termux xz command doesn't support compression at all)
 	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$REMOTE_OS" == "Busybox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$REMOTE_OS" == "Android" ]; then
 		compressionString=""
@@ -1687,6 +1650,142 @@ function InitRemoteOSDependingSettings {
 	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 }
 
+function InitLocalOSDependingSettings {
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
+
+	## If running under Msys, some commands do not run the same way
+	## Using mingw version of find instead of windows one
+	## Getting running processes is quite different
+	## Ping command is not the same
+	if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
+		FIND_CMD=$(dirname $BASH)/find
+		PING_CMD='$SYSTEMROOT\system32\ping -n 2'
+	else
+		FIND_CMD=find
+		PING_CMD="ping -c 2 -i .2"
+	fi
+
+	if [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Android" ] || [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
+		PROCESS_STATE_CMD="echo none"
+		DF_CMD="df"
+	else
+		PROCESS_STATE_CMD='ps -p$pid -o state= 2 > /dev/null'
+		# CentOS 5 needs -P for one line output
+		DF_CMD="df -P"
+	fi
+
+	## Stat command has different syntax on Linux and FreeBSD/MacOSX
+	if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
+		# Tested on BSD and Mac
+		STAT_CMD="stat -f \"%Sm\""
+		STAT_CTIME_MTIME_CMD="stat -f %N;%c;%m"
+	else
+		# Tested on GNU stat, busybox and Cygwin
+		STAT_CMD="stat -c %y"
+		STAT_CTIME_MTIME_CMD="stat -c %n;%Z;%Y"
+	fi
+
+	# Set compression first time when we know what local os we have
+	SetCompression
+}
+
+# Gets executed regardless of the need of remote connections. It's just that this code needs to get executed after we know if there is a remote os, and if yes, which one
+function InitRemoteOSDependingSettings {
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
+
+	if [ "$REMOTE_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
+		REMOTE_FIND_CMD=$(dirname $BASH)/find
+	else
+		REMOTE_FIND_CMD=find
+	fi
+
+	## Stat command has different syntax on Linux and FreeBSD/MacOSX
+	if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
+		REMOTE_STAT_CMD="stat -f \"%Sm\""
+		REMOTE_STAT_CTIME_MTIME_CMD="stat -f \\\"%N;%c;%m\\\""
+	else
+		REMOTE_STAT_CMD="stat --format %y"
+		REMOTE_STAT_CTIME_MTIME_CMD="stat -c \\\"%n;%Z;%Y\\\""
+	fi
+
+	## Set rsync default arguments
+	RSYNC_ARGS="-rltD"
+	if [ "$_DRYRUN" == true ]; then
+		RSYNC_DRY_ARG="-n"
+		DRY_WARNING="/!\ DRY RUN "
+	else
+		RSYNC_DRY_ARG=""
+	fi
+
+	RSYNC_ATTR_ARGS=""
+	if [ "$PRESERVE_PERMISSIONS" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -p"
+	fi
+	if [ "$PRESERVE_OWNER" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -o"
+	fi
+	if [ "$PRESERVE_GROUP" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -g"
+	fi
+	if [ "$PRESERVE_EXECUTABILITY" != "no" ]; then
+		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" --executability"
+	fi
+	if [ "$PRESERVE_ACL" == "yes" ]; then
+		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "msys" ] && [ "$LOCAL_OS" != "Cygwin" ] && [ "$REMOTE_OS" != "Cygwin" ] && [ "$LOCAL_OS" != "BusyBox" ] && [ "$REMOTE_OS" != "BusyBox" ] && [ "$LOCAL_OS" != "Android" ] && [ "$REMOTE_OS" != "Android" ]; then
+			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
+		else
+			Logger "Disabling ACL synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
+
+		fi
+	fi
+	if [ "$PRESERVE_XATTR" == "yes" ]; then
+		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "msys" ] && [ "$LOCAL_OS" != "Cygwin" ] && [ "$REMOTE_OS" != "Cygwin" ] && [ "$LOCAL_OS" != "BusyBox" ] && [ "$REMOTE_OS" != "BusyBox" ]; then
+			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -X"
+		else
+			Logger "Disabling extended attributes synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
+		fi
+	fi
+	if [ "$RSYNC_COMPRESS" == "yes" ]; then
+		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
+			RSYNC_ARGS=$RSYNC_ARGS" -zz --skip-compress=gz/xz/lz/lzma/lzo/rz/jpg/mp3/mp4/7z/bz2/rar/zip/sfark/s7z/ace/apk/arc/cab/dmg/jar/kgb/lzh/lha/lzx/pak/sfx"
+		else
+			Logger "Disabling compression skips on synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
+		fi
+	fi
+	if [ "$COPY_SYMLINKS" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" -L"
+	fi
+	if [ "$KEEP_DIRLINKS" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" -K"
+	fi
+	if [ "$RSYNC_OPTIONAL_ARGS" != "" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" "$RSYNC_OPTIONAL_ARGS
+	fi
+	if [ "$PRESERVE_HARDLINKS" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" -H"
+	fi
+	if [ "$CHECKSUM" == "yes" ]; then
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --checksum"
+	fi
+	if [ "$BANDWIDTH" != "" ] && [ "$BANDWIDTH" != "0" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" --bwlimit=$BANDWIDTH"
+	fi
+
+	if [ "$PARTIAL" == "yes" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
+		RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
+	fi
+
+	if [ "$DELTA_COPIES" != "no" ]; then
+		RSYNC_ARGS=$RSYNC_ARGS" --no-whole-file"
+	else
+		RSYNC_ARGS=$RSYNC_ARGS" --whole-file"
+	fi
+
+	# Set compression options again after we know what remote OS we're dealing with
+	SetCompression
+}
+
 ## IFS debug function
 function PrintIFS {
 	printf "IFS is: %q" "$IFS"
@@ -1705,7 +1804,11 @@ function ParentPid {
 	fi
 }
 
-## END Generic functions
+
+# If using "include" statements, make sure the script does not get executed unless it's loaded by bootstrap
+_OFUNCTIONS_BOOTSTRAP=true
+[ "$_OFUNCTIONS_BOOTSTRAP" != true ] && echo "Please use bootstrap.sh to load this dev version of $(basename $0)" && exit 1
+
 
 _LOGGER_PREFIX="time"
 
@@ -1713,7 +1816,7 @@ _LOGGER_PREFIX="time"
 PARTIAL_DIR=".obackup_workdir_partial"
 
 ## File extension for encrypted files
-CRYPT_FILE_EXTENSION=".obackup.gpg"
+CRYPT_FILE_EXTENSION=".$PROGRAM.gpg"
 
 # List of runtime created global variables
 # $SQL_DISK_SPACE, disk space available on target for sql backups
@@ -1723,9 +1826,9 @@ CRYPT_FILE_EXTENSION=".obackup.gpg"
 # $FILE_BACKUP_TASKS list of directories to backup, found in config file
 # $FILE_RECURSIVE_BACKUP_TASKS, list of directories to backup, computed from config file recursive list
 # $FILE_RECURSIVE_EXCLUDED_TASKS, list of all directories excluded from recursive list
-# $FILE_SIZE_LIST_LOCAL, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes for local command
-# $FILE_SIZE_LIST_REMOTE, list of all directories to include in GetDirectoriesSize, enclosed by escaped singlequotes for remote command
+# $FILE_SIZE_LIST, list of all directories to include in GetDirectoriesSize, enclosed by escaped doublequotes
 
+# Assume that anything can be backed up unless proven otherwise
 CAN_BACKUP_SQL=true
 CAN_BACKUP_FILES=true
 
@@ -1738,11 +1841,11 @@ function TrapQuit {
 	local exitcode
 
 	# Get ERROR / WARN alert flags from subprocesses that call Logger
-	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID" ]; then
-		WARN_ALERT=1
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
 	fi
-	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID" ]; then
-		ERROR_ALERT=1
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
 	fi
 
 	if [ $ERROR_ALERT == true ]; then
@@ -1775,7 +1878,7 @@ function TrapQuit {
 }
 
 function CheckEnvironment {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$REMOTE_OPERATION" == "yes" ]; then
 		if ! type ssh > /dev/null 2>&1 ; then
@@ -1783,6 +1886,11 @@ function CheckEnvironment {
 			exit 1
 		fi
 
+		if [ "$SSH_PASSWORD_FILE" != "" ] && ! type sshpass > /dev/null 2>&1 ; then
+			Logger "sshpass not present. Cannot use password authentication." "CRITICAL"
+			exit 1
+		fi
+	else
 		if [ "$SQL_BACKUP" != "no" ]; then
 			if ! type mysqldump > /dev/null 2>&1 ; then
 				Logger "mysqldump not present. Cannot backup SQL." "CRITICAL"
@@ -1792,11 +1900,6 @@ function CheckEnvironment {
 				Logger "mysql not present. Cannot backup SQL." "CRITICAL"
 				CAN_BACKUP_SQL=false
 			fi
-		fi
-
-		if [ "$SSH_PASSWORD_FILE" != "" ] && ! type sshpass > /dev/null 2>&1 ; then
-			Logger "sshpass not present. Cannot use password authentication." "CRITICAL"
-			exit 1
 		fi
 	fi
 
@@ -1827,7 +1930,7 @@ function CheckCryptEnvironnment {
 }
 
 function CheckCurrentConfig {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$INSTANCE_ID" == "" ]; then
 		Logger "No INSTANCE_ID defined in config file." "CRITICAL"
@@ -1837,7 +1940,7 @@ function CheckCurrentConfig {
 	# Check all variables that should contain "yes" or "no"
 	declare -a yes_no_vars=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
 	for i in "${yes_no_vars[@]}"; do
-		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ]; then Logger \"Bogus $i value [$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
+		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ]; then Logger \"Bogus $i value [\$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
 	done
 
@@ -1849,7 +1952,7 @@ function CheckCurrentConfig {
 	# Check all variables that should contain a numerical value >= 0
 	declare -a num_vars=(BACKUP_SIZE_MINIMUM SQL_WARN_MIN_SPACE FILE_WARN_MIN_SPACE SOFT_MAX_EXEC_TIME_DB_TASK HARD_MAX_EXEC_TIME_DB_TASK COMPRESSION_LEVEL SOFT_MAX_EXEC_TIME_FILE_TASK HARD_MAX_EXEC_TIME_FILE_TASK BANDWIDTH SOFT_MAX_EXEC_TIME_TOTAL HARD_MAX_EXEC_TIME_TOTAL ROTATE_SQL_COPIES ROTATE_FILE_COPIES KEEP_LOGGING MAX_EXEC_TIME_PER_CMD_BEFORE MAX_EXEC_TIME_PER_CMD_AFTER)
 	for i in "${num_vars[@]}"; do
-		test="if [ $(IsNumericExpand \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value [$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
+		test="if [ $(IsNumericExpand \"\$$i\") -eq 0 ]; then Logger \"Bogus $i value [\$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
 	done
 
@@ -1860,7 +1963,6 @@ function CheckCurrentConfig {
 		fi
 	fi
 
-	#TODO-v2.1(ongoing WIP): Add runtime variable tests (RSYNC_ARGS etc)
 	if [ "$REMOTE_OPERATION" == "yes" ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
 		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY]. Cannot connect to remote system." "CRITICAL"
 		exit 1
@@ -1900,7 +2002,7 @@ function CheckCurrentConfig {
 }
 
 function CheckRunningInstances {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"	#__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ -f "$RUN_DIR/$PROGRAM.$INSTANCE_ID" ]; then
 		pid=$(cat "$RUN_DIR/$PROGRAM.$INSTANCE_ID")
@@ -1914,20 +2016,23 @@ function CheckRunningInstances {
 }
 
 function _ListDatabasesLocal {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sqlCmd=
+	local retval
+	local sqlCmd
 
-	sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
-	Logger "cmd: $sqlCmd" "DEBUG"
+	sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+	Logger "Launching command [$sqlCmd]." "DEBUG"
 	eval "$sqlCmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-	if [ $? -eq 0 ]; then
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+	retval=$?
+	if [ $retval -eq 0 ]; then
 		Logger "Listing databases succeeded." "NOTICE"
 	else
 		Logger "Listing databases failed." "ERROR"
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+		Logger "Command was [$sqlCmd]." "WARN"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 		return 1
 	fi
@@ -1935,34 +2040,38 @@ function _ListDatabasesLocal {
 }
 
 function _ListDatabasesRemote {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	local sqlCmd=
+	local sqlCmd
+	local retval
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
-	sqlCmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID\" 2>&1"
-	Logger "cmd: $sqlCmd" "DEBUG"
+	sqlCmd="$SSH_CMD \"mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
+	Logger "Command output: $sqlCmd" "DEBUG"
 	eval "$sqlCmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-	if [ $? -eq 0 ]; then
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+	retval=$?
+	if [ $retval -eq 0 ]; then
 		Logger "Listing databases succeeded." "NOTICE"
 	else
 		Logger "Listing databases failed." "ERROR"
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+		Logger "Command output: $sqlCmd" "WARN"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
-		return 1
+		return $retval
 	fi
 }
 
 function ListDatabases {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local outputFile	# Return of subfunction
 	local dbName
 	local dbSize
 	local dbBackup
+	local missingDatabases=false
 
 	local dbArray
 
@@ -1975,17 +2084,17 @@ function ListDatabases {
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		_ListDatabasesLocal
-		if [ $? != 0 ]; then
+		if [ $? -ne 0 ]; then
 			outputFile=""
 		else
-			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesLocal.$SCRIPT_PID"
+			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesLocal.$SCRIPT_PID.$TSTAMP"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_ListDatabasesRemote
-		if [ $? != 0 ]; then
+		if [ $? -ne 0 ]; then
 			outputFile=""
 		else
-			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesRemote.$SCRIPT_PID"
+			outputFile="$RUN_DIR/$PROGRAM._ListDatabasesRemote.$SCRIPT_PID.$TSTAMP"
 		fi
 	fi
 
@@ -1994,34 +2103,47 @@ function ListDatabases {
 			while read -r name size; do dbName=$name; dbSize=$size; done <<< "$line"
 
 			if [ "$DATABASES_ALL" == "yes" ]; then
-				dbBackup=1
+				dbBackup=true
 				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
-						dbBackup=0
+						dbBackup=false
 					fi
 				done
 			else
-				dbBackup=0
+				dbBackup=false
 				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
 				for j in "${dbArray[@]}"; do
 					if [ "$dbName" == "$j" ]; then
-						dbBackup=1
+						dbBackup=true
 					fi
 				done
+				if [ $dbBackup == false ]; then
+					missingDatabases=true
+				fi
+
 			fi
 
-			if [ $dbBackup -eq 1 ]; then
+			if [ $dbBackup == true ]; then
 				if [ "$SQL_BACKUP_TASKS" != "" ]; then
 					SQL_BACKUP_TASKS="$SQL_BACKUP_TASKS $dbName"
 				else
 				SQL_BACKUP_TASKS="$dbName"
 				fi
-				TOTAL_DATABASES_SIZE=$((TOTAL_DATABASES_SIZE+$dbSize))
+				TOTAL_DATABASES_SIZE=$((TOTAL_DATABASES_SIZE+dbSize))
 			else
 				SQL_EXCLUDED_TASKS="$SQL_EXCLUDED_TASKS $dbName"
 			fi
 		done < "$outputFile"
+
+		if [ $missingDatabases == true ]; then
+			IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_LIST"
+			for i in "${dbArray[@]}"; do
+				if ! grep "$i" "$outputFile" > /dev/null 2>&1; then
+					Logger "Missing database [$i]." "CRITICAL"
+				fi
+			done
+		fi
 
 		Logger "Database backup list: $SQL_BACKUP_TASKS" "DEBUG"
 		Logger "Database exclude list: $SQL_EXCLUDED_TASKS" "DEBUG"
@@ -2032,163 +2154,320 @@ function ListDatabases {
 }
 
 function _ListRecursiveBackupDirectoriesLocal {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
 	local directories
 	local directory
 	local retval
+	local successfulRun=false
+	local failuresPresent=false
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
 		# No sudo here, assuming you should have all necessary rights for local checks
-		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-		Logger "cmd: $cmd" "DEBUG"
-		eval "$cmd" &
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-		if  [ $? != 0 ]; then
+		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+		Logger "Launching command [$cmd]." "DEBUG"
+		eval "$cmd"
+		retval=$?
+		if  [ $retval -ne 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
-				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+			Logger "Command was [$cmd]." "Warn"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
-				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-			retval=1
+			failuresPresent=true
 		else
-			retval=0
+			successfulRun=true
 		fi
 	done
-	return $retval
+	if [ $successfulRun == true ] && [ $failuresPresent == true ]; then
+		return 2
+	elif [ $successfulRun == true ] && [ $failuresPresent == false ]; then
+		return 0
+	else
+		return 1
+	fi
 }
 
 function _ListRecursiveBackupDirectoriesRemote {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	local cmd
+	local retval
+
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env RECURSIVE_DIRECTORY_LIST="'$RECURSIVE_DIRECTORY_LIST'" env PATH_SEPARATOR_CHAR="'$PATH_SEPARATOR_CHAR'" \
+env REMOTE_FIND_CMD="'$REMOTE_FIND_CMD'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+## allow function call checks			#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+fi						#__WITH_PARANOIA_DEBUG
+
+## allow debugging from command line with _DEBUG=yes
+if [ ! "$_DEBUG" == "yes" ]; then
+	_DEBUG=no
+	_LOGGER_VERBOSE=false
+else
+	trap 'TrapError ${LINENO} $?' ERR
+	_LOGGER_VERBOSE=true
+fi
+
+if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
+	SLEEP_TIME=.05
+fi
+function TrapError {
+	local job="$0"
+	local line="$1"
+	local code="${2:-1}"
+
+	if [ $_LOGGER_SILENT == false ]; then
+		(>&2 echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m")
+	fi
+}
+
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
+}
+
+# Sub function of Logger
+function _Logger {
+	local logValue="${1}"		# Log to file
+	local stdValue="${2}"		# Log to screeen
+	local toStderr="${3:-false}"	# Log to stderr instead of stdout
+
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+		# Current log file
+		echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+	fi
+
+	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
+		if [ $toStderr == true ]; then
+			# Force stderr color in subshell
+			(>&2 echo -e "$stdValue")
+
+		else
+			echo -e "$stdValue"
+		fi
+	fi
+}
+
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
+	else
+		prefix=""
+	fi
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "" "$prefix\e[91m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger  "" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "" "$prefix$value"
+			return
+		fi
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
+	else
+		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "" "Value was: $prefix$value" true
+	fi
+}
+
+function _ListRecursiveBackupDirectoriesRemoteSub {
 	local directories
 	local directory
 	local retval
+	local successfulRun=false
+	local failuresPresent=false
+	local cmd
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
-		#TODO(med): Uses local home directory for remote lookup...
-		cmd=$SSH_CMD' "'$COMMAND_SUDO' '$REMOTE_FIND_CMD' -L '$directory'/ -mindepth 1 -maxdepth 1 -type d" >> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
-		Logger "cmd: $cmd" "DEBUG"
-		eval "$cmd" &
-		WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-		if  [ $? != 0 ]; then
-			Logger "Could not enumerate directories in [$directory]." "ERROR"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
-				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
-			fi
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
-				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
-			fi
-			retval=1
+		cmd="$REMOTE_FIND_CMD -L \"$directory\"/ -mindepth 1 -maxdepth 1 -type d"
+		eval $cmd
+		retval=$?
+		if  [ $retval -ne 0 ]; then
+			RemoteLogger "Could not enumerate directories in [$directory]." "ERROR"
+			RemoteLogger "Command was [$cmd]." "WARN"
+			failuresPresent=true
 		else
-			retval=0
+			successfulRun=true
 		fi
 	done
+	if [ $successfulRun == true ] && [ $failuresPresent == true ]; then
+		return 2
+	elif [ $successfulRun == true ] && [ $failuresPresent == false ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+_ListRecursiveBackupDirectoriesRemoteSub
+exit $?
+ENDSSH
+	retval=$?
+	if [ $retval -ne 0 ]; then
+		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		fi
+		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		fi
+	fi
 	return $retval
 }
 
 function ListRecursiveBackupDirectories {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local output_file
 	local file_exclude
 	local excluded
 	local fileArray
 
-	Logger "Listing directories to backup." "NOTICE"
-	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		_ListRecursiveBackupDirectoriesLocal
-		if [ $? != 0 ]; then
-			output_file=""
-		else
-			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID"
-		fi
-	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_ListRecursiveBackupDirectoriesRemote
-		if [ $? != 0 ]; then
-			output_file=""
-		else
-			output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID"
-		fi
-	fi
+	if [ "$RECURSIVE_DIRECTORY_LIST" != "" ]; then
 
-	if [ -f "$output_file" ]; then
-		while read -r line; do
-			file_exclude=0
-			IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$RECURSIVE_EXCLUDE_LIST"
-			for excluded in "${fileArray[@]}"; do
-				if [ "$excluded" == "$line" ]; then
-					file_exclude=1
-				fi
-			done
-
-			if [ $file_exclude -eq 0 ]; then
-				if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
-					FILE_SIZE_LIST_LOCAL="\"$line\""
-					FILE_SIZE_LIST_REMOTE="\'$line\'"
-					FILE_RECURSIVE_BACKUP_TASKS="$line"
-				else
-					FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$line\""
-					FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$line\'"
-					FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
-				fi
+		# Return values from subfunctions can be 0 (no error), 1 (only errors) or 2 (some errors). Do process output except on 1 return code
+		Logger "Listing directories to backup." "NOTICE"
+		if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
+			_ListRecursiveBackupDirectoriesLocal &
+			WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+			if [ $? -eq 1 ]; then
+				output_file=""
 			else
-				FILE_RECURSIVE_EXCLUDED_TASKS="$FILE_RECURSIVE_EXCLUDED_TASKS$PATH_SEPARATOR_CHAR$line"
+				output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesLocal.$SCRIPT_PID.$TSTAMP"
 			fi
-		done < "$output_file"
+		elif [ "$BACKUP_TYPE" == "pull" ]; then
+			_ListRecursiveBackupDirectoriesRemote &
+			WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+			if [ $? -eq 1 ]; then
+				output_file=""
+			else
+				output_file="$RUN_DIR/$PROGRAM._ListRecursiveBackupDirectoriesRemote.$SCRIPT_PID.$TSTAMP"
+			fi
+		fi
+
+		if [ -f "$output_file" ]; then
+			while read -r line; do
+				file_exclude=0
+				IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$RECURSIVE_EXCLUDE_LIST"
+				for excluded in "${fileArray[@]}"; do
+					if [ "$excluded" == "$line" ]; then
+						file_exclude=1
+					fi
+				done
+
+				if [ $file_exclude -eq 0 ]; then
+					if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
+						FILE_SIZE_LIST="\"$line\""
+						FILE_RECURSIVE_BACKUP_TASKS="$line"
+					else
+						FILE_SIZE_LIST="$FILE_SIZE_LIST \"$line\""
+						FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
+					fi
+				else
+					FILE_RECURSIVE_EXCLUDED_TASKS="$FILE_RECURSIVE_EXCLUDED_TASKS$PATH_SEPARATOR_CHAR$line"
+				fi
+			done < "$output_file"
+		fi
 	fi
 
-	IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
-	for directory in "${fileArray[@]}"; do
-		if [ "$FILE_SIZE_LIST_LOCAL" == "" ]; then
-			FILE_SIZE_LIST_LOCAL="\"$directory\""
-			FILE_SIZE_LIST_REMOTE="\'$directory\'"
-		else
-			FILE_SIZE_LIST_LOCAL="$FILE_SIZE_LIST_LOCAL \"$directory\""
-			FILE_SIZE_LIST_REMOTE="$FILE_SIZE_LIST_REMOTE \'$directory\'"
-		fi
+	if [ "$DIRECTORY_LIST" != "" ]; then
 
-		if [ "$FILE_BACKUP_TASKS" == "" ]; then
-			FILE_BACKUP_TASKS="$directory"
-		else
-			FILE_BACKUP_TASKS="$FILE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$directory"
-		fi
-	done
+		IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
+		for directory in "${fileArray[@]}"; do
+			if [ "$FILE_SIZE_LIST" == "" ]; then
+				FILE_SIZE_LIST="\"$directory\""
+			else
+				FILE_SIZE_LIST="$FILE_SIZE_LIST \"$directory\""
+			fi
+
+			if [ "$FILE_BACKUP_TASKS" == "" ]; then
+				FILE_BACKUP_TASKS="$directory"
+			else
+				FILE_BACKUP_TASKS="$FILE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$directory"
+			fi
+		done
+	fi
 }
 
 function _GetDirectoriesSizeLocal {
-	local dir_list="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local dirList="${1}"
+
+	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
 	# No sudo here, assuming you should have all the necessary rights
 	# This is not pretty, but works with all supported systems
-	cmd="du -cs $dir_list | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	Logger "cmd: $cmd" "DEBUG"
+	cmd="du -cs $dirList | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	Logger "Launching command [$cmd]." "DEBUG"
 	eval "$cmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
-	if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
-		Logger "Could not get files size for some or all directories." "ERROR"
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+	retval=$?
+	if  [ $retval -ne  0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+		Logger "Could not get files size for some or all local directories." "ERROR"
+		Logger "Command was [$cmd]." "WARN"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
-	else
+	elsew
 		Logger "File size fetched successfully." "NOTICE"
 	fi
 
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
 		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
@@ -2198,30 +2477,157 @@ function _GetDirectoriesSizeLocal {
 }
 
 function _GetDirectoriesSizeRemote {
-	local dir_list="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local dirList="${1}"
+	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
 	# Error output is different from stdout because not all files in list may fail at once
-	cmd=$SSH_CMD' '$COMMAND_SUDO' du -cs '$dir_list' | tail -n1 | cut -f1 > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2> '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID
-	Logger "cmd: $cmd" "DEBUG"
-	eval "$cmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
-	if  [ $? != 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID ]; then
-		Logger "Could not get files size for some or all directories." "ERROR"
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" dirList="'$dirList'" \
+$COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
+## allow function call checks			#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+fi						#__WITH_PARANOIA_DEBUG
+
+## allow debugging from command line with _DEBUG=yes
+if [ ! "$_DEBUG" == "yes" ]; then
+	_DEBUG=no
+	_LOGGER_VERBOSE=false
+else
+	trap 'TrapError ${LINENO} $?' ERR
+	_LOGGER_VERBOSE=true
+fi
+
+if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
+	SLEEP_TIME=.05
+fi
+function TrapError {
+	local job="$0"
+	local line="$1"
+	local code="${2:-1}"
+
+	if [ $_LOGGER_SILENT == false ]; then
+		(>&2 echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m")
+	fi
+}
+
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
+}
+
+# Sub function of Logger
+function _Logger {
+	local logValue="${1}"		# Log to file
+	local stdValue="${2}"		# Log to screeen
+	local toStderr="${3:-false}"	# Log to stderr instead of stdout
+
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+		# Current log file
+		echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+	fi
+
+	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
+		if [ $toStderr == true ]; then
+			# Force stderr color in subshell
+			(>&2 echo -e "$stdValue")
+
+		else
+			echo -e "$stdValue"
 		fi
-		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+	fi
+}
+
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
+	else
+		prefix=""
+	fi
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "" "$prefix\e[91m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger  "" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "" "$prefix$value"
+			return
+		fi
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
+	else
+		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "" "Value was: $prefix$value" true
+	fi
+}
+
+	cmd="du -cs $dirList | tail -n1 | cut -f1"
+	eval "$cmd"
+	retval=$?
+	if [ $retval != 0 ]; then
+		RemoteLogger "Command was [$cmd]." "WARN"
+	fi
+	exit $retval
+ENDSSH
+	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
+	retval=$?
+	if  [ $retval -ne 0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
+		Logger "Could not get files size for some or all remote directories." "ERROR"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		fi
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 	else
 		Logger "File size fetched successfully." "NOTICE"
 	fi
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" ]; then
-		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
 		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
@@ -2231,95 +2637,229 @@ function _GetDirectoriesSizeRemote {
 }
 
 function GetDirectoriesSize {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	Logger "Getting files size" "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST_LOCAL"
+			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$FILE_BACKUP" != "no" ]; then
-			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST_REMOTE"
+			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST"
 		fi
 	fi
 }
 
 function _CreateDirectoryLocal {
-	local dir_to_create="${1}"
-		__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local dirToCreate="${1}"
+		__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ ! -d "$dir_to_create" ]; then
+	local retval
+
+	if [ ! -d "$dirToCreate" ]; then
 		# No sudo, you should have all necessary rights
-		mkdir -p "$dir_to_create" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1
-		if [ $? != 0 ]; then
-			Logger "Cannot create directory [$dir_to_create]" "CRITICAL"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID ]; then
-				Logger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+		mkdir -p "$dirToCreate" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1 &
+		WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
+		retval=$?
+		if [ $retval -ne 0 ]; then
+			Logger "Cannot create directory [$dirToCreate]" "CRITICAL"
+			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
+				Logger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
-			return 1
+			return $retval
 		fi
 	fi
 }
 
 function _CreateDirectoryRemote {
-	local dir_to_create="${1}"
-		__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local dirToCreate="${1}"
+		__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
 	CheckConnectivity3rdPartyHosts
 	CheckConnectivityRemoteHost
-	cmd=$SSH_CMD' "if ! [ -d \"'$dir_to_create'\" ]; then '$COMMAND_SUDO' mkdir -p \"'$dir_to_create'\"; fi" > '$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID' 2>&1'
-	Logger "cmd: $cmd" "DEBUG"
-	eval "$cmd" &
-	WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-	if [ $? != 0 ]; then
-		Logger "Cannot create remote directory [$dir_to_create]." "CRITICAL"
-		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
-		return 1
+
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env dirToCreate="'$dirToCreate'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
+## allow function call checks			#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+fi						#__WITH_PARANOIA_DEBUG
+
+## allow debugging from command line with _DEBUG=yes
+if [ ! "$_DEBUG" == "yes" ]; then
+	_DEBUG=no
+	_LOGGER_VERBOSE=false
+else
+	trap 'TrapError ${LINENO} $?' ERR
+	_LOGGER_VERBOSE=true
+fi
+
+if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
+	SLEEP_TIME=.05
+fi
+function TrapError {
+	local job="$0"
+	local line="$1"
+	local code="${2:-1}"
+
+	if [ $_LOGGER_SILENT == false ]; then
+		(>&2 echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m")
+	fi
+}
+
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
+}
+
+# Sub function of Logger
+function _Logger {
+	local logValue="${1}"		# Log to file
+	local stdValue="${2}"		# Log to screeen
+	local toStderr="${3:-false}"	# Log to stderr instead of stdout
+
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+		# Current log file
+		echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+	fi
+
+	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
+		if [ $toStderr == true ]; then
+			# Force stderr color in subshell
+			(>&2 echo -e "$stdValue")
+
+		else
+			echo -e "$stdValue"
+		fi
+	fi
+}
+
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
+	else
+		prefix=""
+	fi
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "" "$prefix\e[91m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger  "" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "" "$prefix$value"
+			return
+		fi
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
+	else
+		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "" "Value was: $prefix$value" true
+	fi
+}
+
+	if [ ! -d "$dirToCreate" ]; then
+		# No sudo, you should have all necessary rights
+		mkdir -p "$dirToCreate"
+		retval=$?
+		if [ $retval -ne 0 ]; then
+			RemoteLogger "Cannot create directory [$dirToCreate]" "CRITICAL"
+			exit $retval
+		fi
+	fi
+	exit 0
+ENDSSH
+	WaitForTaskCompletion $! 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false
+	retval=$?
+	if [ $retval -ne 0 ]; then
+		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		return $retval
 	fi
 }
 
 function CreateStorageDirectories {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryLocal "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateDirectoryLocal "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 		if [ "$ENCRYPTION" == "yes" ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			_CreateDirectoryRemote "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 		if [ "$ENCRYPTION" == "yes" ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
@@ -2329,49 +2869,197 @@ function CreateStorageDirectories {
 function GetDiskSpaceLocal {
 	# GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
 	# GLOBAL VARIABLE DRIVE to pass variable to parent function
-	local path_to_check="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local pathToCheck="${1}"
 
-	if [ -d "$path_to_check" ]; then
+	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
+
+	local retval
+
+	if [ -d "$pathToCheck" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
-		$DF_CMD "$path_to_check" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
-		if [ $? != 0 ]; then
+		$DF_CMD "$pathToCheck" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+		retval=$?
+		if [ $retval -ne 0 ]; then
 			DISK_SPACE=0
-			Logger "Cannot get disk space in [$path_to_check] on local system." "ERROR"
-			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+			Logger "Cannot get disk space in [$pathToCheck] on local system." "ERROR"
+			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		else
-			DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
-			DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
+			DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
+			DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
 			if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
 				DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
 			fi
 		fi
 	else
-		Logger "Storage path [$path_to_check] does not exist." "CRITICAL"
+		Logger "Storage path [$pathToCheck] does not exist." "CRITICAL"
 		return 1
 	fi
 }
 
 function GetDiskSpaceRemote {
 	# USE GLOBAL VARIABLE DISK_SPACE to pass variable to parent function
-	local path_to_check="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local pathToCheck="${1}"
+
+	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local cmd
+	local retval
 
-	cmd=$SSH_CMD' "if [ -d \"'$path_to_check'\" ]; then '$COMMAND_SUDO' '$DF_CMD' \"'$path_to_check'\"; else exit 1; fi" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID'" 2>&1'
-	Logger "cmd: $cmd" "DEBUG"
-	eval "$cmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-	if [ $? != 0 ]; then
-		DISK_SPACE=0
-		Logger "Cannot get disk space in [$path_to_check] on remote system." "ERROR"
-		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
-		return 1
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env DF_CMD="'$DF_CMD'" \
+env pathToCheck="'$pathToCheck'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
+## allow function call checks			#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+fi						#__WITH_PARANOIA_DEBUG
+
+## allow debugging from command line with _DEBUG=yes
+if [ ! "$_DEBUG" == "yes" ]; then
+	_DEBUG=no
+	_LOGGER_VERBOSE=false
+else
+	trap 'TrapError ${LINENO} $?' ERR
+	_LOGGER_VERBOSE=true
+fi
+
+if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
+	SLEEP_TIME=.05
+fi
+function TrapError {
+	local job="$0"
+	local line="$1"
+	local code="${2:-1}"
+
+	if [ $_LOGGER_SILENT == false ]; then
+		(>&2 echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m")
+	fi
+}
+
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
+}
+
+# Sub function of Logger
+function _Logger {
+	local logValue="${1}"		# Log to file
+	local stdValue="${2}"		# Log to screeen
+	local toStderr="${3:-false}"	# Log to stderr instead of stdout
+
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+		# Current log file
+		echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+	fi
+
+	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
+		if [ $toStderr == true ]; then
+			# Force stderr color in subshell
+			(>&2 echo -e "$stdValue")
+
+		else
+			echo -e "$stdValue"
+		fi
+	fi
+}
+
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
 	else
-		DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $4}')
-		DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" | awk '{print $1}')
+		prefix=""
+	fi
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "" "$prefix\e[91m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger  "" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "" "$prefix$value"
+			return
+		fi
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
+	else
+		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "" "Value was: $prefix$value" true
+	fi
+}
+
+function _GetDiskSpaceRemoteSub {
+	if [ -d "$pathToCheck" ]; then
+		# Not elegant solution to make df silent on errors
+		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
+		cmd="$DF_CMD \"$pathToCheck\""
+		eval $cmd
+		if [ $? != 0 ]; then
+			RemoteLogger "Error getting [$pathToCheck] size." "CRITICAL"
+			RemoteLogger "Command was [$cmd]." "WARN"
+			return 1
+		else
+			return 0
+		fi
+	else
+		RemoteLogger "Storage path [$pathToCheck] does not exist." "CRITICAL"
+		return 1
+	fi
+}
+
+_GetDiskSpaceRemoteSub
+exit $?
+ENDSSH
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false
+	retval=$?
+	if [ $retval -ne 0 ]; then
+		DISK_SPACE=0
+		Logger "Cannot get disk space in [$pathToCheck] on remote system." "ERROR"
+		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		return $retval
+	else
+		DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
+		DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
 		if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
 			DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
 		fi
@@ -2381,12 +3069,12 @@ function GetDiskSpaceRemote {
 function CheckDiskSpace {
 	# USE OF GLOBAL VARIABLES TOTAL_DATABASES_SIZE, TOTAL_FILES_SIZE, BACKUP_SIZE_MINIMUM, STORAGE_WARN_SIZE, STORAGE_SPACE
 
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			GetDiskSpaceLocal "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
 				CAN_BACKUP_SQL=false
 			else
@@ -2396,7 +3084,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			GetDiskSpaceLocal "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
 				CAN_BACKUP_FILES=false
 			else
@@ -2406,7 +3094,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$ENCRYPTION" != "no" ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
 				CAN_BACKUP_FILES=false
 				CAN_BACKUP_SQL=false
@@ -2418,7 +3106,7 @@ function CheckDiskSpace {
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		if [ "$SQL_BACKUP" != "no" ]; then
 			GetDiskSpaceRemote "$SQL_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
 			else
 				SQL_DISK_SPACE=$DISK_SPACE
@@ -2427,7 +3115,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$FILE_BACKUP" != "no" ]; then
 			GetDiskSpaceRemote "$FILE_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
 			else
 				FILE_DISK_SPACE=$DISK_SPACE
@@ -2436,7 +3124,7 @@ function CheckDiskSpace {
 		fi
 		if [ "$ENCRYPTION" != "no" ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
 				CAN_BACKUP_FILES=false
 				CAN_BACKUP_SQL=false
@@ -2509,7 +3197,7 @@ function CheckDiskSpace {
 		Logger "Crypt storage space: $CRYPT_DISK_SPACE Ko" "NOTICE"
 	fi
 
-	if [ $BACKUP_SIZE_MINIMUM -gt $(($TOTAL_DATABASES_SIZE+$TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
+	if [ $BACKUP_SIZE_MINIMUM -gt $((TOTAL_DATABASES_SIZE+TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
 		Logger "Backup size is smaller than expected." "WARN"
 	fi
 }
@@ -2524,27 +3212,34 @@ function _BackupDatabaseLocalToLocal {
 	local sqlCmd
 	local retval
 
-	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ $encrypt == true ]; then
 		encryptOptions="| $CRYPT_TOOL --encrypt --recipient=\"$GPG_RECIPIENT\""
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sqlCmd" "DEBUG"
+		Logger "Launching command [$sqlCmd]." "DEBUG"
 		eval "$sqlCmd" &
 	else
-		Logger "cmd: $drySqlCmd" "DEBUG"
+		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		if [ $_DRYRUN == false ]; then
+			Logger "Command was [$sqlCmd]." "WARN"
+			eval "$sqlCmd" &
+		else
+			Logger "Command was [$drySqlCmd]." "WARN"
+			eval "$drySqlCmd" &
+		fi
+		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
 	fi
@@ -2556,7 +3251,7 @@ function _BackupDatabaseLocalToRemote {
 	local exportOptions="${2}" # export options
 	local encrypt="${3:-false}" # Does the file need to be encrypted
 
-	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local encryptOptions
 	local encryptExtension
@@ -2573,20 +3268,27 @@ function _BackupDatabaseLocalToRemote {
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
-	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID"
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD '$COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sqlCmd" "DEBUG"
+		Logger "Launching command [$sqlCmd]." "DEBUG"
 		eval "$sqlCmd" &
 	else
-		Logger "cmd: $drySqlCmd" "DEBUG"
+		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		if [ $_DRYRUN == false ]; then
+			Logger "Command was [$sqlCmd]." "WARN"
+			eval "$sqlCmd" &
+		else
+			Logger "Command was [$drySqlCmd]." "WARN"
+			eval "$drySqlCmd" &
+		fi
+		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
 	fi
@@ -2598,7 +3300,7 @@ function _BackupDatabaseRemoteToLocal {
 	local exportOptions="${2}" # export options
 	local encrypt="${3:-false}" # Does the file need to be encrypted ?
 
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local encryptOptions
 	local encryptExtension
@@ -2615,20 +3317,27 @@ function _BackupDatabaseRemoteToLocal {
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
-	local sqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID'"'
+	local drySqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > /dev/null 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP'"'
+	local sqlCmd=$SSH_CMD' "mysqldump -u '$SQL_USER' '$exportOptions' --databases '$database' '$COMPRESSION_PROGRAM' '$COMPRESSION_OPTIONS' '$encryptOptions'" > "'$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension'" 2> "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP'"'
 
 	if [ $_DRYRUN == false ]; then
-		Logger "cmd: $sqlCmd" "DEBUG"
+		Logger "Launching command [$sqlCmd]." "DEBUG"
 		eval "$sqlCmd" &
 	else
-		Logger "cmd: $drySqlCmd" "DEBUG"
+		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID" ]; then
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID)" "ERROR"
+	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+		if [ $_DRYRUN == false ]; then
+			Logger "Command was [$sqlCmd]." "WARN"
+			eval "$sqlCmd" &
+		else
+			Logger "Command was [$drySqlCmd]." "WARN"
+			eval "$drySqlCmd" &
+		fi
+		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
 	fi
@@ -2637,7 +3346,7 @@ function _BackupDatabaseRemoteToLocal {
 
 function BackupDatabase {
 	local database="${1}"
-	__CheckArguments 1 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 1 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local mysqlOptions
 	local encrypt=false
@@ -2672,7 +3381,7 @@ function BackupDatabase {
 }
 
 function BackupDatabases {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local database
 
@@ -2683,8 +3392,6 @@ function BackupDatabases {
 	done
 }
 
-#TODO: exclusions don't work for encrypted files
-#TODO: add ParallelExec here ?
 function EncryptFiles {
 	local filePath="${1}"	# Path of files to encrypt
 	local destPath="${2}"    # Path to store encrypted files
@@ -2692,12 +3399,20 @@ function EncryptFiles {
 	local recursive="${4:-true}" # Is recursive ?
 	local keepFullPath="${5:-false}" # Should destpath become destpath + sourcepath ?
 
-	__CheckArguments 5 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 5 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local successCounter=0
 	local errorCounter=0
 	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
 	local recursiveArgs=""
+
+	if [ ! -d "$destPath" ]; then
+		mkdir -p "$destPath"
+		if [ $? -ne 0 ]; then
+			Logger "Cannot create crypt storage path [$destPath]." "ERROR"
+			return 1
+		fi
+	fi
 
 	if [ ! -w "$destPath" ]; then
 		Logger "Cannot write to crypt storage path [$destPath]." "ERROR"
@@ -2708,6 +3423,7 @@ function EncryptFiles {
 		recursiveArgs="-mindepth 1 -maxdepth 1"
 	fi
 
+	Logger "Encrypting files in [$filePath]." "NOTICE"
 	while IFS= read -r -d $'\0' sourceFile; do
 		# Get path of sourcefile
 		path="$(dirname "$sourceFile")"
@@ -2727,17 +3443,51 @@ function EncryptFiles {
 		fi
 
 		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
-		$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
-		if [ $? != 0 ]; then
-			Logger "Cannot encrypt [$sourceFile]." "ERROR"
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
-			errorCounter=$((errorCounter+1))
+		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+			echo "$CRYPT_TOOL --batch --yes --out \"$path/$file$cryptFileExtension\" --recipient=\"$recipient\" --encrypt \"$sourceFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
-			successCounter=$((successCounter+1))
+			$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+			if [ $? -ne 0 ]; then
+				Logger "Cannot encrypt [$sourceFile]." "ERROR"
+				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+				errorCounter=$((errorCounter+1))
+			else
+				successCounter=$((successCounter+1))
+			fi
 		fi
-	done < <(find "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
-	Logger "Encrypted [$successCounter] files successfully." "NOTICE"
-	if [ $errorCounter -gt 0 ]; then
+	done < <($FIND_CMD "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
+
+	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+		# Handle batch mode where SOFT /HARD MAX EXEC TIME TOTAL is not defined
+		if [ $(IsNumeric $SOFT_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			softMaxExecTime=$SOFT_MAX_EXEC_TIME_TOTAL
+		else
+			softMaxExecTime=0
+		fi
+
+		if [ $(IsNumeric $HARD_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			hardMaxExecTime=$HARD_MAX_EXEC_TIME_TOTAL
+		else
+			hardMaxExecTime=0
+		fi
+
+		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $softMaxExecTime $hardMaxExecTime $SLEEP_TIME $KEEP_LOGGING true true false
+		retval=$?
+		if [ $retval -ne 0 ]; then
+			Logger "Encryption error.." "ERROR"
+			# Output file is defined in ParallelExec
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+		fi
+		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
+		errorCounter=$retval
+	fi
+
+	if [ $successCounter -gt 0 ]; then
+		Logger "Encrypted [$successCounter] files successfully." "NOTICE"
+	elif [ $successCounter -eq 0 ] && [ $errorCounter -eq 0 ]; then
+		Logger "There were no files to encrypt." "WARN"
+	fi
+		if [ $errorCounter -gt 0 ]; then
 		Logger "Failed to encrypt [$errorCounter] files." "CRITICAL"
 	fi
 	return $errorCounter
@@ -2748,17 +3498,32 @@ function DecryptFiles {
 	local passphraseFile="${2}"  # Passphrase file to decrypt files
 	local passphrase="${3}"	# Passphrase to decrypt files
 
-	__CheckArguments 3 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local options
 	local secret
 	local successCounter=0
 	local errorCounter=0
+	local cryptToolVersion
+	local cryptToolMajorVersion
+	local cryptToolSubVersion
 	local cryptFileExtension="$CRYPT_FILE_EXTENSION"
 
+	local retval
+
 	if [ ! -w "$filePath" ]; then
-		Logger "Directory [$filePath] is not writable. Cannot decrypt files." "CRITICAL"
+		Logger "Path [$filePath] is not writable or does not exist. Cannot decrypt files." "CRITICAL"
 		exit 1
+	fi
+
+	# Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
+	cryptToolVersion=$($CRYPT_TOOL --version | head -1 | awk '{print $3}')
+	cryptToolMajorVersion=${cryptToolVersion%%.*}
+	cryptToolSubVersion=${cryptToolVersion#*.}
+	cryptToolSubVersion=${cryptToolSubVersion%.*}
+
+	if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
+		additionalParameters="--pinentry-mode loopback"
 	fi
 
 	if [ -f "$passphraseFile" ]; then
@@ -2778,20 +3543,57 @@ function DecryptFiles {
 
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
-		$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1
-		if [ $? != 0 ]; then
-			Logger "Cannot decrypt [$encryptedFile]." "ERROR"
-			Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "DEBUG"
-			errorCounter=$((errorCounter+1))
+
+		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+			echo "$CRYPT_TOOL $options --out \"${encryptedFile%%$cryptFileExtension}\" $additionalParameters $secret --decrypt \"$encryptedFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
-			successCounter=$((successCounter+1))
-			rm -f "$encryptedFile"
-			if [ $? != 0 ]; then
-				Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
+			$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+			retval=$?
+			if [ $retval -ne 0 ]; then
+				Logger "Cannot decrypt [$encryptedFile]." "ERROR"
+				Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
+				errorCounter=$((errorCounter+1))
+			else
+				successCounter=$((successCounter+1))
+				rm -f "$encryptedFile"
+				if [ $? -ne 0 ]; then
+					Logger "Cannot delete original file [$encryptedFile] after decryption." "ERROR"
+				fi
 			fi
 		fi
-	done < <(find "$filePath" -type f -name "*$cryptFileExtension" -print0)
-	Logger "Decrypted [$successCounter] files successfully." "NOTICE"
+	done < <($FIND_CMD "$filePath" -type f -name "*$cryptFileExtension" -print0)
+
+	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+		# Handle batch mode where SOFT /HARD MAX EXEC TIME TOTAL is not defined
+		if [ $(IsNumeric $SOFT_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			softMaxExecTime=$SOFT_MAX_EXEC_TIME_TOTAL
+		else
+			softMaxExecTime=0
+		fi
+
+		if [ $(IsNumeric $HARD_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+			hardMaxExecTime=$HARD_MAX_EXEC_TIME_TOTAL
+		else
+			hardMaxExecTime=0
+		fi
+
+		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $softMaxExecTime $hardMaxExecTime $SLEEP_TIME $KEEP_LOGGING true true false
+		retval=$?
+		if [ $retval -ne 0 ]; then
+			Logger "Decrypting error.." "ERROR"
+			# Output file is defined in ParallelExec
+			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+		fi
+		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
+		errorCounter=$retval
+	fi
+
+	if [ $successCounter -gt 0 ]; then
+		Logger "Decrypted [$successCounter] files successfully." "NOTICE"
+	elif [ $successCounter -eq 0 ] && [ $errorCounter -eq 0 ]; then
+		Logger "There were no files to decrypt." "WARN"
+	fi
+
 	if [ $errorCounter -gt 0 ]; then
 		Logger "Failed to decrypt [$errorCounter] files." "CRITICAL"
 	fi
@@ -2799,26 +3601,14 @@ function DecryptFiles {
 }
 
 function Rsync {
-	local backupDirectory="${1}"	# Which directory to backup
+	local sourceDir="${1}"		# Source directory
+	local destinationDir="${2}"	# Destination directory
 	local recursive="${2:-true}"	# Backup only files at toplevel of directory
 
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	local fileStoragePath
-	local withoutCryptPath
 	local rsyncCmd
 	local retval
-
-	if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
-		if [ "$ENCRYPTION" == "yes" ]; then
-			withoutCryptPath="${backupDirectory#$CRYPT_STORAGE}"
-			fileStoragePath=$(dirname "$FILE_STORAGE/${withoutCryptPath#/}")
-		else
-			fileStoragePath=$(dirname "$FILE_STORAGE/${backupDirectory#/}")
-		fi
-	else
-		fileStoragePath="$FILE_STORAGE"
-	fi
 
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
 	if [ $recursive == false ]; then
@@ -2828,31 +3618,35 @@ function Rsync {
 		RSYNC_NO_RECURSE_ARGS=""
 	fi
 
+	Logger "Beginning file backup of [$sourceDir] to [$destinationDir]." "VERBOSE"
+
+
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
-		_CreateDirectoryLocal "$fileStoragePath"
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		_CreateDirectoryLocal "$destinationDir"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$sourceDir\" \"$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		_CreateDirectoryLocal "$fileStoragePath"
+		_CreateDirectoryLocal "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		backupDirectory=$(EscapeSpaces "$backupDirectory")
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$backupDirectory\" \"$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		sourceDir=$(EscapeSpaces "$sourceDir")
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$sourceDir\" \"$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		fileStoragePath=$(EscapeSpaces "$fileStoragePath")
-		_CreateDirectoryRemote "$fileStoragePath"
+		destinationDir=$(EscapeSpaces "$destinationDir")
+		_CreateDirectoryRemote "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$backupDirectory\" \"$REMOTE_USER@$REMOTE_HOST:$fileStoragePath\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $RSYNC_ARGS $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$sourceDir\" \"$REMOTE_USER@$REMOTE_HOST:$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	fi
 
-	Logger "cmd: $rsyncCmd" "DEBUG"
+	Logger "Launching command [$rsyncCmd]." "DEBUG"
 	eval "$rsyncCmd" &
-	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
+	WaitForTaskCompletion $! $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false
 	retval=$?
-	if [ $retval != 0 ]; then
-		Logger "Failed to backup [$backupDirectory] to [$fileStoragePath]." "ERROR"
-		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+	if [ $retval -ne 0 ]; then
+		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
+		Logger "Command was [$rsyncCmd]." "WARN"
+		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
 	fi
@@ -2861,49 +3655,72 @@ function Rsync {
 }
 
 function FilesBackup {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local backupTask
 	local backupTasks
+	local destinationDir
+	local withoutCryptPath
+
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
-		Logger "Beginning file backup of [$backupTask]." "NOTICE"
+	# Backup directories from simple list
+
+		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
+		else
+			destinationDir="$FILE_STORAGE"
+			encryptDir="$FILE_STORAGE"
+		fi
+
+		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
-			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" true
+			if [ $? -eq 0 ]; then
+				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
-			Rsync "$backupTask" true
-			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+			Rsync "$backupTask" "$destinationDir" true
+			if [ $? -eq 0 ]; then
+				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
 			fi
 		else
-			Rsync "$backupTask" true
+			Rsync "$backupTask" "$destinationDir" true
 		fi
 		CheckTotalExecutionTime
 	done
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
-		Logger "Beginning non recursive file backup of [$backupTask]." "NOTICE"
+	# Backup recursive directories withouht recursion
+
+		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
+		else
+			destinationDir="$FILE_STORAGE"
+			encryptDir="$FILE_STORAGE"
+		fi
+
+		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
-			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" false true
+			if [ $? -eq 0 ]; then
+				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
-			Rsync "$backupTask" false
-			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false false
+			Rsync "$backupTask" "$destinationDir" false
+			if [ $? -eq 0 ]; then
+				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" false false
 			fi
 		else
-			Rsync "$backupTask" false
+			Rsync "$backupTask" "$destinationDir" false
 		fi
 		CheckTotalExecutionTime
 	done
@@ -2911,210 +3728,308 @@ function FilesBackup {
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_RECURSIVE_BACKUP_TASKS"
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup sub directories of recursive directories
-		Logger "Beginning recursive file backup of [$backupTask]." "NOTICE"
+
+		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
+		else
+			destinationDir="$FILE_STORAGE"
+			encryptDir="$FILE_STORAGE"
+		fi
+
+		Logger "Beginning backup task [$backupTask]." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
-			if [ $? == 0 ]; then
-				Rsync "$CRYPT_STORAGE/$backupTask" true true
+			if [ $? -eq 0 ]; then
+				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
 		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
-			Rsync "$backupTask" true
-			if [ $? == 0 ]; then
-				EncryptFiles "$FILE_STORAGE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
+			Rsync "$backupTask" "$destinationDir" true
+			if [ $? -eq 0 ]; then
+				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
 			fi
 		else
-			Rsync "$backupTask" true
+			Rsync "$backupTask" "$destinationDir" true
 		fi
 		CheckTotalExecutionTime
 	done
 }
 
 function CheckTotalExecutionTime {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	#### Check if max execution time of whole script as been reached
 	if [ $SECONDS -gt $SOFT_MAX_EXEC_TIME_TOTAL ]; then
-		Logger "Max soft execution time of the whole backup exceeded." "ERROR"
-		WARN_ALERT=1
+		Logger "Max soft execution time of the whole backup exceeded." "WARN"
 		SendAlert true
-		if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
-			Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
-			exit 1
-		fi
+	fi
+
+	if [ $SECONDS -gt $HARD_MAX_EXEC_TIME_TOTAL ] && [ $HARD_MAX_EXEC_TIME_TOTAL -ne 0 ]; then
+		Logger "Max hard execution time of the whole backup exceeded, stopping backup process." "CRITICAL"
+		exit 1
 	fi
 }
 
 function _RotateBackupsLocal {
-	local backup_path="${1}"
-	local rotate_copies="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local backupPath="${1}"
+	local rotateCopies="${2}"
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local backup
 	local copy
 	local cmd
 	local path
 
-	#TODO: Replace this -name with regex .*$PROGRAM\.[1-9][0-9]+
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
-		copy=$rotate_copies
+	$FIND_CMD "$backupPath" -mindepth 1 -maxdepth 1 ! -regex ".*\.$PROGRAM\.[0-9]+"  -print0 | while IFS= read -r -d $'\0' backup; do
+		copy=$rotateCopies
 		while [ $copy -gt 1 ]; do
-			if [ $copy -eq $rotate_copies ]; then
+			if [ $copy -eq $rotateCopies ]; then
 				path="$backup.$PROGRAM.$copy"
 				if [ -f "$path" ] || [ -d "$path" ]; then
 					cmd="rm -rf \"$path\""
-					Logger "cmd: $cmd" "DEBUG"
+					Logger "Launching command [$cmd]." "DEBUG"
 					eval "$cmd" &
-					WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-					if [ $? != 0 ]; then
+					WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
+					if [ $? -ne 0 ]; then
 						Logger "Cannot delete oldest copy [$path]." "ERROR"
+						Logger "Command was [$cmd]." "WARN"
 					fi
 				fi
 			fi
 
-			path="$backup.$PROGRAM.$(($copy-1))"
+			path="$backup.$PROGRAM.$((copy-1))"
 			if [ -f "$path" ] || [ -d "$path" ]; then
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
-				Logger "cmd: $cmd" "DEBUG"
+				Logger "Launching command [$cmd]." "DEBUG"
 				eval "$cmd" &
-				WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-				if [ $? != 0 ]; then
+				WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
+				if [ $? -ne 0 ]; then
 					Logger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
+					Logger "Command was [$cmd]." "WARN"
 				fi
 
 			fi
-			copy=$(($copy-1))
+			copy=$((copy-1))
 		done
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]; then
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			Logger "cmd: $cmd" "DEBUG"
+			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-			if [ $? != 0 ]; then
+			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
+			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				Logger "Command was [$cmd]." "WARN"
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
-			Logger "cmd: $cmd" "DEBUG"
+			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-			if [ $? != 0 ]; then
+			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
+			if [ $? -ne 0 ]; then
 				Logger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				Logger "Command was [$cmd]." "WARN"
 			fi
 
 		else
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			Logger "cmd: $cmd" "DEBUG"
+			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
-			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-			if [ $? != 0 ]; then
+			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
+			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				Logger "Command was [$cmd]." "WARN"
 			fi
 		fi
 	done
 }
 
 function _RotateBackupsRemote {
-	local backup_path="${1}"
-	local rotate_copies="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local backupPath="${1}"
+	local rotateCopies="${2}"
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-$SSH_CMD PROGRAM=$PROGRAM REMOTE_OPERATION=$REMOTE_OPERATION _DEBUG=$_DEBUG COMMAND_SUDO=$COMMAND_SUDO rotate_copies=$rotate_copies backup_path="$backup_path" 'bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID" 2>&1 &
+$SSH_CMD env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
+env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" TSTAMP="'$TSTAMP'" \
+env REMOTE_FIND_CMD="'$REMOTE_FIND_CMD'" env rotateCopies="'$rotateCopies'" env backupPath="'$backupPath'" \
+$COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+## allow function call checks			#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+fi						#__WITH_PARANOIA_DEBUG
 
-function _RemoteLogger {
-	local value="${1}" # What to log
-	echo -e "$value"
+## allow debugging from command line with _DEBUG=yes
+if [ ! "$_DEBUG" == "yes" ]; then
+	_DEBUG=no
+	_LOGGER_VERBOSE=false
+else
+	trap 'TrapError ${LINENO} $?' ERR
+	_LOGGER_VERBOSE=true
+fi
+
+if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
+	SLEEP_TIME=.05
+fi
+function TrapError {
+	local job="$0"
+	local line="$1"
+	local code="${2:-1}"
+
+	if [ $_LOGGER_SILENT == false ]; then
+		(>&2 echo -e "\e[45m/!\ ERROR in ${job}: Near line ${line}, exit code ${code}\e[0m")
+	fi
 }
 
-function RemoteLogger {
-	local value="${1}" # Sentence to log (in double quotes)
-	local level="${2}" # Log level: PARANOIA_DEBUG, DEBUG, NOTICE, WARN, ERROR, CRITIAL
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
+}
 
-	prefix="REMOTE TIME: $SECONDS - "
+# Sub function of Logger
+function _Logger {
+	local logValue="${1}"		# Log to file
+	local stdValue="${2}"		# Log to screeen
+	local toStderr="${3:-false}"	# Log to stderr instead of stdout
+
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+		# Current log file
+		echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+	fi
+
+	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
+		if [ $toStderr == true ]; then
+			# Force stderr color in subshell
+			(>&2 echo -e "$stdValue")
+
+		else
+			echo -e "$stdValue"
+		fi
+	fi
+}
+
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
+	else
+		prefix=""
+	fi
 
 	if [ "$level" == "CRITICAL" ]; then
-		_RemoteLogger "$prefix\e[41m$value\e[0m"
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
 		return
 	elif [ "$level" == "ERROR" ]; then
-		_RemoteLogger "$prefix\e[91m$value\e[0m"
+		_Logger "" "$prefix\e[91m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
 		return
 	elif [ "$level" == "WARN" ]; then
-		_RemoteLogger "$prefix\e[93m$value\e[0m"
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
 		return
 	elif [ "$level" == "NOTICE" ]; then
-		_RemoteLogger "$prefix$value"
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger  "" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
 		if [ "$_DEBUG" == "yes" ]; then
-			_RemoteLogger "$prefix$value"
+			_Logger "" "$prefix$value"
 			return
 		fi
-	elif [ "$level" == "PARANOIA_DEBUG" ]; then             	#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then        	#__WITH_PARANOIA_DEBUG
-			_RemoteLogger "$prefix$value"                 	#__WITH_PARANOIA_DEBUG
-			return                                  	#__WITH_PARANOIA_DEBUG
-		fi                                              	#__WITH_PARANOIA_DEBUG
+	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
+			return							#__WITH_PARANOIA_DEBUG
+		fi								#__WITH_PARANOIA_DEBUG
 	else
-		_RemoteLogger "\e[41mLogger function called without proper loglevel.\e[0m"
-		_RemoteLogger "$prefix$value"
+		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "" "Value was: $prefix$value" true
 	fi
 }
 
 function _RotateBackupsRemoteSSH {
-	find "$backup_path" -mindepth 1 -maxdepth 1 ! -name "*.$PROGRAM.[0-9]*" -print0 | while IFS= read -r -d $'\0' backup; do
-		copy=$rotate_copies
+	$REMOTE_FIND_CMD "$backupPath" -mindepth 1 -maxdepth 1 ! -regex ".*\.$PROGRAM\.[0-9]+"  -print0 | while IFS= read -r -d $'\0' backup; do
+		copy=$rotateCopies
 		while [ $copy -gt 1 ]; do
-			if [ $copy -eq $rotate_copies ]; then
+			if [ $copy -eq $rotateCopies ]; then
 				path="$backup.$PROGRAM.$copy"
 				if [ -f "$path" ] || [ -d "$path" ]; then
-					cmd="$COMMAND_SUDO rm -rf \"$path\""
-					RemoteLogger "cmd: $cmd" "DEBUG"
+					cmd="rm -rf \"$path\""
+					RemoteLogger "Launching command [$cmd]." "DEBUG"
 					eval "$cmd"
-					if [ $? != 0 ]; then
+					if [ $? -ne 0 ]; then
 						RemoteLogger "Cannot delete oldest copy [$path]." "ERROR"
+						RemoteLogger "Command was [$cmd]." "WARN"
 					fi
 				fi
 			fi
-			path="$backup.$PROGRAM.$(($copy-1))"
+			path="$backup.$PROGRAM.$((copy-1))"
 			if [ -f "$path" ] || [ -d "$path" ]; then
-				cmd="$COMMAND_SUDO mv \"$path\" \"$backup.$PROGRAM.$copy\""
-				RemoteLogger "cmd: $cmd" "DEBUG"
+				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
+				RemoteLogger "Launching command [$cmd]." "DEBUG"
 				eval "$cmd"
-				if [ $? != 0 ]; then
+				if [ $? -ne 0 ]; then
 					RemoteLogger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
+					RemoteLogger "Command was [$cmd]." "WARN"
 				fi
 
 			fi
-			copy=$(($copy-1))
+			copy=$((opy-1))
 		done
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
 		if [[ $backup == *.sql.* ]]; then
-			cmd="$COMMAND_SUDO mv \"$backup\" \"$backup.$PROGRAM.1\""
-			RemoteLogger "cmd: $cmd" "DEBUG"
+			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
+			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
-			cmd="$COMMAND_SUDO cp -R \"$backup\" \"$backup.$PROGRAM.1\""
-			RemoteLogger "cmd: $cmd" "DEBUG"
+			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
+			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				RemoteLogger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 
 		else
-			cmd="$COMMAND_SUDO mv \"$backup\" \"$backup.$PROGRAM.1\""
-			RemoteLogger "cmd: $cmd" "DEBUG"
+			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
+			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
-			if [ $? != 0 ]; then
+			if [ $? -ne 0 ]; then
 				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 		fi
 	done
@@ -3124,10 +4039,10 @@ function _RotateBackupsRemoteSSH {
 
 ENDSSH
 
-	WaitForTaskCompletion $! 1800 0 $SLEEP_TIME $KEEP_LOGGING true true false ${FUNCNAME[0]}
-	if [ $? != 0 ]; then
-		Logger "Could not rotate backups in [$backup_path]." "ERROR"
-		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID)" "ERROR"
+	WaitForTaskCompletion $! 1800 0 $SLEEP_TIME $KEEP_LOGGING true true false
+	if [ $? -ne 0 ]; then
+		Logger "Could not rotate backups in [$backupPath]." "ERROR"
+		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
 		Logger "Remote rotation succeed." "NOTICE"
 	fi        ## Need to add a trivial sleep time to give ssh time to log to local file
@@ -3136,22 +4051,24 @@ ENDSSH
 
 }
 
+#TODO: test find cmd for backup rotation with regex on busybox / mac
 function RotateBackups {
-	local backup_path="${1}"
-	local rotate_copies="${2}"
-	__CheckArguments 2 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	local backupPath="${1}"
+	local rotateCopies="${2}"
 
-	Logger "Rotating backups in [$backup_path] for [$rotate_copies] copies." "NOTICE"
+	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
+
+	Logger "Rotating backups in [$backupPath] for [$rotateCopies] copies." "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		_RotateBackupsLocal "$backup_path" "$rotate_copies"
+		_RotateBackupsLocal "$backupPath" "$rotateCopies"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		_RotateBackupsRemote "$backup_path" "$rotate_copies"
+		_RotateBackupsRemote "$backupPath" "$rotateCopies"
 	fi
 }
 
 function Init {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	local uri
 	local hosturiandpath
@@ -3212,7 +4129,7 @@ function Init {
 }
 
 function Main {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
 		ListDatabases
@@ -3257,7 +4174,7 @@ function Main {
 }
 
 function Usage {
-	__CheckArguments 0 $# ${FUNCNAME[0]} "$@"    #__WITH_PARANOIA_DEBUG
+	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 
 	if [ "$IS_STABLE" != "yes" ]; then
@@ -3271,8 +4188,9 @@ function Usage {
 	echo "General usage: $0 /path/to/backup.conf [OPTIONS]"
 	echo ""
 	echo "OPTIONS:"
-	echo "--dry             will run obackup without actually doing anything, just testing"
-	echo "--silent          will run obackup without any output to stdout, usefull for cron backups"
+	echo "--dry             will run $PROGRAM without actually doing anything, just testing"
+	echo "--no-prefix       Will suppress time / date suffix from output"
+	echo "--silent          will run $PROGRAM without any output to stdout, usefull for cron backups"
 	echo "--errors-only     Output only errors (can be combined with silent or verbose)"
 	echo "--verbose         adds command outputs"
 	echo "--stats           Adds rsync transfer statistics to verbose output"
@@ -3280,20 +4198,20 @@ function Usage {
 	echo "--no-maxtime      disables any soft and hard execution time checks"
 	echo "--delete          Deletes files on destination that vanished on source"
 	echo "--dontgetsize     Does not try to evaluate backup size"
+	echo "--parallel=ncpu	Use n cpus to encrypt / decrypt files. Works in normal and batch processing mode."
 	echo ""
 	echo "Batch processing usage:"
 	echo -e "\e[93mDecrypt\e[0m a backup encrypted with $PROGRAM"
 	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase-file=/path/to/passphrase"
 	echo  "$0 --decrypt=/path/to/encrypted_backup --passphrase=MySecretPassPhrase (security risk)"
 	echo ""
-	echo "Batch encrypt a directory in separate gpg files"
+	echo "Batch encrypt directories in separate gpg files"
 	echo "$0 --encrypt=/path/to/files --destination=/path/to/encrypted/files --recipient=\"Your Name\""
 	exit 128
 }
 
 # Command line argument flags
 _DRYRUN=false
-_LOGGER_SILENT=false
 no_maxtime=false
 stats=false
 PARTIAL=no
@@ -3358,6 +4276,14 @@ function GetCommandlineArguments {
 			--errors-only)
 			_LOGGER_ERR_ONLY=true
 			;;
+			--no-prefix)
+			_LOGGER_PREFIX=""
+			;;
+			--parallel=*)
+			PARALLEL_ENCRYPTION_PROCESSES="${i##*=}"
+			if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -ne 1 ]; then
+				Logger "Bogus --parallel value. Using only one CPU." "WARN"
+			fi
 		esac
 	done
 }
@@ -3365,12 +4291,18 @@ function GetCommandlineArguments {
 GetCommandlineArguments "$@"
 if [ "$_DECRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
+	GetLocalOS
+	InitLocalOSDependingSettings
+	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION decrypt mode begin." "ALWAYS"
 	DecryptFiles "$DECRYPT_PATH" "$PASSPHRASE_FILE" "$PASSPHRASE"
 	exit $?
 fi
 
 if [ "$_ENCRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
+	GetLocalOS
+	InitLocalOSDependingSettings
+	Logger "$DRY_WARNING$PROGRAM v$PROGRAM_VERSION encrypt mode begin." "ALWAYS"
 	EncryptFiles "$CRYPT_SOURCE" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true false
 	exit $?
 fi
@@ -3422,6 +4354,5 @@ if [ $no_maxtime == true ]; then
 	HARD_MAX_EXEC_TIME_FILE_TASK=0
 	HARD_MAX_EXEC_TIME_TOTAL=0
 fi
-
 RunBeforeHook
 Main
