@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta1
-PROGRAM_BUILD=2017010305
+PROGRAM_BUILD=2017010401
 IS_STABLE=no
 
 # Execution order					#__WITH_PARANOIA_DEBUG
@@ -146,6 +146,11 @@ function CheckEnvironment {
 	if [ "$ENCRYPTION" == "yes" ]; then
 		CheckCryptEnvironnment
 	fi
+
+        if ! type pgrep > /dev/null 2>&1 ; then
+                Logger "pgrep not present. $0 cannot start." "CRITICAL"
+                exit 1
+        fi
 }
 
 function CheckCryptEnvironnment {
