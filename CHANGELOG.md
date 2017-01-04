@@ -2,36 +2,86 @@ KNOWN ISSUES
 ------------
 
 - Backup size check does not honor rsync exclude patterns
+- Encryption does not honor rsync exclude patterns
 - Bandwidth parameter is ignored for SQL backups
 - Missing symlink support when run from MSYS environment
 
 CHANGELOG
 ---------
 
-README: FreeBSD execution needs mailer (not found), sudo missing, bash needed
+04 Jan 2017: obackup v2.1 beta1 released
+----------------------------------------
 
+- Fixed wrong file size fetched remotely since v2.1 rewrite
+- Fixed missing databases in manual list fails to trigger an alert
+- Improved support for GPG ver >= 2.1
+- Added encryption / decryption parallel execution support
+- Improved compatibility for RotateCopies
+- Unit tests now run on CentOS 5,6
+- Added optional rsync arguments configuration value
+- Forcec bash usage on remote connections in order to be FreeBSD 11 compatible
+- Spinner is less prone to move logging on screen
+- Fixed another random error involving warns and errors triggered by earlier runs with same PID flag files
+- Adde more preflight checks (pgrep presence)
+- Added --no-prefix, --error-only and --summary switches
+- Updated installer from osync
+- Updated merge.sh script to handle includes
+- Improved remote logging
+- Simplified osync-batch runner (internally and for user)
+	- Better filename handling
+	- Easier to read log output
+        - Always passes --silent to obackup
+        - All options that do not belong to obackup-batch are automatically passed to obackup
+- Improved installer OS detection
+- Fixed upgrade script cannot update header on BSD / MacOS X
+- Fixed SendEmail function on MacOS X
+- Fixed MAX_SOFT_EXEC_TIME_PER_XX_TASK not enforced bug introduced with newer ofunctions from v2.1
+- PRESERVE_ACL and PRESERVE_XATTR are ignored when local or remote OS is MacOS or msys or Cygwin
+- Fixed PRESERVE_EXECUTABILITY was ommited volontary on MacOS X because of rsync syntax
+- merge.sh is now BSD and Mac compatible
+- Unit tests are now BSD and Mac compatible
+- Local runs should not check for remote connectivity
+- Fixed error alerts cannot be triggered from subprocesses
+- Fixed error flags 
+- Faster remote OS detection
+- Added busybox (and Android Termux) support
+	- More portable file size functions
+	- More portable compression program commands
+	- More paranoia checks
+	- Added busybox sendmail support
+	- Added tls and ssl support for sendmail
+- Added ssh password file support
+- Added unit tests
+	- Added basic unit tests for all three operation modes
+	- Added process management function tests
+	- Added file rotation tests
+	- Added upgrade script test
+	- Added encryption tests
+	- Added missing files / databases test
+	- Added timed execution tests
+- Implemented backup encryption using GPG (see documentation for advantages and caveats)
+	- Backup encrypted but still use differential engine :)
+- Database backup improvements
+	- Added mysqldump options to config file
+- Improved unit tests
+- Added more preflight checks
 - Logs sent by mail are easier to read
 	- Better subject (currently running or finished run)
 	- Fixed bogus double log sent in alert mails
 	- Only current run log is now sent
 	- Alert sending is now triggered after last action
 - Made unix signals posix compliant
-- Config file upgrade script now updates header
-! Add encrpyt storage to upgrade script
-- Added basic unit tests for all three operation modes
-! add update log line in config file from upgrade script
-! check if freebsd macos & win are compatible with new find -mindepth -maxdepth
-! update doc for batch runs instead of reruns
-! update doc mysql use per host file + create encrypted my.cnf file if mysql >= 5.6
+- Improved upgrade script
+	- Upgrade script now updates header
+	- Can add any missing value now
+	- Added encrpytion support
 - Fixed problem with spaces in directories to backup (again !)
-! update doc on sudoers paths
 - Added options to ignore permissions, ownership and groups
 - Improved batch runner
 	- Batch runner works for directories and direct paths
 	- Fixed batch runner does not rerun obackup on warnings only
 	- Code compliance
 	- More clear semantic
-	! doc reruns
 - Made keep logging value configurable and not mandatory
 - Fixed handling of processes in uninterruptible sleep state
 - Code cleanup
@@ -39,6 +89,8 @@ README: FreeBSD execution needs mailer (not found), sudo missing, bash needed
 - Fixed double RunAfterHook launch
 
 06 Aug 2016: obackup v2.0 released
+----------------------------------
+
 - Made logging begin before remote checks for sanity purposes
 - RunAfterCommands can get executed when trapquit
 - Improved process killing and process time control
@@ -65,6 +117,8 @@ README: FreeBSD execution needs mailer (not found), sudo missing, bash needed
 - A long list of minor improvements and bug fixes
 
 v0-1.x - Jan 2013 - Oct 2015
+----------------------------
+
 - New function to kill child processes
 - Fixed no_maxtime not honored
 - Improved some logging, also added highlighting to stdout errors
@@ -123,7 +177,10 @@ v0-1.x - Jan 2013 - Oct 2015
 - Improved OS detection and added prelimnary MacOS X support
 - Improved execution hook logs
 - Improved RunLocalCommand execution hook
-- 02 Nov. 2013: v1.84 RC3
+
+02 Nov. 2013: obackup v1.84RC3 released
+---------------------------------------
+
 - Updated documentation
 - Minor rewrites in recursive backup code
 - Added base directory files backup for recursive directories backup
@@ -150,7 +207,10 @@ v0-1.x - Jan 2013 - Oct 2015
 - Improved dryrun output
 - Improved remote connecivity detection 
 - Fixed a typo in configuration file
-- 18 Aug. 2013: Now v1.84 RC2
+
+18 Aug. 2013: obackup v1.84RC2 released
+---------------------------------------
+
 - Added possibility to change default logfile
 - Simplified dryrun (removed dryrun function and merged it with main function)
 - Simplified Init function
@@ -162,14 +222,17 @@ v0-1.x - Jan 2013 - Oct 2015
 - Added --verbose switch (will add databases list,  rsync commands, and file backup list)
 - Improved task execution checks and more code cleanup
 - Fixed CleanUp function if DEBUG=yes, also function is now launched from TrapQuit
-- 16 Jul. 2013: version tagged as v1.84 RC1
+
+16 Jul. 2013: obackup v1.84RC1 released
+---------------------------------------
+
 - Code cleanup
 - Uploaded first documentation
 - Fixed an issue with RotateBackups
 - Updated obackup to log failed ssh command results
 - Updated ssh command filter to log failed commands
 - Updated ssh command filter to accept personalized commands
-- 23 Jun. 2013 v 1.84 RC1 approaching
+- 23 Jun. 2013: v1.84 RC1 approaching
 - Added ssh commands filter, updated documentation
 - Rewrote local space check function
 - Added ability to run another executable than rsync (see documentation on sudo execution)
@@ -179,5 +242,8 @@ v0-1.x - Jan 2013 - Oct 2015
 - Updated command line argument --silent processing
 - Added remote before and after command execution hook
 - Added local before and after command execution hook
-- 14 Jun 2013
+
+14 Jun 2013
+-----------
+
 - Initial public release, fully functionnal
