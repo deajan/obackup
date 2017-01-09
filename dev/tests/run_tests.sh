@@ -138,7 +138,7 @@ function SetupGPG {
 		CRYPT_TOOL=gpg
 	else
 		echo "No gpg support"
-		AssertEquals "Failed to detect gpg" "1" $?
+		assertEquals "Failed to detect gpg" "1" $?
 		return
 	fi
 
@@ -278,7 +278,7 @@ function setUp () {
 	touch "$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_1/$R_FILE_1"
 	touch "$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_2/$R_FILE_2"
 	dd if=/dev/urandom of="$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_3/$R_FILE_3" bs=1M count=2
-	AssertEquals "dd file creation" "0" $?
+	assertEquals "dd file creation" "0" $?
 	touch "$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_3/$EXCLUDED_FILE"
 
 	FilePresence=(
