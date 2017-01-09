@@ -6,8 +6,8 @@
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.1-beta1
-PROGRAM_BUILD=2017010401
+PROGRAM_VERSION=2.1-beta1+dev
+PROGRAM_BUILD=2017010901
 IS_STABLE=no
 
 # Execution order					#__WITH_PARANOIA_DEBUG
@@ -410,7 +410,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 		retval=$?
 		if  [ $retval -ne 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
-			Logger "Command was [$cmd]." "Warn"
+			Logger "Command was [$cmd]." "WARN"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
@@ -1260,7 +1260,7 @@ function EncryptFiles {
 		ParallelExec $PARALLEL_ENCRYPTION_PROCESSES "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP" true $softMaxExecTime $hardMaxExecTime $SLEEP_TIME $KEEP_LOGGING true true false
 		retval=$?
 		if [ $retval -ne 0 ]; then
-			Logger "Encryption error.." "ERROR"
+			Logger "Encryption error." "ERROR"
 			# Output file is defined in ParallelExec
 			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 		fi
