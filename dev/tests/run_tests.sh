@@ -2,7 +2,7 @@
 
 #TODO Encrypted Pull runs on F25 fail for decryption
 
-## obackup basic tests suite 2017010201
+## obackup basic tests suite 2017010901
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -138,6 +138,8 @@ function SetupGPG {
 		CRYPT_TOOL=gpg
 	else
 		echo "No gpg support"
+		AssertEquals "Failed to detect gpg" "1" $?
+		return
 	fi
 
 	echo "Crypt tool=$CRYPT_TOOL"
@@ -276,6 +278,7 @@ function setUp () {
 	touch "$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_1/$R_FILE_1"
 	touch "$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_2/$R_FILE_2"
 	dd if=/dev/urandom of="$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_3/$R_FILE_3" bs=1M count=2
+	AssertEquals "dd file creation" "0" $?
 	touch "$SOURCE_DIR/$RECURSIVE_DIR/$R_DIR_3/$EXCLUDED_FILE"
 
 	FilePresence=(
