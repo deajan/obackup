@@ -6,7 +6,7 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-CONFIG_FILE_VERSION=2017010201
+CONFIG_FILE_VERSION=2017020901
 PROGRAM_BUILD=2016113001
 
 if ! type "$BASH" > /dev/null; then
@@ -39,6 +39,7 @@ FILE_WARN_MIN_SPACE
 REMOTE_SYSTEM_URI
 SSH_RSA_PRIVATE_KEY
 SSH_PASSWORD_FILE
+_REMOTE_TOKEN
 SSH_COMPRESSION
 SSH_IGNORE_KNOWN_HOSTS
 RSYNC_REMOTE_PATH
@@ -81,6 +82,7 @@ DELTA_COPIES
 BANDWIDTH
 RSYNC_EXECUTABLE
 DESTINATION_MAILS
+MAIL_BODY_CHARSET
 SENDER_MAIL
 SMTP_SERVER
 SMTP_PORT
@@ -125,6 +127,7 @@ yes
 ssh://backupuser@remote.system.tld:22/
 ${HOME}/.ssh/id_rsa
 ''
+SomeAlphaNumericToken9
 yes
 no
 ''
@@ -167,6 +170,7 @@ yes
 0
 rsync
 infrastructure@example.com
+''
 sender@example.com
 smtp.isp.tld
 25
