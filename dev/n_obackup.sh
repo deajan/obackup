@@ -588,7 +588,7 @@ function _GetDirectoriesSizeLocal {
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
-        elsew
+        else
                 Logger "File size fetched successfully." "NOTICE"
         fi
 
