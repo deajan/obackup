@@ -1874,7 +1874,6 @@ function SetConfFileValue () {
 
         if grep "^$name=" "$file" > /dev/null; then
                 # Using -i.tmp for BSD compat
-                echo "sed -i.tmp \"s$separator^$name=.*$separator$name=$value$separator\" \"$file\""
                 sed -i.tmp "s$separator^$name=.*$separator$name=$value$separator" "$file"
                 rm -f "$file.tmp"
 		Logger "Set [$name] to [$value] in config file [$file]." "DEBUG"
