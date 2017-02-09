@@ -2,7 +2,7 @@
 
 #TODO Encrypted Pull runs on F25 fail for decryption
 
-## obackup basic tests suite 2017020901
+## obackup basic tests suite 2017020902
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -236,8 +236,7 @@ function oneTimeTearDown () {
 	#rm -rf "$TARGET_DIR"
 	rm -f "$TMP_FILE"
 
-	cd "$OSYNC_DIR"
-
+	cd "$OBACKUP_DIR"
 	$SUDO_CMD ./install.sh --remove --silent --no-stats
 	assertEquals "Uninstall failed" "0" $?
 
@@ -297,8 +296,7 @@ function test_Merge () {
 	./merge.sh
 	assertEquals "Merging code" "0" $?
 
-	cd "$OSYNC_DIR"
-	./install.sh --silent --no-stats
+	cd "$OBACKUP_DIR"
 	$SUDO_CMD ./install.sh --silent --no-stats
 	assertEquals "Install failed" "0" $?
 
