@@ -2,7 +2,7 @@
 
 #TODO Encrypted Pull runs on F25 fail for decryption
 
-## obackup basic tests suite 2017010901
+## obackup basic tests suite 2017020901
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -71,42 +71,10 @@ OBACKUP_VERSION=2.x
 OBACKUP_MIN_VERSION=x
 OBACKUP_IS_STABLE=maybe
 
-# Setup an array with all function modes
-#declare -Ag osyncParameters
-
-function GetConfFileValue () {
-        local file="${1}"
-        local name="${2}"
-        local value
-
-        value=$(grep "^$name=" "$file")
-        if [ $? == 0 ]; then
-                value="${value##*=}"
-                echo "$value"
-        else
-            	assertEquals "$name does not exist in [$file]." "1" "0"
-        fi
-}
-
-function SetConfFileValue () {
-        local file="${1}"
-        local name="${2}"
-        local value="${3}"
-
-        if grep "^$name=" "$file" > /dev/null; then
-                # Using -i.tmp for BSD compat
-                sed -i.tmp "s#^$name=.*#$name=$value#" "$file"
-                rm -f "$file.tmp"
-                assertEquals "Set $name to [$value]." "0" $?
-        else
-            	assertEquals "$name does not exist in [$file]." "1" "0"
-        fi
-}
-
 function SetupSSH {
         echo -e  'y\n'| ssh-keygen -t rsa -b 2048 -N "" -f "${HOME}/.ssh/id_rsa_local"
         if ! grep "$(cat ${HOME}/.ssh/id_rsa_local.pub)" "${HOME}/.ssh/authorized_keys"; then
-                cat "${HOME}/.ssh/id_rsa_local.pub" >> "${HOME}/.ssh/authorized_keys"
+		echo "from=\"*\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty,command=\"/usr/local/bin/ssh_filter.sh SomeAlphaNumericToken9\" $(cat ${HOME}/.ssh/id_rsa_local.pub)" >> "${HOME}/.ssh/authorized_keys"
         fi
 	chmod 600 "${HOME}/.ssh/authorized_keys"
 
@@ -126,7 +94,7 @@ function RemoveSSH {
         if [ -f "${HOME}/.ssh/id_rsa_local" ]; then
 
                 pubkey=$(cat "${HOME}/.ssh/id_rsa_local.pub")
-                sed -i.bak "#$pubkey#d" "${HOME}/.ssh/authorized_keys"
+		sed -i.bak "s|.*$pubkey.*||g" "${HOME}/.ssh/authorized_keys"
                 rm -f "${HOME}/.ssh/{id_rsa_local.pub,id_rsa_local}"
         fi
 }
@@ -221,6 +189,17 @@ function oneTimeSetUp () {
                 SSH_PORT=22
         fi
 
+
+	#TODO: Assuming that macos has the same syntax than bsd here
+        if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
+                SUDO_CMD=""
+        elif [ "$LOCAL_OS" == "BSD" ] || [ "$LOCAL_OS" == "MacOSX" ]; then
+                SUDO_CMD=""
+        else
+                SUDO_CMD="sudo"
+        fi
+
+
 	SetupGPG
 	if [ "$SKIP_REMOTE" != "yes" ]; then
 		SetupSSH
@@ -256,6 +235,11 @@ function oneTimeTearDown () {
 	#rm -rf "$SOURCE_DIR"
 	#rm -rf "$TARGET_DIR"
 	rm -f "$TMP_FILE"
+
+	cd "$OSYNC_DIR"
+
+	$SUDO_CMD ./install.sh --remove --silent --no-stats
+	assertEquals "Uninstall failed" "0" $?
 
         ELAPSED_TIME=$(($SECONDS - $START_TIME))
         echo "It took $ELAPSED_TIME seconds to run these tests."
@@ -312,6 +296,11 @@ function test_Merge () {
 	cd "$DEV_DIR"
 	./merge.sh
 	assertEquals "Merging code" "0" $?
+
+	cd "$OSYNC_DIR"
+	./install.sh --silent --no-stats
+	$SUDO_CMD ./install.sh --silent --no-stats
+	assertEquals "Install failed" "0" $?
 
 	# Set obackup version to stable while testing to avoid warning message
         SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" "yes"
