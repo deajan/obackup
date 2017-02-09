@@ -2,7 +2,7 @@
 
 #TODO Encrypted Pull runs on F25 fail for decryption
 
-## obackup basic tests suite 2017020902
+## obackup basic tests suite 2017020903
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -134,7 +134,7 @@ EOF
 
 		# Setup fast entropy
 		if type rngd > /dev/null 2>&1; then
-			rngd -r /dev/urandom
+			$SUDO_CMD rngd -r /dev/urandom
 		else
 			echo "No rngd support"
 		fi
