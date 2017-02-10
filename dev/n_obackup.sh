@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta1+dev
-PROGRAM_BUILD=2017020903
+PROGRAM_BUILD=2017021001
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -265,7 +265,7 @@ function _ListDatabasesLocal {
                 Logger "Listing databases succeeded." "NOTICE"
         else
                 Logger "Listing databases failed." "ERROR"
-	        Logger "Command was [$sqlCmd]." "WARN"
+	        _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
@@ -407,7 +407,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 		retval=$?
 		if  [ $retval -ne 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
-			Logger "Command was [$cmd]." "WARN"
+			 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
 				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
@@ -578,7 +578,7 @@ function _GetDirectoriesSizeLocal {
 	retval=$?
         if  [ $retval -ne  0 ] || [ -s $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
                 Logger "Could not get files size for some or all local directories." "ERROR"
-		Logger "Command was [$cmd]." "WARN"
+		 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
                         Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
@@ -1020,10 +1020,10 @@ function _BackupDatabaseLocalToLocal {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
-			Logger "Command was [$sqlCmd]." "WARN"
+			 _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
 			eval "$sqlCmd" &
 		else
-			Logger "Command was [$drySqlCmd]." "WARN"
+			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 			eval "$drySqlCmd" &
 		fi
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -1069,10 +1069,10 @@ function _BackupDatabaseLocalToRemote {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
-			Logger "Command was [$sqlCmd]." "WARN"
+			 _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
 			eval "$sqlCmd" &
 		else
-			Logger "Command was [$drySqlCmd]." "WARN"
+			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 			eval "$drySqlCmd" &
 		fi
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -1118,10 +1118,10 @@ function _BackupDatabaseRemoteToLocal {
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
-			Logger "Command was [$sqlCmd]." "WARN"
+			 _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
 			eval "$sqlCmd" &
 		else
-			Logger "Command was [$drySqlCmd]." "WARN"
+			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 			eval "$drySqlCmd" &
 		fi
 		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -1432,7 +1432,7 @@ function Rsync {
 	retval=$?
 	if [ $retval -ne 0 ]; then
 		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
-		Logger "Command was [$rsyncCmd]." "WARN"
+		 _LOGGER_SILENT=true Logger "Command was [$rsyncCmd]." "WARN"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
 		Logger "File backup succeed." "NOTICE"
@@ -1581,7 +1581,7 @@ function _RotateBackupsLocal {
 					WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 					if [ $? -ne 0 ]; then
 						Logger "Cannot delete oldest copy [$path]." "ERROR"
-						Logger "Command was [$cmd]." "WARN"
+						 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 					fi
 				fi
 			fi
@@ -1594,7 +1594,7 @@ function _RotateBackupsLocal {
 				WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 				if [ $? -ne 0 ]; then
 					Logger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
-					Logger "Command was [$cmd]." "WARN"
+					 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 				fi
 
 			fi
@@ -1609,7 +1609,7 @@ function _RotateBackupsLocal {
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
-				Logger "Command was [$cmd]." "WARN"
+				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 			fi
 
 		elif [ "$REMOTE_OPERATION" == "yes" ]; then
@@ -1619,7 +1619,7 @@ function _RotateBackupsLocal {
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 			if [ $? -ne 0 ]; then
 				Logger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
-				Logger "Command was [$cmd]." "WARN"
+				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 			fi
 
 		else
@@ -1629,7 +1629,7 @@ function _RotateBackupsLocal {
 			WaitForTaskCompletion $! 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false
 			if [ $? -ne 0 ]; then
  				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
-				Logger "Command was [$cmd]." "WARN"
+				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 			fi
 		fi
 	done
