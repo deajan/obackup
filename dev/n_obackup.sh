@@ -10,8 +10,7 @@ PROGRAM_VERSION=2.1-beta1+dev
 PROGRAM_BUILD=2017020903
 IS_STABLE=no
 
-# Execution order					#__WITH_PARANOIA_DEBUG
-
+#### Execution order					#__WITH_PARANOIA_DEBUG
 # GetLocalOS						#__WITH_PARANOIA_DEBUG
 # InitLocalOSDependingSettings				#__WITH_PARANOIA_DEBUG
 # CheckRunningInstances					#__WITH_PARANOIA_DEBUG
@@ -35,9 +34,7 @@ IS_STABLE=no
 #	RsyncPatterns					#__WITH_PARANOIA_DEBUG
 #	FilesBackup					#__WITH_PARANOIA_DEBUG
 
-
 include #### OFUNCTIONS FULL SUBSET ####
-
 # If using "include" statements, make sure the script does not get executed unless it's loaded by bootstrap
 include #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
 [ "$_OFUNCTIONS_BOOTSTRAP" != true ] && echo "Please use bootstrap.sh to load this dev version of $(basename $0)" && exit 1
