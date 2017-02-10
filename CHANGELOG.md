@@ -9,6 +9,17 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+dd Mmm YYYY: obackup v2.1 RC? released
+
+- Uninstall leaves ssh_filter if needed by other programs
+- Logger now obfuscates _REMOTE_TOKEN
+! Improved sudo privilege run
+- Brand new ssh filter from osync project
+- Better installer with --remove option from osync project
+- Updated ofunctions from osync project
+	- Fixes UTF-8 escaped characters in log files due to LC_ALL=C
+	- Optional MAIL_BODY_CHARSET so destination mails aren't sent as UTF-8 anymore depending on systems
+
 04 Jan 2017: obackup v2.1 beta1 released
 ----------------------------------------
 
