@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta1+dev
-PROGRAM_BUILD=2017021101
+PROGRAM_BUILD=2017021001
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1752,38 +1752,36 @@ function Init {
 	trap TrapStop INT QUIT TERM HUP
 	trap TrapQuit EXIT
 
-	if [ "$BACKUP_TYPE_" == "pull" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		## Test if target dir is a ssh uri, and if yes, break it down it its values
-		if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
-			REMOTE_OPERATION="yes"
+	## Test if target dir is a ssh uri, and if yes, break it down it its values
+        if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
+                REMOTE_OPERATION="yes"
 
-			# remove leadng 'ssh://'
-			uri=${REMOTE_SYSTEM_URI#ssh://*}
-			if [[ "$uri" == *"@"* ]]; then
-				# remove everything after '@'
-				REMOTE_USER=${uri%@*}
-			else
-				REMOTE_USER=$LOCAL_USER
-			fi
+                # remove leadng 'ssh://'
+                uri=${REMOTE_SYSTEM_URI#ssh://*}
+                if [[ "$uri" == *"@"* ]]; then
+                        # remove everything after '@'
+                        REMOTE_USER=${uri%@*}
+                else
+                        REMOTE_USER=$LOCAL_USER
+                fi
 
-			if [ "$SSH_RSA_PRIVATE_KEY" == "" ]; then
-                        	if [ ! -f "$SSH_PASSWORD_FILE" ]; then
-                                	# Assume that there might exist a standard rsa key
-                               		SSH_RSA_PRIVATE_KEY=~/.ssh/id_rsa
-                        	fi
-                	fi
+                if [ "$SSH_RSA_PRIVATE_KEY" == "" ]; then
+                        if [ ! -f "$SSH_PASSWORD_FILE" ]; then
+                                # Assume that there might exist a standard rsa key
+                                SSH_RSA_PRIVATE_KEY=~/.ssh/id_rsa
+                        fi
+                fi
 
-                	# remove everything before '@'
-                	hosturiandpath=${uri#*@}
-                	# remove everything after first '/'
-                	hosturi=${hosturiandpath%%/*}
-                	if [[ "$hosturi" == *":"* ]]; then
-                        	REMOTE_PORT=${hosturi##*:}
-                	else
-                        	REMOTE_PORT=22
-                	fi
-                	REMOTE_HOST=${hosturi%%:*}
-		fi
+                # remove everything before '@'
+                hosturiandpath=${uri#*@}
+                # remove everything after first '/'
+                hosturi=${hosturiandpath%%/*}
+                if [[ "$hosturi" == *":"* ]]; then
+                        REMOTE_PORT=${hosturi##*:}
+                else
+                        REMOTE_PORT=22
+                fi
+                REMOTE_HOST=${hosturi%%:*}
 	fi
 
 	## Add update to default RSYNC_ARGS
