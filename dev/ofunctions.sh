@@ -3,7 +3,7 @@
 #### OFUNCTIONS MINI SUBSET ####
 
 _OFUNCTIONS_VERSION=2.1-RC3+dev
-_OFUNCTIONS_BUILD=2017031301
+_OFUNCTIONS_BUILD=2017031401
 #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
 _OFUNCTIONS_BOOTSTRAP=true
 #### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
@@ -1652,13 +1652,17 @@ function SetCompression {
 			COMPRESSION_PROGRAM="| pigz -c$compressionString"
 			COMPRESSION_EXTENSION=.gz
 			# obackup specific
-			COMPRESSION_OPTIONS=--rsyncable
+			if [ "$LOCAL_OS" != "MacOSX" ]; then
+				COMPRESSION_OPTIONS=--rsyncable
+			fi
 		elif type gzip > /dev/null 2>&1
 		then
 			COMPRESSION_PROGRAM="| gzip -c$compressionString"
 			COMPRESSION_EXTENSION=.gz
 			# obackup specific
-			COMPRESSION_OPTIONS=--rsyncable
+			if [ "$LOCAL_OS" != "MacOSX" ]; then
+				COMPRESSION_OPTIONS=--rsyncable
+			fi
 		else
 			COMPRESSION_PROGRAM=
 			COMPRESSION_EXTENSION=
