@@ -2,8 +2,8 @@
 #### OFUNCTIONS FULL SUBSET ####
 #### OFUNCTIONS MINI SUBSET ####
 
-_OFUNCTIONS_VERSION=2.1-RC3+dev
-_OFUNCTIONS_BUILD=2017031401
+_OFUNCTIONS_VERSION=2.1
+_OFUNCTIONS_BUILD=2017032301
 #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
 _OFUNCTIONS_BOOTSTRAP=true
 #### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
@@ -1125,7 +1125,7 @@ function GetLocalOS {
 		*"BSD"*)
 		LOCAL_OS="BSD"
 		;;
-		*"MINGW32"*|*"MSYS"*)
+		*"MINGW32"*|*"MINGW64"*|*"MSYS"*)
 		LOCAL_OS="msys"
 		;;
 		*"CYGWIN"*)
@@ -1226,7 +1226,7 @@ ENDSSH
 			*"BSD"*)
 			REMOTE_OS="BSD"
 			;;
-			*"MINGW32"*|*"MSYS"*)
+			*"MINGW32"*|*"MINGW64"*|*"MSYS"*)
 			REMOTE_OS="msys"
 			;;
 			*"CYGWIN"*)
@@ -1652,17 +1652,13 @@ function SetCompression {
 			COMPRESSION_PROGRAM="| pigz -c$compressionString"
 			COMPRESSION_EXTENSION=.gz
 			# obackup specific
-			if [ "$LOCAL_OS" != "MacOSX" ]; then
-				COMPRESSION_OPTIONS=--rsyncable
-			fi
+			COMPRESSION_OPTIONS=--rsyncable
 		elif type gzip > /dev/null 2>&1
 		then
 			COMPRESSION_PROGRAM="| gzip -c$compressionString"
 			COMPRESSION_EXTENSION=.gz
 			# obackup specific
-			if [ "$LOCAL_OS" != "MacOSX" ]; then
-				COMPRESSION_OPTIONS=--rsyncable
-			fi
+			COMPRESSION_OPTIONS=--rsyncable
 		else
 			COMPRESSION_PROGRAM=
 			COMPRESSION_EXTENSION=
