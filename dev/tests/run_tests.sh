@@ -2,7 +2,7 @@
 
 #TODO Encrypted Pull runs on F25 fail for decryption
 
-## obackup basic tests suite 2017020903
+## obackup basic tests suite 2017040801
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -153,6 +153,10 @@ function oneTimeSetUp () {
 	START_TIME=$SECONDS
 
 	source "$DEV_DIR/ofunctions.sh"
+
+	# Set default umask because ofunctions set 0077
+	umask 0022
+
 	GetLocalOS
 
 	echo "Detected OS: $LOCAL_OS"
