@@ -1,7 +1,8 @@
 # obackup [![Build Status](https://travis-ci.org/deajan/obackup.svg?branch=master)](https://travis-ci.org/deajan/obackup) [![GitHub Release](https://img.shields.io/github/release/deajan/obackup.svg?label=Latest)](https://github.com/deajan/obackup/releases/latest)
 
-
 A robust file & database backup script that works for local and remote push or pull backups via ssh.
+Designed to backup multiple subdirectories with a timeslot for each.
+Supports encryption while still using rsync to lower transfered data (see advantages and caveats below).
 
 ## About
 
@@ -34,7 +35,7 @@ You may disable this behavior in the config file.
 You can download the latest obackup script from authors website.
 You may also clone the following git which will maybe have some more recent builds.
 
-    $ git clone -b "v2.0-maint" git://github.com/deajan/obackup.git
+    $ git clone -b "v2.1-maint" git://github.com/deajan/obackup.git
     $ cd obackup
     $ ./install.sh
 
