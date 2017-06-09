@@ -13,7 +13,7 @@ IS_STABLE=no
 
 
 _OFUNCTIONS_VERSION=2.1.4-rc1
-_OFUNCTIONS_BUILD=2017060901
+_OFUNCTIONS_BUILD=2017060903
 _OFUNCTIONS_BOOTSTRAP=true
 
 ## BEGIN Generic bash functions written in 2013-2017 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
@@ -387,9 +387,7 @@ function SendAlert {
 	fi
 
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
-	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 	if [ $? != 0 ]; then
-		Logger "Cannot create [$ALERT_LOG_FILE]" "WARN"
 		attachment=false
 	else
 		attachment=true
@@ -1576,6 +1574,10 @@ function SetCompression {
 			COMPRESSION_PROGRAM=
 			COMPRESSION_EXTENSION=
 		fi
+	fi
+
+	if [ ".${ALERT_LOG_FILE##*.}" != "$COMPRESSION_EXTENSION" ]; then
+		ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 	fi
 }
 
