@@ -12,8 +12,8 @@ IS_STABLE=no
 
 
 
-_OFUNCTIONS_VERSION=2.1-RC3+dev
-_OFUNCTIONS_BUILD=2017031401
+_OFUNCTIONS_VERSION=2.1.4-rc1
+_OFUNCTIONS_BUILD=2017060901
 _OFUNCTIONS_BOOTSTRAP=true
 
 ## BEGIN Generic bash functions written in 2013-2017 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
@@ -37,6 +37,9 @@ fi
 
 ## Correct output of sort command (language agnostic sorting)
 export LC_ALL=C
+
+## Default umask for file creation
+umask 0077
 
 # Standard alert mail body
 MAIL_ALERT_MSG="Execution of $PROGRAM instance $INSTANCE_ID on $(date) has warnings/errors."
@@ -70,6 +73,8 @@ if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as envi
 fi
 
 SCRIPT_PID=$$
+
+# TODO: Check if %N works on MacOS
 TSTAMP=$(date '+%Y%m%dT%H%M%S.%N')
 
 LOCAL_USER=$(whoami)
@@ -255,7 +260,7 @@ function Logger {
 		return
 	elif [ "$level" == "VERBOSE" ]; then
 		if [ $_LOGGER_VERBOSE == true ]; then
-			_Logger "$prefix:$value" "$prefix$value"
+			_Logger "$prefix($level):$value" "$prefix$value"
 		fi
 		return
 	elif [ "$level" == "ALWAYS" ]; then
@@ -301,14 +306,28 @@ function KillChilds {
 	local pid="${1}" # Parent pid to kill childs
 	local self="${2:-false}" # Should parent be killed too ?
 
-	# Warning: pgrep does not exist in cygwin, have this checked in CheckEnvironment
-	if children="$(pgrep -P "$pid")"; then
-		for child in $children; do
-			KillChilds "$child" true
-		done
+	# Paranoid checks, we can safely assume that $pid shouldn't be 0 nor 1
+	if [ $(IsNumeric "$pid") -eq 0 ] || [ "$pid" == "" ] || [ "$pid" == "0" ] || [ "$pid" == "1" ]; then
+		Logger "Bogus pid given [$pid]." "CRITICAL"
+		return 1
 	fi
-		# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
+
+	if kill -0 "$pid" > /dev/null 2>&1; then
+		# Warning: pgrep is not native on cygwin, have this checked in CheckEnvironment
+		if children="$(pgrep -P "$pid")"; then
+			if [[ "$pid" == *"$children"* ]]; then
+				Logger "Bogus pgrep implementation." "CRITICAL"
+				children="${children/$pid/}"
+			fi
+			for child in $children; do
+				KillChilds "$child" true
+			done
+		fi
+	fi
+
+	# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
 	if [ "$self" == true ]; then
+		# We need to check for pid again because it may have disappeared after recursive function call
 		if kill -0 "$pid" > /dev/null 2>&1; then
 			kill -s TERM "$pid"
 			Logger "Sent SIGTERM to process [$pid]." "DEBUG"
@@ -368,6 +387,7 @@ function SendAlert {
 	fi
 
 	eval "cat \"$LOG_FILE\" $COMPRESSION_PROGRAM > $ALERT_LOG_FILE"
+	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 	if [ $? != 0 ]; then
 		Logger "Cannot create [$ALERT_LOG_FILE]" "WARN"
 		attachment=false
@@ -615,6 +635,7 @@ function Spinner {
 }
 
 
+
 # Time control function for background processes, suitable for multiple synchronous processes
 # Fills a global variable called WAIT_FOR_TASK_COMPLETION_$callerName that contains list of failed pids in format pid1:result1;pid2:result2
 # Also sets a global variable called HARD_MAX_EXEC_TIME_REACHED_$callerName to true if hardMaxTime is reached
@@ -739,6 +760,8 @@ function WaitForTaskCompletion {
 		pidsArray=("${newPidsArray[@]}")
 		# Trivial wait time for bash to not eat up all CPU
 		sleep $sleepTime
+
+
 	done
 
 
@@ -897,6 +920,7 @@ function ParallelExec {
 
 		# Trivial wait time for bash to not eat up all CPU
 		sleep $sleepTime
+
 	done
 
 	return $errorCount
@@ -1081,7 +1105,7 @@ function GetLocalOS {
 		*"BSD"*)
 		LOCAL_OS="BSD"
 		;;
-		*"MINGW32"*|*"MSYS"*)
+		*"MINGW32"*|*"MINGW64"*|*"MSYS"*)
 		LOCAL_OS="msys"
 		;;
 		*"CYGWIN"*)
@@ -1107,9 +1131,6 @@ function GetLocalOS {
 		exit 1
 		;;
 	esac
-	if [ "$_OFUNCTIONS_VERSION" != "" ]; then
-		Logger "Local OS: [$localOsVar]." "DEBUG"
-	fi
 
 	# Get linux versions
 	if [ -f "/etc/os-release" ]; then
@@ -1119,7 +1140,12 @@ function GetLocalOS {
 
 	# Add a global variable for statistics in installer
 	LOCAL_OS_FULL="$localOsVar ($localOsName $localOsVer)"
+
+	if [ "$_OFUNCTIONS_VERSION" != "" ]; then
+		Logger "Local OS: [$LOCAL_OS_FULL]." "DEBUG"
+	fi
 }
+
 
 
 function GetRemoteOS {
@@ -1130,12 +1156,15 @@ function GetRemoteOS {
 
 	local remoteOsVar
 
-$SSH_CMD env _REMOTE_TOKEN="$_REMOTE_TOKEN" bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+$SSH_CMD env LC_ALL=C env _REMOTE_TOKEN="$_REMOTE_TOKEN" bash -s << 'ENDSSH' >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+
 
 function GetOs {
 	local localOsVar
 	local localOsName
 	local localOsVer
+
+	local osInfo="/etc/os-release"
 
 	# There's no good way to tell if currently running in BusyBox shell. Using sluggish way.
 	if ls --help 2>&1 | grep -i "BusyBox" > /dev/null; then
@@ -1155,9 +1184,11 @@ function GetOs {
 		fi
 	fi
 	# Get linux versions
-	if [ -f "/etc/os-release" ]; then
-		localOsName=$(GetConfFileValue "/etc/os-release" "NAME")
-		localOsVer=$(GetConfFileValue "/etc/os-release" "VERSION")
+	if [ -f "$osInfo" ]; then
+		localOsName=$(grep "^NAME=" "$osInfo")
+                localOsName="${localOsName##*=}"
+		localOsVer=$(grep "^VERSION=" "$osInfo")
+		localOsVer="${localOsVer##*=}"
 	fi
 
 	echo "$localOsVar ($localOsName $localOsVer)"
@@ -1179,7 +1210,7 @@ ENDSSH
 			*"BSD"*)
 			REMOTE_OS="BSD"
 			;;
-			*"MINGW32"*|*"MSYS"*)
+			*"MINGW32"*|*"MINGW64"*|*"MSYS"*)
 			REMOTE_OS="msys"
 			;;
 			*"CYGWIN"*)
@@ -1262,7 +1293,7 @@ function RunRemoteCommand {
 	fi
 
 	Logger "Running command [$command] on remote host." "NOTICE"
-	cmd=$SSH_CMD' "env _REMOTE_TOKEN="'$_REMOTE_TOKEN'" $command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
+	cmd=$SSH_CMD' "env LC_ALL=C env _REMOTE_TOKEN="'$_REMOTE_TOKEN'" $command" > "'$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP'" 2>&1'
 	Logger "cmd: $cmd" "DEBUG"
 	eval "$cmd" &
 	WaitForTaskCompletion $! 0 $hardMaxTime $SLEEP_TIME $KEEP_LOGGING true true false
@@ -1364,7 +1395,6 @@ function CheckConnectivity3rdPartyHosts {
 			fi
 		fi
 }
-
 
 function RsyncPatternsAdd {
 	local patternType="${1}"	# exclude or include
@@ -1491,13 +1521,13 @@ function PostInit {
 
 	# Define remote commands
 	if [ -f "$SSH_RSA_PRIVATE_KEY" ]; then
-		SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
-		SCP_CMD="$(type -p scp) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY -P $REMOTE_PORT"
-		RSYNC_SSH_CMD="$(type -p ssh) $SSH_COMP -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS -p $REMOTE_PORT"
+		SSH_CMD="$(type -p ssh) $SSH_COMP -q -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
+		SCP_CMD="$(type -p scp) $SSH_COMP -q -i $SSH_RSA_PRIVATE_KEY -P $REMOTE_PORT"
+		RSYNC_SSH_CMD="$(type -p ssh) $SSH_COMP -q -i $SSH_RSA_PRIVATE_KEY $SSH_OPTS -p $REMOTE_PORT"
 	elif [ -f "$SSH_PASSWORD_FILE" ]; then
-		SSH_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p ssh) $SSH_COMP $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
-		SCP_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p scp) $SSH_COMP -P $REMOTE_PORT"
-		RSYNC_SSH_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p ssh) $SSH_COMP $SSH_OPTS -p $REMOTE_PORT"
+		SSH_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p ssh) $SSH_COMP -q $SSH_OPTS $REMOTE_USER@$REMOTE_HOST -p $REMOTE_PORT"
+		SCP_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p scp) $SSH_COMP -q -P $REMOTE_PORT"
+		RSYNC_SSH_CMD="$(type -p sshpass) -f $SSH_PASSWORD_FILE $(type -p ssh) $SSH_COMP -q $SSH_OPTS -p $REMOTE_PORT"
 	else
 		SSH_PASSWORD=""
 		SSH_CMD=""
@@ -1535,23 +1565,18 @@ function SetCompression {
 			COMPRESSION_PROGRAM="| pigz -c$compressionString"
 			COMPRESSION_EXTENSION=.gz
 			# obackup specific
-			if [ "$LOCAL_OS" != "MacOSX" ]; then
-				COMPRESSION_OPTIONS=--rsyncable
-			fi
+			COMPRESSION_OPTIONS=--rsyncable
 		elif type gzip > /dev/null 2>&1
 		then
 			COMPRESSION_PROGRAM="| gzip -c$compressionString"
 			COMPRESSION_EXTENSION=.gz
 			# obackup specific
-			if [ "$LOCAL_OS" != "MacOSX" ]; then
-				COMPRESSION_OPTIONS=--rsyncable
-			fi
+			COMPRESSION_OPTIONS=--rsyncable
 		else
 			COMPRESSION_PROGRAM=
 			COMPRESSION_EXTENSION=
 		fi
 	fi
-	ALERT_LOG_FILE="$ALERT_LOG_FILE$COMPRESSION_EXTENSION"
 }
 
 function InitLocalOSDependingSettings {
@@ -1713,35 +1738,46 @@ function ParentPid {
 
 # Neat version compare function found at http://stackoverflow.com/a/4025065/2635443
 # Returns 0 if equal, 1 if $1 > $2 and 2 if $1 < $2
-vercomp () {
-    if [[ $1 == $2 ]]
-    then
-        return 0
-    fi
-    local IFS=.
-    local i ver1=($1) ver2=($2)
-    # fill empty fields in ver1 with zeros
-    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++))
-    do
-        ver1[i]=0
-    done
-    for ((i=0; i<${#ver1[@]}; i++))
-    do
-        if [[ -z ${ver2[i]} ]]
-        then
-            # fill empty fields in ver2 with zeros
-            ver2[i]=0
-        fi
-        if ((10#${ver1[i]} > 10#${ver2[i]}))
-        then
-            return 1
-        fi
-        if ((10#${ver1[i]} < 10#${ver2[i]}))
-        then
-            return 2
-        fi
-    done
-    return 0
+function VerComp () {
+	if [ "$1" == "" ] || [ "$2" == "" ]; then
+		Logger "Bogus Vercomp values [$1] and [$2]." "WARN"
+		return 1
+	fi
+
+	if [[ $1 == $2 ]]
+		then
+			echo 0
+		return
+	fi
+
+	local IFS=.
+	local i ver1=($1) ver2=($2)
+	# fill empty fields in ver1 with zeros
+	for ((i=${#ver1[@]}; i<${#ver2[@]}; i++))
+	do
+        	ver1[i]=0
+	done
+	for ((i=0; i<${#ver1[@]}; i++))
+	do
+		if [[ -z ${ver2[i]} ]]
+		then
+			# fill empty fields in ver2 with zeros
+			ver2[i]=0
+		fi
+		if ((10#${ver1[i]} > 10#${ver2[i]}))
+		then
+			echo 1
+			return
+        	fi
+        	if ((10#${ver1[i]} < 10#${ver2[i]}))
+        	then
+			echo 2
+            		return
+        	fi
+    	done
+
+    	echo 0
+	return
 }
 
 function GetConfFileValue () {
@@ -1771,6 +1807,29 @@ function SetConfFileValue () {
 		Logger "Set [$name] to [$value] in config file [$file]." "DEBUG"
         else
 		Logger "Cannot set value [$name] to [$value] in config file [$file]." "ERROR"
+        fi
+}
+
+# Function can replace [ -f /some/file* ] tests
+# Modified version of http://stackoverflow.com/a/6364244/2635443
+function WildcardFileExists () {
+        local file="${1}"
+        local exists=0
+
+        for f in $file; do
+                ## Check if the glob gets expanded to existing files.
+                ## If not, f here will be exactly the pattern above
+                ## and the exists test will evaluate to false.
+                if [ -e "$f" ]; then
+                        exists=1
+                        break
+                fi
+        done
+
+        if [ $exists -eq 1 ]; then
+                echo 1
+        else
+                echo 0
         fi
 }
 
@@ -4225,6 +4284,8 @@ if [ ! -w "$(dirname $LOG_FILE)" ]; then
 else
 	Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
 fi
+
+# Switching rundir to 
 
 if [ "$IS_STABLE" != "yes" ]; then
 	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"

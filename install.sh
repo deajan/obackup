@@ -12,7 +12,7 @@ PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
 SSH_FILTER="ssh_filter.sh"
 
-SCRIPT_BUILD=2017031402
+SCRIPT_BUILD=2017041701
 
 ## osync / obackup / pmocr / zsnap install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8, 10 and 11
@@ -122,7 +122,7 @@ function GetLocalOS {
 		*"BSD"*)
 		LOCAL_OS="BSD"
 		;;
-		*"MINGW32"*|*"MSYS"*)
+		*"MINGW32"*|*"MINGW64"*|*"MSYS"*)
 		LOCAL_OS="msys"
 		;;
 		*"CYGWIN"*)
@@ -148,9 +148,6 @@ function GetLocalOS {
 		exit 1
 		;;
 	esac
-	if [ "$_OFUNCTIONS_VERSION" != "" ]; then
-		Logger "Local OS: [$localOsVar]." "DEBUG"
-	fi
 
 	# Get linux versions
 	if [ -f "/etc/os-release" ]; then
@@ -160,6 +157,10 @@ function GetLocalOS {
 
 	# Add a global variable for statistics in installer
 	LOCAL_OS_FULL="$localOsVar ($localOsName $localOsVer)"
+
+	if [ "$_OFUNCTIONS_VERSION" != "" ]; then
+		Logger "Local OS: [$LOCAL_OS_FULL]." "DEBUG"
+	fi
 }
 function GetConfFileValue () {
         local file="${1}"
@@ -331,7 +332,9 @@ function CopyProgram {
 function CopyServiceFiles {
 	if ([ "$init" == "systemd" ] && [ -f "$SCRIPT_PATH/$SERVICE_FILE_SYSTEMD_SYSTEM" ]); then
 		CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_SYSTEM" "$SERVICE_FILE_SYSTEMD_SYSTEM" "" "" "" true
-		CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_USER" "$SERVICE_FILE_SYSTEMD_USER" "" "" "" true
+		if [ -f "$SCRIPT_PATH/$SERVICE_FILE_SYSTEMD_SYSTEM_USER" ]; then
+			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_USER" "$SERVICE_FILE_SYSTEMD_USER" "" "" "" true
+		fi
 
 		QuickLogger "Created [$SERVICE_NAME] service in [$SERVICE_DIR_SYSTEMD_SYSTEM] and [$SERVICE_DIR_SYSTEMD_USER]."
 		QuickLogger "Can be activated with [systemctl start SERVICE_NAME@instance.conf] where instance.conf is the name of the config file in $CONF_DIR."
@@ -340,9 +343,9 @@ function CopyServiceFiles {
 	elif ([ "$init" == "initV" ] && [ -f "$SCRIPT_PATH/$SERVICE_FILE_INIT" ] && [ -d "$SERVICE_DIR_INIT" ]); then
 		CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_INIT" "$SERVICE_FILE_INIT" "755" "" "" true
 
-		QuickLogger "Created osync-srv service in [$SERVICE_DIR_INIT]."
-		QuickLogger "Can be activated with [service $OSYNC_SERVICE_FILE_INIT start]."
-		QuickLogger "Can be enabled on boot with [chkconfig $OSYNC_SERVICE_FILE_INIT on]."
+		QuickLogger "Created [$SERVICE_NAME] service in [$SERVICE_DIR_INIT]."
+		QuickLogger "Can be activated with [service $SERVICE_FILE_INIT start]."
+		QuickLogger "Can be enabled on boot with [chkconfig $SERVICE_FILE_INIT on]."
 	else
 		QuickLogger "Cannot define what init style is in use on this system. Skipping service file installation."
 	fi
@@ -384,7 +387,11 @@ function RemoveFile {
 
 function RemoveAll {
 	RemoveFile "$BIN_DIR/$PROGRAM_BINARY"
-	RemoveFile "$BIN_DIR/$PROGRAM_BATCH"
+
+	if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "obackup" ]; then
+		RemoveFile "$BIN_DIR/$PROGRAM_BATCH"
+	fi
+
 	if [ ! -f "$BIN_DIR/osync.sh" ] && [ ! -f "$BIN_DIR/obackup.sh" ]; then		# Check if any other program requiring ssh filter is present before removal
 		RemoveFile "$BIN_DIR/$SSH_FILTER"
 	else
@@ -402,6 +409,7 @@ function Usage {
 	echo "options:"
 	echo "--silent		Will log and bypass user interaction."
 	echo "--no-stats	Used with --silent in order to refuse sending anonymous install stats."
+	echo "--remove          Remove the program."
 	exit 127
 }
 
@@ -444,7 +452,9 @@ else
 	CreateDir "$BIN_DIR"
 	CopyExampleFiles
 	CopyProgram
-	CopyServiceFiles
+	if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "pmocr" ]; then
+		CopyServiceFiles
+	fi
 	QuickLogger "$PROGRAM installed. Use with $BIN_DIR/$PROGRAM"
 	if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "obackup" ]; then
 		QuickLogger ""

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 SUBPROGRAM=obackup
 PROGRAM="$SUBPROGRAM-batch" # Batch program to run osync / obackup instances sequentially and rerun failed ones
-AUTHOR="(L) 2013-2016 by Orsiris de Jong"
+AUTHOR="(L) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr - ozy@netpower.fr"
 PROGRAM_BUILD=2016120401
 
@@ -119,15 +119,15 @@ function Batch {
 				fi
 			done
 			runList=("${runAgainList[@]}")
-			runs=$(($runs + 1))
+			runs=$((runs + 1))
 		done
 	fi
 }
 
 function Usage {
 	echo "$PROGRAM $PROGRAM_BUILD"
-	echo $AUTHOR
-	echo $CONTACT
+	echo "$AUTHOR"
+	echo "$CONTACT"
 	echo ""
 	echo "Batch script to sequentially run osync or obackup instances and rerun failed ones."
 	echo "Usage: $PROGRAM.sh [OPTIONS] [$SUBPROGRAM OPTIONS]"
