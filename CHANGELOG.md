@@ -9,7 +9,14 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+20 Jun 2017: obackup v2.1 beta3 released
+----------------------------------------
+
+- Fixed regression where some commandline arguments weren't honored anymore since 2.1 beta1 (--delete, --stats, --dontgetsize)
+- Fixed commandline arguments aren't checked against valid list
+
 14 Mar 2017: obackup v2.1 beta2 released
+----------------------------------------
 
 - Fixed remote commands can be run on local runs and obviously fail
 - Uninstall leaves ssh_filter if needed by other programs
