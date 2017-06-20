@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta2
-PROGRAM_BUILD=2017062003
+PROGRAM_BUILD=2017062004
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -2013,26 +2013,6 @@ else
 	Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
 fi
 
-if [ "$IS_STABLE" != "yes" ]; then
-	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
-fi
-
-DATE=$(date)
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "$DRY_WARNING$DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "ALWAYS"
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
-
-GetLocalOS
-InitLocalOSDependingSettings
-CheckRunningInstances
-PreInit
-Init
-CheckEnvironment
-PostInit
-CheckCurrentConfig
-GetRemoteOS
-InitRemoteOSDependingSettings
 
 if [ $no_maxtime == true ]; then
 	SOFT_MAX_EXEC_TIME_DB_TASK=0
@@ -2054,5 +2034,25 @@ if [ $dont_get_backup_size == true ]; then
 	GET_BACKUP_SIZE="no"
 fi
 
+if [ "$IS_STABLE" != "yes" ]; then
+	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
+fi
+
+DATE=$(date)
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "$DRY_WARNING$DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "ALWAYS"
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
+
+GetLocalOS
+InitLocalOSDependingSettings
+CheckRunningInstances
+PreInit
+Init
+CheckEnvironment
+PostInit
+CheckCurrentConfig
+GetRemoteOS
+InitRemoteOSDependingSettings
 RunBeforeHook
 Main
