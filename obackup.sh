@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta2
-PROGRAM_BUILD=2017021001
+PROGRAM_BUILD=2017062001
 IS_STABLE=no
 
 
@@ -4175,7 +4175,9 @@ function Usage {
 _DRYRUN=false
 no_maxtime=false
 stats=false
-PARTIAL=no
+partial_transfers=false
+delete_vanished=false
+dont_get_backup_size=false
 _DECRYPT_MODE=false
 DECRYPT_PATH=""
 _ENCRYPT_MODE=false
@@ -4200,16 +4202,16 @@ function GetCommandlineArguments {
 			stats=false
 			;;
 			--partial)
-			PARTIAL="yes"
+			partial_transfers=true
 			;;
 			--no-maxtime)
 			no_maxtime=true
 			;;
 			--delete)
-			DELETE_VANISHED_FILES="yes"
+			delete_vanished=true
 			;;
 			--dontgetsize)
-			GET_BACKUP_SIZE="no"
+			dont_get_backup_size=true
 			;;
 			--help|-h|--version|-v)
 			Usage
@@ -4287,8 +4289,6 @@ else
 	Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
 fi
 
-# Switching rundir to 
-
 if [ "$IS_STABLE" != "yes" ]; then
 	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
 fi
@@ -4317,5 +4317,18 @@ if [ $no_maxtime == true ]; then
 	HARD_MAX_EXEC_TIME_FILE_TASK=0
 	HARD_MAX_EXEC_TIME_TOTAL=0
 fi
+
+if [ $partial_transfers == true ]; then
+	PARTIAL="yes"
+fi
+
+if [ $delete_vanished == true ]; then
+	DELETE_VANISHED_FILES="yes"
+fi
+
+if [ $dont_get_backup_size == true ]; then
+	GET_BACKUP_SIZE="no"
+fi
+
 RunBeforeHook
 Main
