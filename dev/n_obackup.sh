@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta2
-PROGRAM_BUILD=2017062002
+PROGRAM_BUILD=2017062003
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1784,23 +1784,23 @@ function Init {
                 REMOTE_HOST=${hosturi%%:*}
 	fi
 
-	## Add update to default RSYNC_ARGS
-	RSYNC_ARGS=$RSYNC_ARGS" -u"
+	## Add update to default RSYNC_TYPE_ARGS
+	RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" -u"
 
 	if [ $_LOGGER_VERBOSE == true ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -i"
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" -i"
 	fi
 
 	if [ "$DELETE_VANISHED_FILES" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --delete"
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --delete"
 	fi
 
 	if [ $stats == true ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --stats"
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --stats"
 	fi
 
 	## Fix for symlink to directories on target cannot get updated
-	RSYNC_ARGS=$RSYNC_ARGS" --force"
+	RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --force"
 }
 
 function Main {
