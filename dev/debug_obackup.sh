@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta2
-PROGRAM_BUILD=2017062001
+PROGRAM_BUILD=2017062004
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -4301,23 +4301,23 @@ function Init {
 		REMOTE_HOST=${hosturi%%:*}
 	fi
 
-	## Add update to default RSYNC_ARGS
-	RSYNC_ARGS=$RSYNC_ARGS" -u"
+	## Add update to default RSYNC_TYPE_ARGS
+	RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" -u"
 
 	if [ $_LOGGER_VERBOSE == true ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" -i"
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" -i"
 	fi
 
 	if [ "$DELETE_VANISHED_FILES" == "yes" ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --delete"
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --delete"
 	fi
 
 	if [ $stats == true ]; then
-		RSYNC_ARGS=$RSYNC_ARGS" --stats"
+		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --stats"
 	fi
 
 	## Fix for symlink to directories on target cannot get updated
-	RSYNC_ARGS=$RSYNC_ARGS" --force"
+	RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --force"
 }
 
 function Main {
@@ -4414,6 +4414,8 @@ DECRYPT_PATH=""
 _ENCRYPT_MODE=false
 
 function GetCommandlineArguments {
+	local isFirstArgument=true
+
 	if [ $# -eq 0 ]; then
 		Usage
 	fi
@@ -4478,7 +4480,15 @@ function GetCommandlineArguments {
 			if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -ne 1 ]; then
 				Logger "Bogus --parallel value. Using only one CPU." "WARN"
 			fi
+			;;
+			*)
+			if [ $isFirstArgument == false ]; then
+				Logger "Unknown option '$i'" "CRITICAL"
+				Usage
+			fi
+			;;
 		esac
+		isFirstArgument=false
 	done
 }
 
@@ -4520,26 +4530,6 @@ else
 	Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
 fi
 
-if [ "$IS_STABLE" != "yes" ]; then
-	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
-fi
-
-DATE=$(date)
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "$DRY_WARNING$DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "ALWAYS"
-Logger "--------------------------------------------------------------------" "NOTICE"
-Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
-
-GetLocalOS
-InitLocalOSDependingSettings
-CheckRunningInstances
-PreInit
-Init
-CheckEnvironment
-PostInit
-CheckCurrentConfig
-GetRemoteOS
-InitRemoteOSDependingSettings
 
 if [ $no_maxtime == true ]; then
 	SOFT_MAX_EXEC_TIME_DB_TASK=0
@@ -4561,5 +4551,25 @@ if [ $dont_get_backup_size == true ]; then
 	GET_BACKUP_SIZE="no"
 fi
 
+if [ "$IS_STABLE" != "yes" ]; then
+	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
+fi
+
+DATE=$(date)
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "$DRY_WARNING$DATE - $PROGRAM v$PROGRAM_VERSION $BACKUP_TYPE script begin." "ALWAYS"
+Logger "--------------------------------------------------------------------" "NOTICE"
+Logger "Backup instance [$INSTANCE_ID] launched as $LOCAL_USER@$LOCAL_HOST (PID $SCRIPT_PID)" "NOTICE"
+
+GetLocalOS
+InitLocalOSDependingSettings
+CheckRunningInstances
+PreInit
+Init
+CheckEnvironment
+PostInit
+CheckCurrentConfig
+GetRemoteOS
+InitRemoteOSDependingSettings
 RunBeforeHook
 Main
