@@ -1,30 +1,64 @@
 #!/usr/bin/env bash
 
-## dev pre-processor bootstrap rev 2016121302
+## dev pre-processor bootstrap rev 2017062001
 ## Yeah !!! A really tech sounding name... In fact it's just include emulation in bash
+
+function Usage {
+	echo "$0 - Quick and dirty preprocessor for including ofunctions into programs"
+	echo "Creates and executes $0.tmp.sh"
+	echo "Usage:"
+	echo ""
+	echo "$0 --program=osync|osync_target_helper|obackup|pmocr [options to pass to program]"
+}
+
 
 if [ ! -f "./merge.sh" ]; then
 	echo "Plrase run bootstrap.sh from osync/dev directory."
 	exit 1
 fi
 
+bootstrapProgram=""
+opts=""
 outputFileName="$0"
 
-source "merge.sh"
-__PREPROCESSOR_PROGRAM=obackup
-__PREPROCESSOR_Constants
+for i in "$@"; do
+        case $i in
+                --program=*)
+                bootstrapProgram="${i##*=}"
+		;;
+		*)
+		opts=$opts" $i"
+		;;
+	esac
+done
 
-cp "n_$__PREPROCESSOR_PROGRAM.sh" "$outputFileName.tmp.sh"
+if [ "$bootstrapProgram" == "" ]; then
+	Usage
+	exit 128
+else
+	source "merge.sh"
+
+	__PREPROCESSOR_PROGRAM=$bootstrapProgram
+	__PREPROCESSOR_PROGRAM_EXEC="n_$bootstrapProgram.sh"
+	__PREPROCESSOR_Constants
+
+	if [ ! -f "$__PREPROCESSOR_PROGRAM_EXEC" ]; then
+		echo "Cannot find file [n_$bootstrapProgram.sh]."
+		exit 1
+	fi
+fi
+
+cp "$__PREPROCESSOR_PROGRAM_EXEC" "$outputFileName.tmp.sh"
 if [ $? != 0 ]; then
-	echo "Cannot copy original file [n_$__PREPROCESSOR_PROGRAM.sh] to [$outputFileName.tmp.sh]."
+	echo "Cannot copy original file [$__PREPROCESSOR_PROGRAM_EXEC] to [$outputFileName.tmp.sh]."
 	exit 1
 fi
 for subset in "${__PREPROCESSOR_SUBSETS[@]}"; do
 	__PREPROCESSOR_MergeSubset "$subset" "${subset//SUBSET/SUBSET END}" "ofunctions.sh" "$outputFileName.tmp.sh"
 done
-chmod +x "$0.tmp.sh"
+chmod +x "$outputFileName.tmp.sh"
 if [ $? != 0 ]; then
-	echo "Cannot make [$outputFileName] executable.."
+	echo "Cannot make [$outputFileName] executable."
 	exit 1
 fi
 
@@ -33,4 +67,4 @@ if type termux-fix-shebang > /dev/null 2>&1; then
 	termux-fix-shebang "$outputFileName.tmp.sh"
 fi
 
-"$outputFileName.tmp.sh" "$@"
+"$outputFileName.tmp.sh" $opts
