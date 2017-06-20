@@ -2042,5 +2042,7 @@ fi
 
 if [ $dont_get_backup_size == true ]; then
 	GET_BACKUP_SIZE="no"
+fi
+
 RunBeforeHook
 Main
