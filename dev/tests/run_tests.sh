@@ -297,7 +297,7 @@ function setUp () {
 
 function test_Merge () {
 	cd "$DEV_DIR"
-	./merge.sh
+	./merge.sh obackup
 	assertEquals "Merging code" "0" $?
 
 	cd "$OBACKUP_DIR"
