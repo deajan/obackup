@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta2
-PROGRAM_BUILD=2017062001
+PROGRAM_BUILD=2017062002
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1897,6 +1897,8 @@ DECRYPT_PATH=""
 _ENCRYPT_MODE=false
 
 function GetCommandlineArguments {
+	local isFirstArgument=true
+
 	if [ $# -eq 0 ]; then
 		Usage
 	fi
@@ -1961,7 +1963,15 @@ function GetCommandlineArguments {
 			if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -ne 1 ]; then
 				Logger "Bogus --parallel value. Using only one CPU." "WARN"
 			fi
+			;;
+			*)
+			if [ $isFirstArgument == false ]; then
+				Logger "Unknown option '$i'" "CRITICAL"
+				Usage
+			fi
+			;;
 		esac
+		isFirstArgument=false
 	done
 }
 
