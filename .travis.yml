@@ -3,12 +3,6 @@ language:
 
 dist: trusty
 sudo: required
-addons:
-  apt:
-    packages:
-    - mysql-server-5.6
-    - mysql-client-core-5.6
-    - mysql-client-5.6
 
 services:
     mysql
@@ -18,7 +12,7 @@ os:
     osx
 
 before_script:
-    mysql -e 'CREATE DATABASE travistest;'
+    alias mysql='mysql --socket=/run/mysql-5.6/mysqld.sock; mysql -e 'CREATE DATABASE travistest;'
 
 script:
     TRAVIS_RUN=true dev/tests/run_tests.sh
