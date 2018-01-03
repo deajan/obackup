@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta4
-PROGRAM_BUILD=2018010301
+PROGRAM_BUILD=2018010302
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -500,7 +500,7 @@ function ListRecursiveBackupDirectories {
 		Logger "Listing directories to backup." "NOTICE"
 		if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 			_ListRecursiveBackupDirectoriesLocal &
-			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false $!
 			if [ $? -eq 1 ]; then
 				output_file=""
 			else
@@ -508,7 +508,7 @@ function ListRecursiveBackupDirectories {
 			fi
 		elif [ "$BACKUP_TYPE" == "pull" ]; then
 			_ListRecursiveBackupDirectoriesRemote &
-			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false $!
 			if [ $? -eq 1 ]; then
 				output_file=""
 			else
@@ -777,7 +777,8 @@ function GetDiskSpaceLocal {
         if [ -d "$pathToCheck" ]; then
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
-		$DF_CMD "$pathToCheck" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
+		$DF_CMD "$pathToCheck" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
+		ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false $!
 		retval=$?
         	if [ $retval -ne 0 ]; then
         		DISK_SPACE=0
