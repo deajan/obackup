@@ -1,13 +1,11 @@
 language:
     bash
 
-dist: trusty
+dist: precise
 sudo: required
-addons:
-  apt:
-    packages:
-    - mysql-server
-    - mysql-client
+
+service
+    mysql
 
 os:
     linux
