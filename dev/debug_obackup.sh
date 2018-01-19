@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta4
-PROGRAM_BUILD=2018010302
+PROGRAM_BUILD=2018011901
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -2342,7 +2342,7 @@ function _ListDatabasesLocal {
 	sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
 	Logger "Launching command [$sqlCmd]." "DEBUG"
 	eval "$sqlCmd" &
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Listing databases succeeded." "NOTICE"
@@ -2368,7 +2368,7 @@ function _ListDatabasesRemote {
 	sqlCmd="$SSH_CMD \"env _REMOTE_TOKEN=$_REMOTE_TOKEN mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
 	Logger "Command output: $sqlCmd" "DEBUG"
 	eval "$sqlCmd" &
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ $retval -eq 0 ]; then
 		Logger "Listing databases succeeded." "NOTICE"
@@ -2696,7 +2696,7 @@ function ListRecursiveBackupDirectories {
 		Logger "Listing directories to backup." "NOTICE"
 		if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
 			_ListRecursiveBackupDirectoriesLocal &
-			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false $!
+			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 			if [ $? -eq 1 ]; then
 				output_file=""
 			else
@@ -2704,7 +2704,7 @@ function ListRecursiveBackupDirectories {
 			fi
 		elif [ "$BACKUP_TYPE" == "pull" ]; then
 			_ListRecursiveBackupDirectoriesRemote &
-			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false $!
+			ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 			if [ $? -eq 1 ]; then
 				output_file=""
 			else
@@ -2769,7 +2769,7 @@ function _GetDirectoriesSizeLocal {
 	cmd="du -cs $dirList | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 	Logger "Launching command [$cmd]." "DEBUG"
 	eval "$cmd" &
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
 	retval=$?
 	if  [ $retval -ne  0 ] || [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
@@ -2933,7 +2933,7 @@ function RemoteLogger {
 	exit $retval
 ENDSSH
 	# $cmd will return 0 even if some errors found, so we need to check if there is an error output
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if  [ $retval -ne 0 ] || [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		Logger "Could not get files size for some or all remote directories." "ERROR"
@@ -2981,7 +2981,7 @@ function _CreateDirectoryLocal {
 	if [ ! -d "$dirToCreate" ]; then
 		# No sudo, you should have all necessary rights
 		mkdir -p "$dirToCreate" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1 &
-		ExecTasks "${FUNCNAME[0]}" 0 0 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+		ExecTasks "${FUNCNAME[0]}" 0 0 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 		retval=$?
 		if [ $retval -ne 0 ]; then
 			Logger "Cannot create directory [$dirToCreate]" "CRITICAL"
@@ -3135,7 +3135,7 @@ function RemoteLogger {
 	fi
 	exit 0
 ENDSSH
-	ExecTasks "${FUNCNAME[0]}" 0 0 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 720 1800 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ $retval -ne 0 ]; then
 		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
@@ -3200,7 +3200,7 @@ function GetDiskSpaceLocal {
 		# Not elegant solution to make df silent on errors
 		# No sudo on local commands, assuming you should have all the necesarry rights to check backup directories sizes
 		$DF_CMD "$pathToCheck" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
-		ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false $!
+		ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 		retval=$?
 		if [ $retval -ne 0 ]; then
 			DISK_SPACE=0
@@ -3372,7 +3372,7 @@ function _GetDiskSpaceRemoteSub {
 _GetDiskSpaceRemoteSub
 exit $?
 ENDSSH
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ $retval -ne 0 ]; then
 		DISK_SPACE=0
@@ -3552,7 +3552,7 @@ function _BackupDatabaseLocalToLocal {
 		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
@@ -3601,7 +3601,7 @@ function _BackupDatabaseLocalToRemote {
 		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
@@ -3650,7 +3650,7 @@ function _BackupDatabaseRemoteToLocal {
 		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
@@ -3964,7 +3964,7 @@ function Rsync {
 
 	Logger "Launching command [$rsyncCmd]." "DEBUG"
 	eval "$rsyncCmd" &
-	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 $SOFT_MAX_EXEC_TIME_FILE_TASK $HARD_MAX_EXEC_TIME_FILE_TASK $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	retval=$?
 	if [ $retval -ne 0 ]; then
 		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
@@ -4114,7 +4114,7 @@ function _RotateBackupsLocal {
 					cmd="rm -rf \"$path\""
 					Logger "Launching command [$cmd]." "DEBUG"
 					eval "$cmd" &
-					ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+					ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 					if [ $? -ne 0 ]; then
 						Logger "Cannot delete oldest copy [$path]." "ERROR"
 						 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
@@ -4127,7 +4127,7 @@ function _RotateBackupsLocal {
 				cmd="mv \"$path\" \"$backup.$PROGRAM.$copy\""
 				Logger "Launching command [$cmd]." "DEBUG"
 				eval "$cmd" &
-				ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+				ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 				if [ $? -ne 0 ]; then
 					Logger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
 					 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
@@ -4142,7 +4142,7 @@ function _RotateBackupsLocal {
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
-			ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+			ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
@@ -4152,7 +4152,7 @@ function _RotateBackupsLocal {
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
-			ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+			ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 			if [ $? -ne 0 ]; then
 				Logger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
@@ -4162,7 +4162,7 @@ function _RotateBackupsLocal {
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
-			ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+			ExecTasks "${FUNCNAME[0]}" 0 0 3600 0 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
 				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
@@ -4363,7 +4363,7 @@ function _RotateBackupsRemoteSSH {
 
 ENDSSH
 
-	ExecTasks "${FUNCNAME[0]}" 0 0 1800 0 $SLEEP_TIME $KEEP_LOGGING true true false false $!
+	ExecTasks "${FUNCNAME[0]}" 0 0 1800 0 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
 	if [ $? -ne 0 ]; then
 		Logger "Could not rotate backups in [$backupPath]." "ERROR"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
