@@ -9,12 +9,11 @@ addons:
     - mysql-client-core-5.6
     - mysql-client-5.6
 
-service
+service:
     mysql
 
 os:
     linux
-    osx
 
 before_script:
     service --status-all; mysql -e 'CREATE DATABASE travistest;'
