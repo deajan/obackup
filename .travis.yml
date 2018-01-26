@@ -1,7 +1,6 @@
 language:
     bash
 
-dist: trusty
 sudo: required
 
 addons:
