@@ -3,13 +3,13 @@ language: bash
 sudo: required
 
 services:
-    mysql
+    - mysql
 
 os:
     linux
 
 before_script:
-    service --status-all; ls /var; ls /var/run; mysql -e 'CREATE DATABASE travistest;'X
+    service --status-all; ls /var/run; netstat -natp; mysql -e 'CREATE DATABASE travistest;'X
 
 script:
     TRAVIS_RUN=true dev/tests/run_tests.sh
