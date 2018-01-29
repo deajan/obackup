@@ -9,7 +9,7 @@ os:
     linux
 
 before_script:
-    service --status-all; mysql -e 'CREATE DATABASE travistest;'
+    service --status-all; mysql -e 'CREATE DATABASE travistest; ls /var/run;'
 
 script:
     TRAVIS_RUN=true dev/tests/run_tests.sh
