@@ -1,3 +1,4 @@
+# Necessary evil: if 'bash' is selected as language, travis will try to install ruby and fails
 language: php
 
 sudo: required
@@ -9,7 +10,7 @@ os:
     linux
 
 before_script:
-    service --status-all; ls /var/run; netstat -natp; mysql -e 'CREATE DATABASE travistest;'X
+    mysql -e 'CREATE DATABASE travistest;'
 
 script:
     TRAVIS_RUN=true dev/tests/run_tests.sh
