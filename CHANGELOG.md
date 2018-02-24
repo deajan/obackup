@@ -9,6 +9,8 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+- Updated ofunctions
+
 20 Jun 2017: obackup v2.1 beta3 released
 ----------------------------------------
 
