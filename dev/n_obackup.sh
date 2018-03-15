@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta5
-PROGRAM_BUILD=2018022401
+PROGRAM_BUILD=2018031501
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -259,7 +259,7 @@ function _ListDatabasesLocal {
         sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
         Logger "Launching command [$sqlCmd]." "DEBUG"
         eval "$sqlCmd" &
-	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK true $SLEEP_TIME $KEEP_LOGGING
+	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
 	retval=$?
         if [ $retval -eq 0 ]; then
                 Logger "Listing databases succeeded." "NOTICE"
@@ -285,7 +285,7 @@ function _ListDatabasesRemote {
         sqlCmd="$SSH_CMD \"env _REMOTE_TOKEN=$_REMOTE_TOKEN mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
         Logger "Command output: $sqlCmd" "DEBUG"
         eval "$sqlCmd" &
-	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK true $SLEEP_TIME $KEEP_LOGGING
+	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
 	retval=$?
         if [ $retval -eq 0 ]; then
                 Logger "Listing databases succeeded." "NOTICE"
@@ -1017,7 +1017,7 @@ function _BackupDatabaseLocalToLocal {
 		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
+	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK true $SLEEP_TIME $KEEP_LOGGING
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
@@ -1066,7 +1066,7 @@ function _BackupDatabaseLocalToRemote {
 		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
+	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK true $SLEEP_TIME $KEEP_LOGGING
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
@@ -1115,7 +1115,7 @@ function _BackupDatabaseRemoteToLocal {
 		Logger "Launching command [$drySqlCmd]." "DEBUG"
 		eval "$drySqlCmd" &
 	fi
-	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
+	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_DB_TASK $HARD_MAX_EXEC_TIME_DB_TASK true $SLEEP_TIME $KEEP_LOGGING
 	retval=$?
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
