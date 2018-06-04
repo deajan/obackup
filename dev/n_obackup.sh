@@ -1243,6 +1243,7 @@ function EncryptFiles {
 				successCounter=$((successCounter+1))
 			fi
 		fi
+	#TODO: This redirection does not work with busybox since there is no subshell support
 	done < <($FIND_CMD "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
 
 	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
