@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta5
-PROGRAM_BUILD=2018083003
+PROGRAM_BUILD=2018083004
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1411,9 +1411,6 @@ function Rsync {
 		RSYNC_NO_RECURSE_ARGS=""
 	fi
 
-	Logger "Beginning file backup of [$sourceDir] to [$destinationDir]." "VERBOSE"
-
-
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
 		_CreateDirectoryLocal "$destinationDir"
@@ -1472,7 +1469,7 @@ function FilesBackup {
 			encryptDir="$FILE_STORAGE"
 		fi
 
-		Logger "Beginning backup task [$backupTask]." "NOTICE"
+		Logger "Beginning file backup of [$sourceDir] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
@@ -1508,7 +1505,7 @@ function FilesBackup {
 			encryptDir="$FILE_STORAGE"
 		fi
 
-		Logger "Beginning backup task [$backupTask]." "NOTICE"
+		Logger "Beginning file backup of [$sourceDir] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? -eq 0 ]; then
@@ -1543,7 +1540,7 @@ function FilesBackup {
 			encryptDir="$FILE_STORAGE"
 		fi
 
-		Logger "Beginning backup task [$backupTask]." "NOTICE"
+		Logger "Beginning file backup of [$sourceDir] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
