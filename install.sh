@@ -12,7 +12,7 @@ PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
 SSH_FILTER="ssh_filter.sh"
 
-SCRIPT_BUILD=2017041701
+SCRIPT_BUILD=2017072701
 
 ## osync / obackup / pmocr / zsnap install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8, 10 and 11
@@ -20,6 +20,39 @@ SCRIPT_BUILD=2017041701
 
 # Get current install.sh path from http://stackoverflow.com/a/246128/2635443
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+_LOGGER_SILENT=false
+_STATS=1
+ACTION="install"
+FAKEROOT=""
+
+function GetCommandlineArguments {
+        for i in "$@"; do
+                case $i in
+			--prefix=*)
+                        FAKEROOT="${i##*=}"
+                        ;;
+			--silent)
+			_LOGGER_SILENT=true
+			;;
+			--no-stats)
+			_STATS=0
+			;;
+			--remove)
+			ACTION="uninstall"
+			;;
+			--help|-h|-?)
+			Usage
+			;;
+                        *)
+			Logger "Unknown option '$i'" "CRITICAL"
+			Usage
+                        ;;
+                esac
+	done
+}
+
+GetCommandlineArguments "$@"
 
 CONF_DIR=$FAKEROOT/etc/$PROGRAM
 BIN_DIR="$FAKEROOT/usr/local/bin"
@@ -49,34 +82,15 @@ else
 	LOG_FILE="./$PROGRAM-install.log"
 fi
 
-# QuickLogger subfunction, can be called directly
-function _QuickLogger {
-	local value="${1}"
-	local destination="${2}" # Destination: stdout, log, both
-
-	if ([ "$destination" == "log" ] || [ "$destination" == "both" ]); then
-		echo -e "$(date) - $value" >> "$LOG_FILE"
-	elif ([ "$destination" == "stdout" ] || [ "$destination" == "both" ]); then
-		echo -e "$value"
-	fi
-}
-
-# Generic quick logging function
-function QuickLogger {
-	local value="${1}"
-
-	if [ "$_LOGGER_SILENT" == true ]; then
-		_QuickLogger "$value" "log"
-	else
-		_QuickLogger "$value" "stdout"
-	fi
-}
-## from https://gist.github.com/cdown/1163649
+include #### QuickLogger SUBSET ####
+## Modified version of https://gist.github.com/cdown/1163649
 function UrlEncode {
 	local length="${#1}"
 
+	local i
+
 	local LANG=C
-	for (( i = 0; i < length; i++ )); do
+	for i in $(seq 0 $((length-1))); do
 		local c="${1:i:1}"
 		case $c in
 			[a-zA-Z0-9.~_-])
@@ -153,10 +167,34 @@ function GetLocalOS {
 	if [ -f "/etc/os-release" ]; then
 		localOsName=$(GetConfFileValue "/etc/os-release" "NAME" true)
 		localOsVer=$(GetConfFileValue "/etc/os-release" "VERSION" true)
+	elif [ "$LOCAL_OS" == "BusyBox" ]; then
+		localOsVer=`ls --help 2>&1 | head -1 | cut -f2 -d' '`
+		localOsName="BusyBox"
 	fi
 
-	# Add a global variable for statistics in installer
-	LOCAL_OS_FULL="$localOsVar ($localOsName $localOsVer)"
+	# Get Host info for Windows
+	if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Cygwin" ] || [ "$LOCAL_OS" == "WinNT10" ]; then localOsVar="$(uname -a)"
+		if [ "$PROGRAMW6432" != "" ]; then
+			LOCAL_OS_BITNESS=64
+			LOCAL_OS_FAMILY="Windows"
+		elif [ "$PROGRAMFILES" != "" ]; then
+			LOCAL_OS_BITNESS=32
+			LOCAL_OS_FAMILY="Windows"
+		# Case where running on BusyBox but no program files defined
+		elif [ "$LOCAL_OS" == "BusyBox" ]; then
+			LOCAL_OS_FAMILY="Unix"
+		fi
+	# Get Host info for Unix
+	else
+		LOCAL_OS_FAMILY="Unix"
+		if uname -m | grep '64' > /dev/null 2>&1; then
+			LOCAL_OS_BITNESS=64
+		else
+			LOCAL_OS_BITNESS=32
+		fi
+	fi
+
+	LOCAL_OS_FULL="$localOsVar ($localOsName $localOsVer) $LOCAL_OS_BITNESS-bit $LOCAL_OS_FAMILY"
 
 	if [ "$_OFUNCTIONS_VERSION" != "" ]; then
 		Logger "Local OS: [$LOCAL_OS_FULL]." "DEBUG"
@@ -234,7 +272,7 @@ function CreateDir {
 	local dir="${1}"
 
 	if [ ! -d "$dir" ]; then
-		mkdir "$dir"
+		mkdir -p "$dir"
 		if [ $? == 0 ]; then
 			QuickLogger "Created directory [$dir]."
 		else
@@ -338,8 +376,10 @@ function CopyProgram {
 
 function CopyServiceFiles {
 	if ([ "$init" == "systemd" ] && [ -f "$SCRIPT_PATH/$SERVICE_FILE_SYSTEMD_SYSTEM" ]); then
+		CreateDir "$SERVICE_DIR_SYSTEMD_SYSTEM"
 		CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_SYSTEM" "$SERVICE_FILE_SYSTEMD_SYSTEM" "" "" "" true
-		if [ -f "$SCRIPT_PATH/$SERVICE_FILE_SYSTEMD_SYSTEM_USER" ]; then
+		if [ -f "$SCRIPT_PATH/$SERVICE_FILE_SYSTEMD_USER" ]; then
+			CreateDir "$SERVICE_DIR_SYSTEMD_USER"
 			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_USER" "$SERVICE_FILE_SYSTEMD_USER" "" "" "" true
 		fi
 
@@ -348,6 +388,7 @@ function CopyServiceFiles {
 		QuickLogger "Can be enabled on boot with [systemctl enable $SERVICE_NAME@instance.conf]."
 		QuickLogger "In userland, active with [systemctl --user start $SERVICE_NAME@instance.conf]."
 	elif ([ "$init" == "initV" ] && [ -f "$SCRIPT_PATH/$SERVICE_FILE_INIT" ] && [ -d "$SERVICE_DIR_INIT" ]); then
+		CreateDir "$SERVICE_DIR_INIT"
 		CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_INIT" "$SERVICE_FILE_INIT" "755" "" "" true
 
 		QuickLogger "Created [$SERVICE_NAME] service in [$SERVICE_DIR_INIT]."
@@ -405,7 +446,7 @@ function RemoveAll {
 		QuickLogger "Skipping removal of [$BIN_DIR/$SSH_FILTER] because other programs present that need it."
 	fi
 	RemoveFile "$SERVICE_DIR_SYSTEMD_SYSTEM/$SERVICE_FILE_SYSTEMD_SYSTEM"
-	RemoveFile "$SERVICE_DIR_SYSTEMD_USER/$SERVICE_FILE_SYSTEMD_SYSTEM"
+	RemoveFile "$SERVICE_DIR_SYSTEMD_USER/$SERVICE_FILE_SYSTEMD_USER"
 	RemoveFile "$SERVICE_DIR_INIT/$SERVICE_FILE_INIT"
 
 	QuickLogger "Skipping configuration files in [$CONF_DIR]. You may remove this directory manually."
@@ -417,33 +458,9 @@ function Usage {
 	echo "--silent		Will log and bypass user interaction."
 	echo "--no-stats	Used with --silent in order to refuse sending anonymous install stats."
 	echo "--remove          Remove the program."
+	echo "--prefix=/path    Use prefix to install path."
 	exit 127
 }
-
-_LOGGER_SILENT=false
-_STATS=1
-ACTION="install"
-
-for i in "$@"
-do
-	case $i in
-		--silent)
-		_LOGGER_SILENT=true
-		;;
-		--no-stats)
-		_STATS=0
-		;;
-		--remove)
-		ACTION="uninstall"
-		;;
-		--help|-h|-?)
-		Usage
-	esac
-done
-
-if [ "$FAKEROOT" != "" ]; then
-	mkdir -p "$SERVICE_DIR_SYSTEMD_SYSTEM" "$SERVICE_DIR_SYSTEMD_USER" "$BIN_DIR"
-fi
 
 GetLocalOS
 SetLocalOSSettings
