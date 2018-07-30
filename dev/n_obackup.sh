@@ -403,7 +403,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 		# Make sure there is only one trailing slash
 		directory="${directory%/}/"
 		# No sudo here, assuming you should have all necessary rights for local checks
-		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+		cmd="$FIND_CMD -L $directory -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		Logger "Launching command [$cmd]." "DEBUG"
 		eval "$cmd"
 		retval=$?
@@ -456,7 +456,7 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 	for directory in "${directories[@]}"; do
 		# Make sure there is only one trailing slash
 		directory="${directory%/}/"
-		cmd="$REMOTE_FIND_CMD -L \"$directory\"/ -mindepth 1 -maxdepth 1 -type d"
+		cmd="$REMOTE_FIND_CMD -L \"$directory\" -mindepth 1 -maxdepth 1 -type d"
 		Logger "Launching command [$cmd]." "DEBUG"
 		eval $cmd
 		retval=$?
