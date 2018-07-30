@@ -1462,10 +1462,10 @@ function FilesBackup {
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
-			if [ "${backupTask#/}" == "/" ]; then
-				destinationDir="$FILE_STORAGE/${backupTask#/}"
+			if [ "${backupTask#/}/" == "/" ]; then
+				destinationDir="$FILE_STORAGE/${backupTask#/}/"
 			else
-				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
 		else
 			destinationDir="$FILE_STORAGE"
@@ -1497,10 +1497,10 @@ function FilesBackup {
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
-			if [ "${backupTask#/}" == "/" ]; then
-				destinationDir="$FILE_STORAGE/${backupTask#/}"
+			if [ "${backupTask#/}/" == "/" ]; then
+				destinationDir="$FILE_STORAGE/${backupTask#/}/"
 			else
-				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
 			encryptDir="$FILE_STORAGE/${backupTask#/}"
 		else
@@ -1533,10 +1533,10 @@ function FilesBackup {
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
-			if [ "${backupTask#/}" == "/" ]; then
-				destinationDir="$FILE_STORAGE/${backupTask#/}"
+			if [ "${backupTask#/}/" == "/" ]; then
+				destinationDir="$FILE_STORAGE/${backupTask#/}/"
 			else
-				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
 		else
 			destinationDir="$FILE_STORAGE"
