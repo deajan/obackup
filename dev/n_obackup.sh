@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta5
-PROGRAM_BUILD=2018083004
+PROGRAM_BUILD=2018083005
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1396,7 +1396,7 @@ function DecryptFiles {
 function Rsync {
 	local sourceDir="${1}"		# Source directory
 	local destinationDir="${2}"	# Destination directory
-	local recursive="${2:-true}"	# Backup only files at toplevel of directory
+	local recursive="${3:-true}"	# Backup only files at toplevel of directory
 
         __CheckArguments 3 $# "$@"    #__WITH_PARANOIA_DEBUG
 
