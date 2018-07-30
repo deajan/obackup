@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta5
-PROGRAM_BUILD=2018031501
+PROGRAM_BUILD=2018083002
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -400,6 +400,8 @@ function _ListRecursiveBackupDirectoriesLocal {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
+		# Make sure there is only one trailing slash
+		directory="${directory%/}/"
 		# No sudo here, assuming you should have all necessary rights for local checks
 		cmd="$FIND_CMD -L $directory/ -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 		Logger "Launching command [$cmd]." "DEBUG"
@@ -452,7 +454,10 @@ function _ListRecursiveBackupDirectoriesRemoteSub {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a directories <<< "$RECURSIVE_DIRECTORY_LIST"
 	for directory in "${directories[@]}"; do
+		# Make sure there is only one trailing slash
+		directory="${directory%/}/"
 		cmd="$REMOTE_FIND_CMD -L \"$directory\"/ -mindepth 1 -maxdepth 1 -type d"
+		Logger "Launching command [$cmd]." "DEBUG"
 		eval $cmd
 		retval=$?
 		if  [ $retval -ne 0 ]; then
@@ -1456,8 +1461,12 @@ function FilesBackup {
 	# Backup directories from simple list
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
-			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
-			encryptDir="$FILE_STORAGE/${backupTask#/}"
+			# Fix for backup of '/'
+			if [ "${backupTask#/}" == "/" ]; then
+				destinationDir="$FILE_STORAGE/${backupTask#/}"
+			else
+				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			fi
 		else
 			destinationDir="$FILE_STORAGE"
 			encryptDir="$FILE_STORAGE"
@@ -1487,7 +1496,12 @@ function FilesBackup {
 	# Backup recursive directories withouht recursion
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
-			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			# Fix for backup of '/'
+			if [ "${backupTask#/}" == "/" ]; then
+				destinationDir="$FILE_STORAGE/${backupTask#/}"
+			else
+				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			fi
 			encryptDir="$FILE_STORAGE/${backupTask#/}"
 		else
 			destinationDir="$FILE_STORAGE"
@@ -1518,8 +1532,12 @@ function FilesBackup {
 	# Backup sub directories of recursive directories
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
-			destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
-			encryptDir="$FILE_STORAGE/${backupTask#/}"
+			# Fix for backup of '/'
+			if [ "${backupTask#/}" == "/" ]; then
+				destinationDir="$FILE_STORAGE/${backupTask#/}"
+			else
+				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}")
+			fi
 		else
 			destinationDir="$FILE_STORAGE"
 			encryptDir="$FILE_STORAGE"
