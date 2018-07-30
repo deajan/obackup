@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-beta5
-PROGRAM_BUILD=2018083002
+PROGRAM_BUILD=2018083003
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1463,7 +1463,7 @@ function FilesBackup {
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
-				destinationDir="$FILE_STORAGE/${backupTask#/}/"
+				destinationDir="$FILE_STORAGE/"
 			else
 				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
@@ -1498,7 +1498,7 @@ function FilesBackup {
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
-				destinationDir="$FILE_STORAGE/${backupTask#/}/"
+				destinationDir="$FILE_STORAGE/"
 			else
 				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
@@ -1534,7 +1534,7 @@ function FilesBackup {
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
-				destinationDir="$FILE_STORAGE/${backupTask#/}/"
+				destinationDir="$FILE_STORAGE/"
 			else
 				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
