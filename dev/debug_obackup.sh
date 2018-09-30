@@ -4,10 +4,10 @@
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
-AUTHOR="(C) 2013-2017 by Orsiris de Jong"
+AUTHOR="(C) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018093003
+PROGRAM_BUILD=2018093005
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -4264,7 +4264,7 @@ function FilesBackup {
 			encryptDir="$FILE_STORAGE"
 		fi
 
-		Logger "Beginning file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
+		Logger "Beginning non recursive file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? -eq 0 ]; then
@@ -4299,7 +4299,7 @@ function FilesBackup {
 			encryptDir="$FILE_STORAGE"
 		fi
 
-		Logger "Beginning file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
+		Logger "Beginning recursive child file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
@@ -4376,7 +4376,9 @@ function _RotateBackupsLocal {
 			copy=$((copy-1))
 		done
 
+		# TODO: Describe new behavior: Always copy instead of move in order to make delta copies
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
+		# Whereas sql files will always be moved because we don't do deltas on sql files
 		if [[ $backup == *.sql.* ]]; then
 			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "Launching command [$cmd]." "DEBUG"
@@ -4384,28 +4386,29 @@ function _RotateBackupsLocal {
 			ExecTasks $! "${FUNCNAME[0]}" false 0 0 3600 0 true $SLEEP_TIME $KEEP_LOGGING
 			if [ $? -ne 0 ]; then
 				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
-				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
+				_LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 			fi
 
-		elif [ "$REMOTE_OPERATION" == "yes" ]; then
+		else
+		#elif [ "$REMOTE_OPERATION" == "yes" ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
 			ExecTasks $! "${FUNCNAME[0]}" false 0 0 3600 0 true $SLEEP_TIME $KEEP_LOGGING
 			if [ $? -ne 0 ]; then
 				Logger "Cannot copy [$backup] to [$backup.$PROGRAM.1]." "ERROR"
-				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
+				_LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 			fi
 
-		else
-			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			Logger "Launching command [$cmd]." "DEBUG"
-			eval "$cmd" &
-			ExecTasks $! "${FUNCNAME[0]}" false 0 0 3600 0 true $SLEEP_TIME $KEEP_LOGGING
-			if [ $? -ne 0 ]; then
-				Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
-				 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
-			fi
+		#else
+		#	cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
+		#	Logger "Launching command [$cmd]." "DEBUG"
+		#	eval "$cmd" &
+		#	ExecTasks $! "${FUNCNAME[0]}" false 0 0 3600 0 true $SLEEP_TIME $KEEP_LOGGING
+		#	if [ $? -ne 0 ]; then
+		#		Logger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+		#		_LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
+		#	fi
 		fi
 	done
 }
