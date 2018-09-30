@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018093006
+PROGRAM_BUILD=2018093007
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1755,11 +1755,11 @@ function RotateBackups {
 
 	__CheckArguments 2 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	Logger "Rotating backups in [$backupPath] for [$rotateCopies] copies." "NOTICE"
-
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
+		Logger "Rotating local backups in [$backupPath] for [$rotateCopies] copies." "NOTICE"
 		_RotateBackupsLocal "$backupPath" "$rotateCopies"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
+		Logger "Rotating remote backups in [$backupPath] for [$rotateCopies] copies." "NOTICE"
 		_RotateBackupsRemote "$backupPath" "$rotateCopies"
 	fi
 }
