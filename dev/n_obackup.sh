@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018093005
+PROGRAM_BUILD=2018093006
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1710,7 +1710,8 @@ function _RotateBackupsRemoteSSH {
 				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 
-		elif [ "$REMOTE_OPERATION" == "yes" ]; then
+		else
+		#elif [ "$REMOTE_OPERATION" == "yes" ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
@@ -1719,14 +1720,14 @@ function _RotateBackupsRemoteSSH {
 				RemoteLogger "Command was [$cmd]." "WARN"
 			fi
 
-		else
-			cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
-			RemoteLogger "Launching command [$cmd]." "DEBUG"
-			eval "$cmd"
-			if [ $? -ne 0 ]; then
- 				RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
-				RemoteLogger "Command was [$cmd]." "WARN"
-			fi
+		#else
+		#	cmd="mv \"$backup\" \"$backup.$PROGRAM.1\""
+		#	RemoteLogger "Launching command [$cmd]." "DEBUG"
+		#	eval "$cmd"
+		#	if [ $? -ne 0 ]; then
+ 		#		RemoteLogger "Cannot move [$backup] to [$backup.$PROGRAM.1]." "ERROR"
+		#		RemoteLogger "Command was [$cmd]." "WARN"
+		#	fi
 		fi
 	done
 }
