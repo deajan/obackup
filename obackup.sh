@@ -12,7 +12,7 @@ IS_STABLE=no
 
 
 _OFUNCTIONS_VERSION=2.3.0-RC1
-_OFUNCTIONS_BUILD=2018093001
+_OFUNCTIONS_BUILD=2018093002
 _OFUNCTIONS_BOOTSTRAP=true
 
 ## To use in a program, define the following variables:
@@ -1980,7 +1980,7 @@ function InitRemoteOSDependingSettings {
 	fi
 
 	## Set rsync default arguments (complete with -r or -d depending on recursivity later)
-	RSYNC_DEFAULT_ARGS="ltD -8"
+	RSYNC_DEFAULT_ARGS="-ltD -8"
 	if [ "$_DRYRUN" == true ]; then
 		RSYNC_DRY_ARG="-n"
 		DRY_WARNING="/!\ DRY RUN "
