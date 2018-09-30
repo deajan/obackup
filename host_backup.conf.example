@@ -124,6 +124,7 @@ COMPRESSION_LEVEL=3
 ## Every subdirectory of each directory in RECURSIVE_DIRECTORY_LIST will be processed as a unique task.
 ## Example: RECURSIVE_DIRECTORY_LIST="/home;/var" will create backup tasks tasks "/home/dir1, "/home/dir2", ... "/home/dirN", "/var/log", "/var/lib"... "/var/something".
 ## You can exclude directories from the avove backup task creation, ex: avoid backing up "/home/dir2" by adding it to RECURSIVE_EXCLUDE_LIST.
+## Note that since we recurse only by one level, excluding /home/dir2/somedir won't have any effect.
 ## Please use ${HOME} instead of ~ if needed.
 
 ## Directories backup list. List of semicolon separated directories that will be backed up.
