@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018093007
+PROGRAM_BUILD=2018093008
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1671,6 +1671,11 @@ include #### TrapError SUBSET ####
 include #### RemoteLogger SUBSET ####
 
 function _RotateBackupsRemoteSSH {
+	local backup
+	local copy
+	local cmd
+	local path
+
 	$REMOTE_FIND_CMD "$backupPath" -mindepth 1 -maxdepth 1 ! -regex ".*\.$PROGRAM\.[0-9]+"  -print0 | while IFS= read -r -d $'\0' backup; do
 		copy=$rotateCopies
 		while [ $copy -gt 1 ]; do
@@ -1697,7 +1702,7 @@ function _RotateBackupsRemoteSSH {
 				fi
 
 			fi
-			copy=$((opy-1))
+			copy=$((copy-1))
 		done
 
 		# Latest file backup will not be moved if script configured for remote backup so next rsync execution will only do delta copy instead of full one
