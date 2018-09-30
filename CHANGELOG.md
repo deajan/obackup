@@ -9,7 +9,15 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+XX YYY 2018: obackup v2.1 RC1 released
+--------------------------------------
+
+- File backup rotation will always make copies instead of moving files, in order to let rsync do deltas even in local backup scheme
+- Fixed non recursive backups being recursive (bug introduced in a8b6bcb)
+- Fixed multiple trailing slashes when backing-up '/'
 - Updated ofunctions
+- Upgraded shunit2 test framework to v2.1.8pre (git commit 07bb329)
+- Minor fixes
 
 20 Jun 2017: obackup v2.1 beta3 released
 ----------------------------------------
