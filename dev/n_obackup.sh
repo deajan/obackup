@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2017 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018093003
+PROGRAM_BUILD=2018093004
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1507,7 +1507,7 @@ function FilesBackup {
 			encryptDir="$FILE_STORAGE"
 		fi
 
-		Logger "Beginning file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
+		Logger "Beginning non recursive file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? -eq 0 ]; then
@@ -1542,7 +1542,7 @@ function FilesBackup {
 			encryptDir="$FILE_STORAGE"
 		fi
 
-		Logger "Beginning file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
+		Logger "Beginning recursive child file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
 		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
