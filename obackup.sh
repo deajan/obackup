@@ -12,7 +12,7 @@ IS_STABLE=no
 
 
 _OFUNCTIONS_VERSION=2.3.0-RC1
-_OFUNCTIONS_BUILD=2018093003
+_OFUNCTIONS_BUILD=2018100105
 _OFUNCTIONS_BOOTSTRAP=true
 
 ## To use in a program, define the following variables:
@@ -101,38 +101,17 @@ fi
 #### PoorMansRandomGenerator SUBSET ####
 # Get a random number on Windows BusyBox alike, also works on most Unixes
 function PoorMansRandomGenerator {
-	local digits="${1}"		# The number of digits to generate
+        local digits="${1}" # The number of digits to generate
+        local number
 
-	local minimum=1
-	local maximum
-	local n=0
-	
-	if [ "$digits" == "" ]; then
-		digits=5
-	fi
-	
-	# Minimum already has a digit
-	for n in $(seq 1 $((digits-1))); do
-		minimum=$minimum"0"
-		maximum=$maximum"9"
-	done
-	maximum=$maximum"9"
-	
-	#n=0; while [ $n -lt $minimum ]; do n=$n$(dd if=/dev/urandom bs=100 count=1 2>/dev/null | tr -cd '0-9'); done; n=$(echo $n | sed -e 's/^0//')
-	# bs=19 since if real random strikes, having a 19 digits number is not supported
-	while [ $n -lt $minimum ] || [ $n -gt $maximum ]; do
-		if [ $n -lt $minimum ]; then
-			# Add numbers
-			n=$n$(dd if=/dev/urandom bs=19 count=1 2>/dev/null | tr -cd '0-9')
-			n=$(echo $n | sed -e 's/^0//')
-			if [ "$n" == "" ]; then
-				n=0
-			fi
-		elif [ $n -gt $maximum ]; then
-			n=$(echo $n | sed 's/.$//')
-		fi
-	done
-	echo $n
+        # Some read bytes can't be used, se we read twice the number of required bytes
+        dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
+                number=$number$(printf "%d" "'$char")
+                if [ ${#number} -ge $digits ]; then
+                        echo ${number:0:$digits}
+                        break;
+                fi
+        done
 }
 #### PoorMansRandomGenerator SUBSET END ####
 
@@ -1750,9 +1729,9 @@ function RsyncPatternsAdd {
 			rest="${rest#*$PATH_SEPARATOR_CHAR}"
 		fi
 			if [ "$RSYNC_PATTERNS" == "" ]; then
-			RSYNC_PATTERNS="--"$patternType"=\"$str\""
+			RSYNC_PATTERNS="--$patternType=\"$str\""
 		else
-			RSYNC_PATTERNS="$RSYNC_PATTERNS --"$patternType"=\"$str\""
+			RSYNC_PATTERNS="$RSYNC_PATTERNS --$patternType=\"$str\""
 		fi
 	done
 	set +f
@@ -1768,7 +1747,7 @@ function RsyncPatternsFromAdd {
 	fi
 
 	if [ -e "$patternFrom" ]; then
-		RSYNC_PATTERNS="$RSYNC_PATTERNS --"$patternType"-from=\"$patternFrom\""
+		RSYNC_PATTERNS="$RSYNC_PATTERNS --$patternType-from=\"$patternFrom\""
 	fi
 }
 
@@ -2087,7 +2066,7 @@ function VerComp () {
 		return 1
 	fi
 
-	if [[ $1 == $2 ]]
+	if [[ "$1" == "$2" ]]
 		then
 			echo 0
 		return
