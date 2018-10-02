@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
 
-#TODO Encrypted Pull runs on F25 fail for decryption
+## obackup basic tests suite 2018100201
 
-## obackup basic tests suite 2017040801
+# Supported environment variables
+
+# TRAVIS_RUN=[true|false]
+# SSH_PORT=22
+# SKIP_REMOTE=[true|false]
+
+
+#TODO Encrypted Pull runs on F25 fail for decryption
+# If gpg key generation hangs, please install and configure rngd service
+#eg yum install rng-tools ; systemctl start rngd
+
+
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
@@ -205,7 +216,7 @@ function oneTimeSetUp () {
 
 
 	SetupGPG
-	if [ "$SKIP_REMOTE" != "yes" ]; then
+	if [ "$SKIP_REMOTE" != true ]; then
 		SetupSSH
 	fi
 
@@ -233,7 +244,9 @@ function oneTimeSetUp () {
 function oneTimeTearDown () {
 	SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" "$OBACKUP_IS_STABLE"
 
-	RemoveSSH
+	if [ "$SKIP_REMOTE" != true ]; then
+		RemoveSSH
+	fi
 
 	#TODO: uncomment this when dev is done
 	#rm -rf "$SOURCE_DIR"
@@ -398,7 +411,7 @@ function test_LocalRun () {
 }
 
 function test_PullRun () {
-	if [ "$SKIP_REMOTE" == "yes" ]; then
+	if [ "$SKIP_REMOTE" == true ]; then
 		return 0
 	fi
 
@@ -455,7 +468,7 @@ function test_PullRun () {
 }
 
 function test_PushRun () {
-	if [ "$SKIP_REMOTE" == "yes" ]; then
+	if [ "$SKIP_REMOTE" == true ]; then
 		return 0
 	fi
 
@@ -570,7 +583,7 @@ function test_EncryptLocalRun () {
 }
 
 function test_EncryptPullRun () {
-	if [ "$SKIP_REMOTE" == "yes" ]; then
+	if [ "$SKIP_REMOTE" == true ]; then
 		return 0
 	fi
 
@@ -636,7 +649,7 @@ function test_EncryptPullRun () {
 }
 
 function test_EncryptPushRun () {
-	if [ "$SKIP_REMOTE" == "yes" ]; then
+	if [ "$SKIP_REMOTE" == true ]; then
 		return 0
 	fi
 
