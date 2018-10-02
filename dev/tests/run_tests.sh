@@ -13,7 +13,9 @@
 # If gpg key generation hangs, please install and configure rngd service
 #eg yum install rng-tools ; systemctl start rngd
 
-
+if [ "$SKIP_REMOTE" == "" ]; then
+	SKIP_REMOTE=false
+fi
 
 OBACKUP_DIR="$(pwd)"
 OBACKUP_DIR=${OBACKUP_DIR%%/dev*}
