@@ -1,19 +1,12 @@
 #!/usr/bin/env bash
 ## Generic and highly portable bash functions written in 2013-2018 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
-#TODO: ExecTasks postponed arrays / files grow a lot. Consider having them "rolling"
+#TODO: ExecTasks postponed arrays / files grow a lot. Consider having them "rolling" (cleaned at numberOfEvents)
 #TODO: command line arguments don't take -AaqV for example
-#TODO: Vercomp, IsNumeric, IsNumericExpand are not busybux ash compatible
 
-#### OFUNCTIONS FULL SUBSET ####
-#### OFUNCTIONS MINI SUBSET ####
-_OFUNCTIONS_VERSION=2.3.0-RC1
-_OFUNCTIONS_BUILD=2018100105
-#### _OFUNCTIONS_BOOTSTRAP SUBSET ####
-_OFUNCTIONS_BOOTSTRAP=true
-#### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
-
+####################################################################################################################################################################
 ## To use in a program, define the following variables:
+
 ## PROGRAM=program-name
 ## INSTANCE_ID=program-instance-name
 ## _DEBUG=yes/no
@@ -22,8 +15,26 @@ _OFUNCTIONS_BOOTSTRAP=true
 ## _LOGGER_ERR_ONLY=true/false
 ## _LOGGER_PREFIX="date"/"time"/""
 
+## Also, set the following trap in order to clean temporary files
+## trap GenericTrapQuit TERM EXIT HUP QUIT
+
+## Then simply source ofunctions with
+## source "./ofunctions.sh"
+
+## Why use GenericTrapQuit in order to catch exitcode ?
 ## Logger sets {ERROR|WARN}_ALERT variable when called with critical / error / warn loglevel
 ## When called from subprocesses, variable of main process cannot be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID.$TSTAMP
+
+####################################################################################################################################################################
+
+#### OFUNCTIONS FULL SUBSET ####
+#### OFUNCTIONS MINI SUBSET ####
+#### OFUNCTIONS MICRO SUBSET ####
+_OFUNCTIONS_VERSION=2.3.0-RC2
+_OFUNCTIONS_BUILD=2018100205
+#### _OFUNCTIONS_BOOTSTRAP SUBSET ####
+_OFUNCTIONS_BOOTSTRAP=true
+#### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
 
 if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -103,7 +114,31 @@ else
 fi
 
 #### PoorMansRandomGenerator SUBSET ####
-# Get a random number on Windows BusyBox alike, also works on most Unixes
+# Get a random number on Windows BusyBox alike, also works on most Unixes that have dd, if dd is not found, then return $RANDOM
+function PoorMansRandomGenerator {
+	local digits="${1}" # The number of digits to generate
+	local number
+	local isFirst=true
+
+	if type dd >/dev/null 2>&1; then
+
+		# Some read bytes can't be used, se we read twice the number of required bytes
+		dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
+			if [ $isFirst == false ] || [ $(printf "%d" "'$char") != "0" ]; then
+				number=$number$(printf "%d" "'$char")
+				isFirst=false
+			fi
+			if [ ${#number} -ge $digits ]; then
+				echo ${number:0:$digits}
+				break;
+			fi
+		done
+	elif [ "$RANDOM" -ne 0 ]; then
+		 echo $RANDOM
+	else
+		Logger "Cannot generate random number." "ERROR"
+	fi
+}
 function PoorMansRandomGenerator {
         local digits="${1}" # The number of digits to generate
         local number
@@ -128,13 +163,6 @@ ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.$TSTAMP.last.log"
 # Set error exit code if a piped command fails
 set -o pipefail
 set -o errtrace
-
-
-function Dummy {
-	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
-
-	sleep $SLEEP_TIME
-}
 
 #### Logger SUBSET ####
 #### RemoteLogger SUBSET ####
@@ -385,6 +413,38 @@ function KillAllChilds {
 	done
 	return $errorcount
 }
+
+#### CleanUp SUBSET ####
+function CleanUp {
+	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
+
+	if [ "$_DEBUG" != "yes" ]; then
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
+		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
+	fi
+}
+#### CleanUp SUBSET END ####
+
+function GenericTrapQuit {
+	local exitcode=0
+
+	# Get ERROR / WARN alert flags from subprocesses that call Logger
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
+		exitcode=2
+	fi
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
+		exitcode=1
+	fi
+
+	CleanUp
+	exit $exitcode
+}
+
+
+#### OFUNCTIONS MICRO SUBSET END ####
 
 # osync/obackup/pmocr script specific mail alert function, use SendEmail function for generic mail sending
 function SendAlert {
@@ -1193,16 +1253,6 @@ function ExecTasks {
 	fi
 }
 
-function CleanUp {
-	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
-
-	if [ "$_DEBUG" != "yes" ]; then
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
-		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
-	fi
-}
-
 # Usage: var=$(StripSingleQuotes "$var")
 function StripSingleQuotes {
 	local string="${1}"
@@ -1241,25 +1291,30 @@ function EscapeDoubleQuotes {
 	echo "${value//\"/\\\"}"
 }
 
-function IsNumericExpand {
-	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
-
-	if [[ $value =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
-		echo 1
-	else
-		echo 0
-	fi
-}
-
 # Usage [ $(IsNumeric $var) -eq 1 ]
 function IsNumeric {
 	local value="${1}"
 
-	if [[ $value =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-		echo 1
+	if type expr > /dev/null 2>&1; then
+		expr "$value" : "^[-+]\?[0-9]*\.\?[0-9]\+$" > /dev/null 2>&1
+		if [ $? -eq 0 ]; then
+			echo 1
+		else
+			echo 0
+		fi
 	else
-		echo 0
+		if [[ $value =~ ^[-+]?[0-9]+([.][0-9]+)?$ ]]; then
+			echo 1
+		else
+			echo 0
+		fi
 	fi
+}
+
+function IsNumericExpand {
+	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
+
+	echo $(IsNumeric "$value")
 }
 
 #### IsInteger SUBSET ####
