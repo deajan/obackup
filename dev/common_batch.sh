@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 SUBPROGRAM=[prgname]
 PROGRAM="$SUBPROGRAM-batch" # Batch program to run osync / obackup instances sequentially and rerun failed ones
-AUTHOR="(L) 2013-2017 by Orsiris de Jong"
+AUTHOR="(L) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr - ozy@netpower.fr"
-PROGRAM_BUILD=2016120401
+PROGRAM_BUILD=2018100201
 
 ## Runs an osync /obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
@@ -26,36 +26,20 @@ else
 	LOG_FILE=./$SUBPROGRAM-batch.log
 fi
 
+## Default directory where to store temporary run files
+if [ -w /tmp ]; then
+	RUN_DIR=/tmp
+elif [ -w /var/tmp ]; then
+	RUN_DIR=/var/tmp
+else
+	RUN_DIR=.
+fi
+
+trap TrapQuit TERM EXIT HUP QUIT
+
 # No need to edit under this line ##############################################################
 
-function _logger {
-	local value="${1}" # What to log
-	echo -e "$value" >> "$LOG_FILE"
-}
-
-function Logger {
-	local value="${1}" # What to log
-	local level="${2}" # Log level: DEBUG, NOTICE, WARN, ERROR, CRITIAL
-
-	prefix="$(date) - "
-
-	if [ "$level" == "CRITICAL" ]; then
-		_logger "$prefix\e[41m$value\e[0m"
-	elif [ "$level" == "ERROR" ]; then
-		_logger "$prefix\e[91m$value\e[0m"
-	elif [ "$level" == "WARN" ]; then
-		_logger "$prefix\e[93m$value\e[0m"
-	elif [ "$level" == "NOTICE" ]; then
-		_logger "$prefix$value"
-	elif [ "$level" == "DEBUG" ]; then
-		if [ "$DEBUG" == "yes" ]; then
-			_logger "$prefix$value"
-		fi
-	else
-		_logger "\e[41mLogger function called without proper loglevel.\e[0m"
-		_logger "$prefix$value"
-	fi
-}
+include #### Logger SUBSET ####
 
 function CheckEnvironment {
 	## osync / obackup executable full path can be set here if it cannot be found on the system

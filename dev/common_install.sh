@@ -10,14 +10,14 @@ PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
 SSH_FILTER="ssh_filter.sh"
 
-SCRIPT_BUILD=2018090301
+SCRIPT_BUILD=2018100201
 INSTANCE_ID="installer-$SCRIPT_BUILD"
 
 ## osync / obackup / pmocr / zsnap install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8, 10 and 11
 ## Please adapt this to fit your distro needs
 
-include #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
+include #### OFUNCTIONS MICRO SUBSET ####
 
 # Get current install.sh path from http://stackoverflow.com/a/246128/2635443
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -86,7 +86,6 @@ else
 	LOG_FILE="./$PROGRAM-install.log"
 fi
 
-include #### Logger SUBSET ####
 include #### UrlEncode SUBSET ####
 include #### GetLocalOS SUBSET ####
 include #### GetConfFileValue SUBSET ####
@@ -345,19 +344,27 @@ function Usage {
 	exit 127
 }
 
+function TrapQuit {
+	local exitcode=0
+
+	# Get ERROR / WARN alert flags from subprocesses that call Logger
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
+		exitcode=2
+	fi
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
+		exitcode=1
+	fi
+
+	CleanUp
+	exit $exitcode
+}
+
 ############################## Script entry point
 
-if [ "$LOGFILE" == "" ]; then
-        if [ -w /var/log ]; then
-                LOG_FILE="/var/log/$PROGRAM.$INSTANCE_ID.log"
-        elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
-                LOG_FILE="$HOME/$PROGRAM.$INSTANCE_ID.log"
-        else
-                LOG_FILE="./$PROGRAM.$INSTANCE_ID.log"
-        fi
-else
-        LOG_FILE="$LOGFILE"
-fi
+trap TrapQuit TERM EXIT HUP QUIT
+
 if [ ! -w "$(dirname $LOG_FILE)" ]; then
         echo "Cannot write to log [$(dirname $LOG_FILE)]."
 else
@@ -382,7 +389,7 @@ else
 	if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "pmocr" ]; then
 		CopyServiceFiles
 	fi
-	Logger "$PROGRAM installed. Use with $BIN_DIR/$PROGRAM" "SIMPLE"
+	Logger "$PROGRAM installed. Use with $BIN_DIR/$PROGRAM_BINARY" "SIMPLE"
 	if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "obackup" ]; then
 		echo ""
 		Logger "If connecting remotely, consider setup ssh filter to enhance security." "SIMPLE"
