@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018093008
+PROGRAM_BUILD=2018101001
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1776,9 +1776,6 @@ function Init {
 	local hosturiandpath
 	local hosturi
 
-	trap TrapStop INT QUIT TERM HUP
-	trap TrapQuit EXIT
-
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
         if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
                 REMOTE_OPERATION="yes"
@@ -1911,6 +1908,9 @@ function Usage {
 	echo "$0 --encrypt=/path/to/files --destination=/path/to/encrypted/files --recipient=\"Your Name\""
 	exit 128
 }
+
+#### SCRIPT ENTRY POINT ####
+trap TrapQuit EXIT
 
 # Command line argument flags
 _DRYRUN=false
