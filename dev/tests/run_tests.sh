@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2018100201
+## obackup basic tests suite 2018110501
 
 # Supported environment variables
 
@@ -394,7 +394,7 @@ function test_LocalRun () {
 	done
 
 	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-local/$SOURCE_DIR" | grep -i Exclu
-	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-local/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-local/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 3 ]
 	assertEquals "Diff should only output excluded files" "0" $?
 
 	# Tests presence of rotated files
@@ -450,7 +450,7 @@ function test_PullRun () {
 	done
 
 	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu
-	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 3 ]
 	assertEquals "Diff should only output excluded files" "0" $?
 
 	# Tests presence of rotated files
@@ -507,7 +507,7 @@ function test_PushRun () {
 	done
 
 	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-push/$SOURCE_DIR" | grep -i Exclu
-	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-push/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-push/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 3 ]
 	assertEquals "Diff should only output excluded files" "0" $?
 
 	# Tests presence of rotated files
@@ -624,7 +624,7 @@ function test_EncryptPullRun () {
 
 	# Only excluded files should be listed here
 	diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu
-	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 2 ]
+	[ $(diff -qr "$SOURCE_DIR" "$TARGET_DIR/files-pull/$SOURCE_DIR" | grep -i Exclu | wc -l) -eq 3 ]
 	assertEquals "Diff should only output excluded files" "0" $?
 
 	# Tests presence of rotated files
