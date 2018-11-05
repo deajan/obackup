@@ -1452,7 +1452,8 @@ function FilesBackup {
 	local backupTask
 	local backupTasks
 	local destinationDir
-	local withoutCryptPath
+	local encryptDir
+	
 
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
@@ -1466,6 +1467,7 @@ function FilesBackup {
 			else
 				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
 		else
 			destinationDir="$FILE_STORAGE"
 			encryptDir="$FILE_STORAGE"
@@ -1537,6 +1539,7 @@ function FilesBackup {
 			else
 				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
 		else
 			destinationDir="$FILE_STORAGE"
 			encryptDir="$FILE_STORAGE"
