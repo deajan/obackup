@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018101001
+PROGRAM_BUILD=2018110501
 IS_STABLE=no
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1408,7 +1408,7 @@ function Rsync {
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
 	if [ $recursive == false ]; then
 		# Fixes symlinks to directories in target cannot be deleted when backing up root directory without recursion
-		rsyncArgs="$RSYNC_DEFAULT_NONRECURSIVE_ARGS -k"
+		rsyncArgs="$RSYNC_DEFAULT_ARGS -f '- /*/*/'"
 	else
 		rsyncArgs="$RSYNC_DEFAULT_ARGS"
 	fi
@@ -1492,7 +1492,7 @@ function FilesBackup {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
-	# Backup recursive directories withouht recursion
+	# Backup recursive directories without recursion
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
