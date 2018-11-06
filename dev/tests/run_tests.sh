@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2018110601
+## obackup basic tests suite 2018110602
 
 # Supported environment variables
 
@@ -546,16 +546,16 @@ function test_PushRun () {
 
 	# Tests presence of rotated files
 
-	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PULL_CONF"
+	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$PUSH_CONF"
 	assertEquals "Return code" "0" $?
 
 	for file in "${DatabasePresence[@]}"; do
-		[ -f "$TARGET_DIR_SQL_PULL/$file$ROTATE_1_EXTENSION" ]
-		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PULL/$file$ROTATE_1_EXTENSION]" "0" $?
+		[ -f "$TARGET_DIR_SQL_PUSH/$file$ROTATE_1_EXTENSION" ]
+		assertEquals "Database rotated Presence [$TARGET_DIR_SQL_PUSH/$file$ROTATE_1_EXTENSION]" "0" $?
 	done
 
-	[ -d "$TARGET_DIR_FILE_PULL/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION" ]
-	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PULL/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION]" "0" $?
+	[ -d "$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION" ]
+	assertEquals "File rotated Presence [$TARGET_DIR_FILE_PUSH/$(dirname $SOURCE_DIR)$ROTATE_1_EXTENSION]" "0" $?
 
 	# Second test of presence of rotated files
 
