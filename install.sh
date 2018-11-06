@@ -10,14 +10,430 @@ PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
 SSH_FILTER="ssh_filter.sh"
 
-SCRIPT_BUILD=2018090301
+SCRIPT_BUILD=2018100201
 INSTANCE_ID="installer-$SCRIPT_BUILD"
 
 ## osync / obackup / pmocr / zsnap install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8, 10 and 11
 ## Please adapt this to fit your distro needs
 
+_OFUNCTIONS_VERSION=2.3.0-RC2
+_OFUNCTIONS_BUILD=2018110502
 _OFUNCTIONS_BOOTSTRAP=true
+
+if ! type "$BASH" > /dev/null; then
+	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
+	exit 127
+fi
+
+## Correct output of sort command (language agnostic sorting)
+export LC_ALL=C
+
+## Default umask for file creation
+umask 0077
+
+# Standard alert mail body
+MAIL_ALERT_MSG="Execution of $PROGRAM instance $INSTANCE_ID on $(date) has warnings/errors."
+
+# Environment variables that can be overriden by programs
+_DRYRUN=false
+_LOGGER_SILENT=false
+_LOGGER_VERBOSE=false
+_LOGGER_ERR_ONLY=false
+_LOGGER_PREFIX="date"
+if [ "$KEEP_LOGGING" == "" ]; then
+	KEEP_LOGGING=1801
+fi
+
+# Initial error status, logging 'WARN', 'ERROR' or 'CRITICAL' will enable alerts flags
+ERROR_ALERT=false
+WARN_ALERT=false
+
+
+## allow debugging from command line with _DEBUG=yes
+if [ ! "$_DEBUG" == "yes" ]; then
+	_DEBUG=no
+	_LOGGER_VERBOSE=false
+else
+	trap 'TrapError ${LINENO} $?' ERR
+	_LOGGER_VERBOSE=true
+fi
+
+if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as environment variable when runinng with bash -x in order to avoid spamming console
+	SLEEP_TIME=.05
+fi
+
+SCRIPT_PID=$$
+
+LOCAL_USER=$(whoami)
+LOCAL_HOST=$(hostname)
+
+if [ "$PROGRAM" == "" ]; then
+	PROGRAM="ofunctions"
+fi
+
+## Default log file until config file is loaded
+if [ -w /var/log ]; then
+	LOG_FILE="/var/log/$PROGRAM.log"
+elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
+	LOG_FILE="$HOME/$PROGRAM.log"
+elif [ -w . ]; then
+	LOG_FILE="./$PROGRAM.log"
+else
+	LOG_FILE="/tmp/$PROGRAM.log"
+fi
+
+#### RUN_DIR SUBSET ####
+## Default directory where to store temporary run files
+
+if [ -w /tmp ]; then
+	RUN_DIR=/tmp
+elif [ -w /var/tmp ]; then
+	RUN_DIR=/var/tmp
+else
+	RUN_DIR=.
+fi
+
+## Special note when remote target is on the same host as initiator (happens for unit tests): we'll have to differentiate RUN_DIR so remote CleanUp won't affect initiator.
+if [ "$_REMOTE_EXECUTION" == true ]; then
+	mkdir -p "$RUN_DIR/$PROGRAM.remote"
+	RUN_DIR="$RUN_DIR/$PROGRAM.remote"
+fi
+#### RUN_DIR SUBSET END ####
+
+# Get a random number on Windows BusyBox alike, also works on most Unixes that have dd, if dd is not found, then return $RANDOM
+function PoorMansRandomGenerator {
+	local digits="${1}" # The number of digits to generate
+	local number
+	local isFirst=true
+
+	if type dd >/dev/null 2>&1; then
+
+		# Some read bytes can't be used, se we read twice the number of required bytes
+		dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
+			if [ $isFirst == false ] || [ $(printf "%d" "'$char") != "0" ]; then
+				number=$number$(printf "%d" "'$char")
+				isFirst=false
+			fi
+			if [ ${#number} -ge $digits ]; then
+				echo ${number:0:$digits}
+				break;
+			fi
+		done
+	elif [ "$RANDOM" -ne 0 ]; then
+		 echo $RANDOM
+	else
+		Logger "Cannot generate random number." "ERROR"
+	fi
+}
+function PoorMansRandomGenerator {
+        local digits="${1}" # The number of digits to generate
+        local number
+
+        # Some read bytes can't be used, se we read twice the number of required bytes
+        dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
+                number=$number$(printf "%d" "'$char")
+                if [ ${#number} -ge $digits ]; then
+                        echo ${number:0:$digits}
+                        break;
+                fi
+        done
+}
+
+# Initial TSTMAP value before function declaration
+TSTAMP=$(date '+%Y%m%dT%H%M%S').$(PoorMansRandomGenerator 5)
+
+# Default alert attachment filename
+ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.$TSTAMP.last.log"
+
+# Set error exit code if a piped command fails
+set -o pipefail
+set -o errtrace
+
+
+# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
+# usage: joinString separaratorChar Array
+function joinString {
+	local IFS="$1"; shift; echo "$*";
+}
+
+# Sub function of Logger
+function _Logger {
+	local logValue="${1}"		# Log to file
+	local stdValue="${2}"		# Log to screeen
+	local toStdErr="${3:-false}"	# Log to stderr instead of stdout
+
+	if [ "$logValue" != "" ]; then
+		echo -e "$logValue" >> "$LOG_FILE"
+
+		# Build current log file for alerts if we have a sufficient environment
+		if [ "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" != "" ]; then
+			echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+		fi
+	fi
+
+	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
+		if [ $toStdErr == true ]; then
+			# Force stderr color in subshell
+			(>&2 echo -e "$stdValue")
+
+		else
+			echo -e "$stdValue"
+		fi
+	fi
+}
+
+# Remote logger similar to below Logger, without log to file and alert flags
+function RemoteLogger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="R $(date) - "
+	else
+		prefix=""
+	fi
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "" "$prefix\e[31m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "" "$prefix\e[33m$value\e[0m" true
+		if [ $_DEBUG == "yes" ]; then
+			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
+		fi
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ $_LOGGER_ERR_ONLY != true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger	 "" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "" "$prefix$value"
+			return
+		fi
+	else
+		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "" "Value was: $prefix$value" true
+	fi
+}
+
+# General log function with log levels:
+
+# Environment variables
+# _LOGGER_SILENT: Disables any output to stdout & stderr
+# _LOGGER_ERR_ONLY: Disables any output to stdout except for ALWAYS loglevel
+# _LOGGER_VERBOSE: Allows VERBOSE loglevel messages to be sent to stdout
+
+# Loglevels
+# Except for VERBOSE, all loglevels are ALWAYS sent to log file
+
+# CRITICAL, ERROR, WARN sent to stderr, color depending on level, level also logged
+# NOTICE sent to stdout
+# VERBOSE sent to stdout if _LOGGER_VERBOSE = true
+# ALWAYS is sent to stdout unless _LOGGER_SILENT = true
+# DEBUG & PARANOIA_DEBUG are only sent to stdout if _DEBUG=yes
+# SIMPLE is a wrapper for QuickLogger that does not use advanced functionality
+function Logger {
+	local value="${1}"		# Sentence to log (in double quotes)
+	local level="${2}"		# Log level
+	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
+
+	if [ "$_LOGGER_PREFIX" == "time" ]; then
+		prefix="TIME: $SECONDS - "
+	elif [ "$_LOGGER_PREFIX" == "date" ]; then
+		prefix="$(date '+%Y-%m-%d %H:%M:%S') - "
+	else
+		prefix=""
+	fi
+
+	## Obfuscate _REMOTE_TOKEN in logs (for ssh_filter usage only in osync and obackup)
+	value="${value/env _REMOTE_TOKEN=$_REMOTE_TOKEN/__(o_O)__}"
+	value="${value/env _REMOTE_TOKEN=\$_REMOTE_TOKEN/__(o_O)__}"
+
+	if [ "$level" == "CRITICAL" ]; then
+		_Logger "$prefix($level):$value" "$prefix\e[1;33;41m$value\e[0m" true
+		ERROR_ALERT=true
+		# ERROR_ALERT / WARN_ALERT is not set in main when Logger is called from a subprocess. Need to keep this flag.
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+		return
+	elif [ "$level" == "ERROR" ]; then
+		_Logger "$prefix($level):$value" "$prefix\e[91m$value\e[0m" true
+		ERROR_ALERT=true
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+		return
+	elif [ "$level" == "WARN" ]; then
+		_Logger "$prefix($level):$value" "$prefix\e[33m$value\e[0m" true
+		WARN_ALERT=true
+		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.warn.$SCRIPT_PID.$TSTAMP"
+		return
+	elif [ "$level" == "NOTICE" ]; then
+		if [ "$_LOGGER_ERR_ONLY" != true ]; then
+			_Logger "$prefix$value" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "VERBOSE" ]; then
+		if [ $_LOGGER_VERBOSE == true ]; then
+			_Logger "$prefix($level):$value" "$prefix$value"
+		fi
+		return
+	elif [ "$level" == "ALWAYS" ]; then
+		_Logger "$prefix$value" "$prefix$value"
+		return
+	elif [ "$level" == "DEBUG" ]; then
+		if [ "$_DEBUG" == "yes" ]; then
+			_Logger "$prefix$value" "$prefix$value"
+			return
+		fi
+	elif [ "$level" == "SIMPLE" ]; then
+		if [ "$_LOGGER_SILENT" == true ]; then
+			_Logger "$preix$value"
+		else
+			_Logger "$preix$value" "$prefix$value"
+		fi
+		return
+	else
+		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
+		_Logger "Value was: $prefix$value" "Value was: $prefix$value" true
+	fi
+}
+
+# Function is busybox compatible since busybox ash does not understand direct regex, we use expr
+function IsInteger {
+	local value="${1}"
+
+	if type expr > /dev/null 2>&1; then
+		expr "$value" : '^[0-9]\{1,\}$' > /dev/null 2>&1
+		if [ $? -eq 0 ]; then
+			echo 1
+		else
+			echo 0
+		fi
+	else
+		if [[ $value =~ ^[0-9]+$ ]]; then
+			echo 1
+		else
+			echo 0
+		fi
+	fi
+}
+
+# Portable child (and grandchild) kill function tester under Linux, BSD and MacOS X
+function KillChilds {
+	local pid="${1}" # Parent pid to kill childs
+	local self="${2:-false}" # Should parent be killed too ?
+
+	# Paranoid checks, we can safely assume that $pid should not be 0 nor 1
+	if [ $(IsInteger "$pid") -eq 0 ] || [ "$pid" == "" ] || [ "$pid" == "0" ] || [ "$pid" == "1" ]; then
+		Logger "Bogus pid given [$pid]." "CRITICAL"
+		return 1
+	fi
+
+	if kill -0 "$pid" > /dev/null 2>&1; then
+		if children="$(pgrep -P "$pid")"; then
+			if [[ "$pid" == *"$children"* ]]; then
+				Logger "Bogus pgrep implementation." "CRITICAL"
+				children="${children/$pid/}"
+			fi
+			for child in $children; do
+				KillChilds "$child" true
+			done
+		fi
+	fi
+
+	# Try to kill nicely, if not, wait 15 seconds to let Trap actions happen before killing
+	if [ "$self" == true ]; then
+		# We need to check for pid again because it may have disappeared after recursive function call
+		if kill -0 "$pid" > /dev/null 2>&1; then
+			kill -s TERM "$pid"
+			Logger "Sent SIGTERM to process [$pid]." "DEBUG"
+			if [ $? != 0 ]; then
+				sleep 15
+				Logger "Sending SIGTERM to process [$pid] failed." "DEBUG"
+				kill -9 "$pid"
+				if [ $? != 0 ]; then
+					Logger "Sending SIGKILL to process [$pid] failed." "DEBUG"
+					return 1
+				fi	# Simplify the return 0 logic here
+			else
+				return 0
+			fi
+		else
+			return 0
+		fi
+	else
+		return 0
+	fi
+}
+
+function KillAllChilds {
+	local pids="${1}" # List of parent pids to kill separated by semi-colon
+	local self="${2:-false}" # Should parent be killed too ?
+
+
+	local errorcount=0
+
+	IFS=';' read -a pidsArray <<< "$pids"
+	for pid in "${pidsArray[@]}"; do
+		KillChilds $pid $self
+		if [ $? != 0 ]; then
+			errorcount=$((errorcount+1))
+			fi
+	done
+	return $errorcount
+}
+
+function CleanUp {
+	if [ "$_DEBUG" != "yes" ]; then
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
+		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
+	fi
+}
+
+function GenericTrapQuit {
+	local exitcode=0
+
+	# Get ERROR / WARN alert flags from subprocesses that call Logger
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
+		exitcode=2
+	fi
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
+		exitcode=1
+	fi
+
+	CleanUp
+	exit $exitcode
+}
+
+
 
 # Get current install.sh path from http://stackoverflow.com/a/246128/2635443
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -86,186 +502,6 @@ else
 	LOG_FILE="./$PROGRAM-install.log"
 fi
 
-#### RemoteLogger SUBSET ####
-
-# Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
-# usage: joinString separaratorChar Array
-function joinString {
-	local IFS="$1"; shift; echo "$*";
-}
-
-# Sub function of Logger
-function _Logger {
-	local logValue="${1}"		# Log to file
-	local stdValue="${2}"		# Log to screeen
-	local toStdErr="${3:-false}"	# Log to stderr instead of stdout
-
-	if [ "$logValue" != "" ]; then
-		echo -e "$logValue" >> "$LOG_FILE"
-
-		# Build current log file for alerts if we have a sufficient environment
-		if [ "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" != "" ]; then
-			echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
-		fi
-	fi
-
-	if [ "$stdValue" != "" ] && [ "$_LOGGER_SILENT" != true ]; then
-		if [ $toStdErr == true ]; then
-			# Force stderr color in subshell
-			(>&2 echo -e "$stdValue")
-
-		else
-			echo -e "$stdValue"
-		fi
-	fi
-}
-
-# Remote logger similar to below Logger, without log to file and alert flags
-function RemoteLogger {
-	local value="${1}"		# Sentence to log (in double quotes)
-	local level="${2}"		# Log level
-	local retval="${3:-undef}"	# optional return value of command
-
-	if [ "$_LOGGER_PREFIX" == "time" ]; then
-		prefix="TIME: $SECONDS - "
-	elif [ "$_LOGGER_PREFIX" == "date" ]; then
-		prefix="R $(date) - "
-	else
-		prefix=""
-	fi
-
-	if [ "$level" == "CRITICAL" ]; then
-		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
-			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
-		fi
-		return
-	elif [ "$level" == "ERROR" ]; then
-		_Logger "" "$prefix\e[31m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
-			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
-		fi
-		return
-	elif [ "$level" == "WARN" ]; then
-		_Logger "" "$prefix\e[33m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
-			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
-		fi
-		return
-	elif [ "$level" == "NOTICE" ]; then
-		if [ $_LOGGER_ERR_ONLY != true ]; then
-			_Logger "" "$prefix$value"
-		fi
-		return
-	elif [ "$level" == "VERBOSE" ]; then
-		if [ $_LOGGER_VERBOSE == true ]; then
-			_Logger "" "$prefix$value"
-		fi
-		return
-	elif [ "$level" == "ALWAYS" ]; then
-		_Logger	 "" "$prefix$value"
-		return
-	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
-			_Logger "" "$prefix$value"
-			return
-		fi
-	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
-			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
-			return							#__WITH_PARANOIA_DEBUG
-		fi								#__WITH_PARANOIA_DEBUG
-	else
-		_Logger "" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
-		_Logger "" "Value was: $prefix$value" true
-	fi
-}
-#### RemoteLogger SUBSET END ####
-
-# General log function with log levels:
-
-# Environment variables
-# _LOGGER_SILENT: Disables any output to stdout & stderr
-# _LOGGER_ERR_ONLY: Disables any output to stdout except for ALWAYS loglevel
-# _LOGGER_VERBOSE: Allows VERBOSE loglevel messages to be sent to stdout
-
-# Loglevels
-# Except for VERBOSE, all loglevels are ALWAYS sent to log file
-
-# CRITICAL, ERROR, WARN sent to stderr, color depending on level, level also logged
-# NOTICE sent to stdout
-# VERBOSE sent to stdout if _LOGGER_VERBOSE = true
-# ALWAYS is sent to stdout unless _LOGGER_SILENT = true
-# DEBUG & PARANOIA_DEBUG are only sent to stdout if _DEBUG=yes
-# SIMPLE is a wrapper for QuickLogger that does not use advanced functionality
-function Logger {
-	local value="${1}"		# Sentence to log (in double quotes)
-	local level="${2}"		# Log level
-	local retval="${3:-undef}"	# optional return value of command
-
-	if [ "$_LOGGER_PREFIX" == "time" ]; then
-		prefix="TIME: $SECONDS - "
-	elif [ "$_LOGGER_PREFIX" == "date" ]; then
-		prefix="$(date '+%Y-%m-%d %H:%M:%S') - "
-	else
-		prefix=""
-	fi
-
-	## Obfuscate _REMOTE_TOKEN in logs (for ssh_filter usage only in osync and obackup)
-	value="${value/env _REMOTE_TOKEN=$_REMOTE_TOKEN/__(o_O)__}"
-	value="${value/env _REMOTE_TOKEN=\$_REMOTE_TOKEN/__(o_O)__}"
-
-	if [ "$level" == "CRITICAL" ]; then
-		_Logger "$prefix($level):$value" "$prefix\e[1;33;41m$value\e[0m" true
-		ERROR_ALERT=true
-		# ERROR_ALERT / WARN_ALERT is not set in main when Logger is called from a subprocess. Need to keep this flag.
-		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
-		return
-	elif [ "$level" == "ERROR" ]; then
-		_Logger "$prefix($level):$value" "$prefix\e[91m$value\e[0m" true
-		ERROR_ALERT=true
-		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
-		return
-	elif [ "$level" == "WARN" ]; then
-		_Logger "$prefix($level):$value" "$prefix\e[33m$value\e[0m" true
-		WARN_ALERT=true
-		echo -e "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$\n$prefix($level):$value" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.warn.$SCRIPT_PID.$TSTAMP"
-		return
-	elif [ "$level" == "NOTICE" ]; then
-		if [ "$_LOGGER_ERR_ONLY" != true ]; then
-			_Logger "$prefix$value" "$prefix$value"
-		fi
-		return
-	elif [ "$level" == "VERBOSE" ]; then
-		if [ $_LOGGER_VERBOSE == true ]; then
-			_Logger "$prefix($level):$value" "$prefix$value"
-		fi
-		return
-	elif [ "$level" == "ALWAYS" ]; then
-		_Logger "$prefix$value" "$prefix$value"
-		return
-	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
-			_Logger "$prefix$value" "$prefix$value"
-			return
-		fi
-	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
-			_Logger "$prefix$value" "$prefix\e[35m$value\e[0m"	#__WITH_PARANOIA_DEBUG
-			return							#__WITH_PARANOIA_DEBUG
-		fi								#__WITH_PARANOIA_DEBUG
-	elif [ "$level" == "SIMPLE" ]; then
-		if [ "$_LOGGER_SILENT" == true ]; then
-			_Logger "$preix$value"
-		else
-			_Logger "$preix$value" "$prefix$value"
-		fi
-		return
-	else
-		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
-		_Logger "Value was: $prefix$value" "Value was: $prefix$value" true
-	fi
-}
 ## Modified version of https://gist.github.com/cdown/1163649
 function UrlEncode {
 	local length="${#1}"
@@ -293,6 +529,8 @@ function GetLocalOS {
 	# There is no good way to tell if currently running in BusyBox shell. Using sluggish way.
 	if ls --help 2>&1 | grep -i "BusyBox" > /dev/null; then
 		localOsVar="BusyBox"
+	elif set -o | grep "winxp" > /dev/null; then
+		localOsVar="BusyBox-w32"
 	else
 		# Detecting the special ubuntu userland in Windows 10 bash
 		if grep -i Microsoft /proc/sys/kernel/osrelease > /dev/null 2>&1; then
@@ -325,7 +563,7 @@ function GetLocalOS {
 		*"CYGWIN"*)
 		LOCAL_OS="Cygwin"
 		;;
-		*"Microsoft"*)
+		*"Microsoft"*|*"MS/Windows"*)
 		LOCAL_OS="WinNT10"
 		;;
 		*"Darwin"*)
@@ -356,7 +594,8 @@ function GetLocalOS {
 	fi
 
 	# Get Host info for Windows
-	if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Cygwin" ] || [ "$LOCAL_OS" == "WinNT10" ]; then localOsVar="$(uname -a)"
+	if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Cygwin" ] || [ "$LOCAL_OS" == "WinNT10" ]; then
+		localOsVar="$localOsVar $(uname -a)"
 		if [ "$PROGRAMW6432" != "" ]; then
 			LOCAL_OS_BITNESS=64
 			LOCAL_OS_FAMILY="Windows"
@@ -370,6 +609,9 @@ function GetLocalOS {
 	# Get Host info for Unix
 	else
 		LOCAL_OS_FAMILY="Unix"
+	fi
+
+	if [ "$LOCAL_OS_FAMILY" == "Unix" ]; then
 		if uname -m | grep '64' > /dev/null 2>&1; then
 			LOCAL_OS_BITNESS=64
 		else
@@ -658,19 +900,27 @@ function Usage {
 	exit 127
 }
 
+function TrapQuit {
+	local exitcode=0
+
+	# Get ERROR / WARN alert flags from subprocesses that call Logger
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
+		exitcode=2
+	fi
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
+		exitcode=1
+	fi
+
+	CleanUp
+	exit $exitcode
+}
+
 ############################## Script entry point
 
-if [ "$LOGFILE" == "" ]; then
-        if [ -w /var/log ]; then
-                LOG_FILE="/var/log/$PROGRAM.$INSTANCE_ID.log"
-        elif ([ "$HOME" != "" ] && [ -w "$HOME" ]); then
-                LOG_FILE="$HOME/$PROGRAM.$INSTANCE_ID.log"
-        else
-                LOG_FILE="./$PROGRAM.$INSTANCE_ID.log"
-        fi
-else
-        LOG_FILE="$LOGFILE"
-fi
+trap TrapQuit TERM EXIT HUP QUIT
+
 if [ ! -w "$(dirname $LOG_FILE)" ]; then
         echo "Cannot write to log [$(dirname $LOG_FILE)]."
 else
@@ -695,7 +945,7 @@ else
 	if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "pmocr" ]; then
 		CopyServiceFiles
 	fi
-	Logger "$PROGRAM installed. Use with $BIN_DIR/$PROGRAM" "SIMPLE"
+	Logger "$PROGRAM installed. Use with $BIN_DIR/$PROGRAM_BINARY" "SIMPLE"
 	if [ "$PROGRAM" == "osync" ] || [ "$PROGRAM" == "obackup" ]; then
 		echo ""
 		Logger "If connecting remotely, consider setup ssh filter to enhance security." "SIMPLE"

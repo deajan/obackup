@@ -7,25 +7,13 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2018 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018093008
+PROGRAM_BUILD=2018110601
 IS_STABLE=no
 
 
-_OFUNCTIONS_VERSION=2.3.0-RC1
-_OFUNCTIONS_BUILD=2018100105
+_OFUNCTIONS_VERSION=2.3.0-RC2
+_OFUNCTIONS_BUILD=2018110502
 _OFUNCTIONS_BOOTSTRAP=true
-
-## To use in a program, define the following variables:
-## PROGRAM=program-name
-## INSTANCE_ID=program-instance-name
-## _DEBUG=yes/no
-## _LOGGER_SILENT=true/false
-## _LOGGER_VERBOSE=true/false
-## _LOGGER_ERR_ONLY=true/false
-## _LOGGER_PREFIX="date"/"time"/""
-
-## Logger sets {ERROR|WARN}_ALERT variable when called with critical / error / warn loglevel
-## When called from subprocesses, variable of main process cannot be set. Status needs to be get via $RUN_DIR/$PROGRAM.Logger.{error|warn}.$SCRIPT_PID.$TSTAMP
 
 if ! type "$BASH" > /dev/null; then
 	echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -89,7 +77,9 @@ else
 	LOG_FILE="/tmp/$PROGRAM.log"
 fi
 
+#### RUN_DIR SUBSET ####
 ## Default directory where to store temporary run files
+
 if [ -w /tmp ]; then
 	RUN_DIR=/tmp
 elif [ -w /var/tmp ]; then
@@ -98,8 +88,38 @@ else
 	RUN_DIR=.
 fi
 
-#### PoorMansRandomGenerator SUBSET ####
-# Get a random number on Windows BusyBox alike, also works on most Unixes
+## Special note when remote target is on the same host as initiator (happens for unit tests): we'll have to differentiate RUN_DIR so remote CleanUp won't affect initiator.
+if [ "$_REMOTE_EXECUTION" == true ]; then
+	mkdir -p "$RUN_DIR/$PROGRAM.remote"
+	RUN_DIR="$RUN_DIR/$PROGRAM.remote"
+fi
+#### RUN_DIR SUBSET END ####
+
+# Get a random number on Windows BusyBox alike, also works on most Unixes that have dd, if dd is not found, then return $RANDOM
+function PoorMansRandomGenerator {
+	local digits="${1}" # The number of digits to generate
+	local number
+	local isFirst=true
+
+	if type dd >/dev/null 2>&1; then
+
+		# Some read bytes can't be used, se we read twice the number of required bytes
+		dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
+			if [ $isFirst == false ] || [ $(printf "%d" "'$char") != "0" ]; then
+				number=$number$(printf "%d" "'$char")
+				isFirst=false
+			fi
+			if [ ${#number} -ge $digits ]; then
+				echo ${number:0:$digits}
+				break;
+			fi
+		done
+	elif [ "$RANDOM" -ne 0 ]; then
+		 echo $RANDOM
+	else
+		Logger "Cannot generate random number." "ERROR"
+	fi
+}
 function PoorMansRandomGenerator {
         local digits="${1}" # The number of digits to generate
         local number
@@ -113,10 +133,9 @@ function PoorMansRandomGenerator {
                 fi
         done
 }
-#### PoorMansRandomGenerator SUBSET END ####
 
 # Initial TSTMAP value before function declaration
-TSTAMP=$(date '+%Y%m%dT%H%M%S').$(PoorMansRandomGenerator 4)
+TSTAMP=$(date '+%Y%m%dT%H%M%S').$(PoorMansRandomGenerator 5)
 
 # Default alert attachment filename
 ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.$TSTAMP.last.log"
@@ -124,12 +143,6 @@ ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.$TSTAMP.last.log"
 # Set error exit code if a piped command fails
 set -o pipefail
 set -o errtrace
-
-
-function Dummy {
-
-	sleep $SLEEP_TIME
-}
 
 
 # Array to string converter, see http://stackoverflow.com/questions/1527049/bash-join-elements-of-an-array
@@ -169,6 +182,8 @@ function RemoteLogger {
 	local value="${1}"		# Sentence to log (in double quotes)
 	local level="${2}"		# Log level
 	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -241,6 +256,8 @@ function Logger {
 	local level="${2}"		# Log level
 	local retval="${3:-undef}"	# optional return value of command
 
+	local prefix
+
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
 	elif [ "$_LOGGER_PREFIX" == "date" ]; then
@@ -297,6 +314,26 @@ function Logger {
 	else
 		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
 		_Logger "Value was: $prefix$value" "Value was: $prefix$value" true
+	fi
+}
+
+# Function is busybox compatible since busybox ash does not understand direct regex, we use expr
+function IsInteger {
+	local value="${1}"
+
+	if type expr > /dev/null 2>&1; then
+		expr "$value" : '^[0-9]\{1,\}$' > /dev/null 2>&1
+		if [ $? -eq 0 ]; then
+			echo 1
+		else
+			echo 0
+		fi
+	else
+		if [[ $value =~ ^[0-9]+$ ]]; then
+			echo 1
+		else
+			echo 0
+		fi
 	fi
 }
 
@@ -364,6 +401,33 @@ function KillAllChilds {
 	done
 	return $errorcount
 }
+
+function CleanUp {
+	if [ "$_DEBUG" != "yes" ]; then
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
+		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
+	fi
+}
+
+function GenericTrapQuit {
+	local exitcode=0
+
+	# Get ERROR / WARN alert flags from subprocesses that call Logger
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
+		exitcode=2
+	fi
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
+		exitcode=1
+	fi
+
+	CleanUp
+	exit $exitcode
+}
+
+
 
 # osync/obackup/pmocr script specific mail alert function, use SendEmail function for generic mail sending
 function SendAlert {
@@ -744,6 +808,7 @@ function ExecTasks {
 	local minTimeBetweenRetries="${17:-300}"	# Time (in seconds) between postponed command retries
 	local validExitCodes="${18:-0}"			# Semi colon separated list of valid main command exit codes which will not trigger errors
 
+
 	local i
 
 
@@ -760,9 +825,6 @@ function ExecTasks {
 			eval "$test"
 		done
 	fi
-
-	# Change '-' to '_' in task id
-	id="${id/-/_}"
 
 	# Expand validExitCodes into array
 	IFS=';' read -r -a validExitCodes <<< "$validExitCodes"
@@ -800,15 +862,9 @@ function ExecTasks {
 	local newPidsArray		# New array of currently running pids for next iteration
 	local pidsTimeArray		# Array containing execution begin time of pids
 	local executeCommand		# Boolean to check if currentCommand can be executed given a condition
-
-
 	local functionMode
-
-	if [ $counting == true ]; then
-		local softAlert=false # Does a soft alert need to be triggered, if yes, send an alert once
-	else
-		local softAlert=false
-	fi
+	local softAlert=false
+	local failedPidsList		# List containing failed pids with exit code separated by semicolons (eg : 2355:1;4534:2;2354:3)
 
 	# Initialise global variable
 	eval "WAIT_FOR_TASK_COMPLETION_$id=\"\""
@@ -968,17 +1024,17 @@ function ExecTasks {
 					# Check for valid exit codes
 					if [ $(ArrayContains $retval "${validExitCodes[@]}") -eq 0 ]; then
 						if [ $noErrorLogsAtAll != true ]; then
-							Logger "${FUNCNAME[0]} called by [$id] finished monitoring pid [$pid] with exitcode [$retval]." "DEBUG"
+							Logger "${FUNCNAME[0]} called by [$id] finished monitoring pid [$pid] with exitcode [$retval]." "ERROR"
 							if [ "$functionMode" == "ParallelExec" ]; then
 								Logger "Command was [${commandsArrayPid[$pid]}]." "ERROR"
 							fi
 						fi
 						errorcount=$((errorcount+1))
 						# Welcome to variable variable bash hell
-						if [ "$(eval echo \"\$WAIT_FOR_TASK_COMPLETION_$id\")" == "" ]; then
-							eval "WAIT_FOR_TASK_COMPLETION_$id=\"$pid:$retval\""
+						if [ "$failedPidsList" == "" ]; then
+							failedPidsList="$pid:$retval"
 						else
-							eval "WAIT_FOR_TASK_COMPLETION_$id=\";$pid:$retval\""
+							failedPidsList="$failedPidsList;$pid:$retval"
 						fi
 					else
 						Logger "${FUNCNAME[0]} called by [$id] finished monitoring pid [$pid] with exitcode [$retval]." "DEBUG"
@@ -1132,19 +1188,12 @@ function ExecTasks {
 	# Return exit code if only one process was monitored, else return number of errors
 	# As we cannot return multiple values, a global variable WAIT_FOR_TASK_COMPLETION contains all pids with their return value
 
+	eval "WAIT_FOR_TASK_COMPLETION_$id=\"$failedPidsList\""
+
 	if [ $mainItemCount -eq 1 ]; then
 		return $retval
 	else
 		return $errorcount
-	fi
-}
-
-function CleanUp {
-
-	if [ "$_DEBUG" != "yes" ]; then
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
-		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
 	fi
 }
 
@@ -1186,45 +1235,30 @@ function EscapeDoubleQuotes {
 	echo "${value//\"/\\\"}"
 }
 
-function IsNumericExpand {
-	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
-
-	if [[ $value =~ ^-?[0-9]+([.][0-9]+)?$ ]]; then
-		echo 1
-	else
-		echo 0
-	fi
-}
-
 # Usage [ $(IsNumeric $var) -eq 1 ]
 function IsNumeric {
 	local value="${1}"
 
-	if [[ $value =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-		echo 1
-	else
-		echo 0
-	fi
-}
-
-# Function is busybox compatible since busybox ash does not understand direct regex, we use expr
-function IsInteger {
-	local value="${1}"
-
 	if type expr > /dev/null 2>&1; then
-		expr "$value" : "^[0-9]\+$" > /dev/null 2>&1
+		expr "$value" : '^[-+]\{0,1\}[0-9]*\.\{0,1\}[0-9]\{1,\}$' > /dev/null 2>&1
 		if [ $? -eq 0 ]; then
 			echo 1
 		else
 			echo 0
 		fi
 	else
-		if [[ $value =~ ^[0-9]+$ ]]; then
+		if [[ $value =~ ^[-+]?[0-9]+([.][0-9]+)?$ ]]; then
 			echo 1
 		else
 			echo 0
 		fi
 	fi
+}
+
+function IsNumericExpand {
+	eval "local value=\"${1}\"" # Needed eval so variable variables can be processed
+
+	echo $(IsNumeric "$value")
 }
 
 # Converts human readable sizes into integer kilobyte sizes
@@ -1323,6 +1357,8 @@ function GetLocalOS {
 	# There is no good way to tell if currently running in BusyBox shell. Using sluggish way.
 	if ls --help 2>&1 | grep -i "BusyBox" > /dev/null; then
 		localOsVar="BusyBox"
+	elif set -o | grep "winxp" > /dev/null; then
+		localOsVar="BusyBox-w32"
 	else
 		# Detecting the special ubuntu userland in Windows 10 bash
 		if grep -i Microsoft /proc/sys/kernel/osrelease > /dev/null 2>&1; then
@@ -1355,7 +1391,7 @@ function GetLocalOS {
 		*"CYGWIN"*)
 		LOCAL_OS="Cygwin"
 		;;
-		*"Microsoft"*)
+		*"Microsoft"*|*"MS/Windows"*)
 		LOCAL_OS="WinNT10"
 		;;
 		*"Darwin"*)
@@ -1386,7 +1422,8 @@ function GetLocalOS {
 	fi
 
 	# Get Host info for Windows
-	if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Cygwin" ] || [ "$LOCAL_OS" == "WinNT10" ]; then localOsVar="$(uname -a)"
+	if [ "$LOCAL_OS" == "msys" ] || [ "$LOCAL_OS" == "BusyBox" ] || [ "$LOCAL_OS" == "Cygwin" ] || [ "$LOCAL_OS" == "WinNT10" ]; then
+		localOsVar="$localOsVar $(uname -a)"
 		if [ "$PROGRAMW6432" != "" ]; then
 			LOCAL_OS_BITNESS=64
 			LOCAL_OS_FAMILY="Windows"
@@ -1400,6 +1437,9 @@ function GetLocalOS {
 	# Get Host info for Unix
 	else
 		LOCAL_OS_FAMILY="Unix"
+	fi
+
+	if [ "$LOCAL_OS_FAMILY" == "Unix" ]; then
 		if uname -m | grep '64' > /dev/null 2>&1; then
 			LOCAL_OS_BITNESS=64
 		else
@@ -1943,14 +1983,14 @@ function InitLocalOSDependingSettings {
 # Gets executed regardless of the need of remote connections. It is just that this code needs to get executed after we know if there is a remote os, and if yes, which one
 function InitRemoteOSDependingSettings {
 
-	if [ "$REMOTE_OS" == "msys" ] || [ "$LOCAL_OS" == "Cygwin" ]; then
+	if [ "$REMOTE_OS" == "msys" ] || [ "$REMOTE_OS" == "Cygwin" ]; then
 		REMOTE_FIND_CMD=$(dirname $BASH)/find
 	else
 		REMOTE_FIND_CMD=find
 	fi
 
 	## Stat command has different syntax on Linux and FreeBSD/MacOSX
-	if [ "$LOCAL_OS" == "MacOSX" ] || [ "$LOCAL_OS" == "BSD" ]; then
+	if [ "$REMOTE_OS" == "MacOSX" ] || [ "$REMOTE_OS" == "BSD" ]; then
 		REMOTE_STAT_CMD="stat -f \"%Sm\""
 		REMOTE_STAT_CTIME_MTIME_CMD="stat -f \\\"%N;%c;%m\\\""
 	else
@@ -2129,13 +2169,26 @@ function SetConfFileValue () {
 	local value="${3}"
 	local separator="${4:-#}"
 
-	if grep "^$name=" "$file" > /dev/null; then
-		# Using -i.tmp for BSD compat
-		sed -i.tmp "s$separator^$name=.*$separator$name=$value$separator" "$file"
-		rm -f "$file.tmp"
-		Logger "Set [$name] to [$value] in config file [$file]." "DEBUG"
+	if [ -f "$file" ]; then
+		if grep "^$name=" "$file" > /dev/null 2>&1; then
+			# Using -i.tmp for BSD compat
+			sed -i.tmp "s$separator^$name=.*$separator$name=$value$separator" "$file"
+			if [ $? -ne 0 ]; then
+				Logger "Cannot update value [$name] to [$value] in config file [$file]." "ERROR"
+			fi
+			rm -f "$file.tmp"
+			Logger "Set [$name] to [$value] in config file [$file]." "DEBUG"
+		else
+			echo "$name=$value" >> "$file"
+			if [ $? -ne 0 ]; then
+				Logger "Cannot create value [$name] to [$value] in config file [$file]." "ERROR"
+			fi
+		fi
 	else
-		Logger "Cannot set value [$name] to [$value] in config file [$file]." "ERROR"
+		echo "$name=$value" > "$file"
+		if [ $? -ne 0 ]; then
+			Logger "Config file [$file] does not exist. Failed to create it witn value [$name]." "ERROR"
+		fi
 	fi
 }
 
@@ -2556,7 +2609,7 @@ function _ListRecursiveBackupDirectoriesRemote {
 
 $SSH_CMD env _REMOTE_TOKEN=$_REMOTE_TOKEN \
 env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
-env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
+env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
 env RECURSIVE_DIRECTORY_LIST="'$RECURSIVE_DIRECTORY_LIST'" env PATH_SEPARATOR_CHAR="'$PATH_SEPARATOR_CHAR'" \
 env REMOTE_FIND_CMD="'$REMOTE_FIND_CMD'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
@@ -2619,6 +2672,8 @@ function RemoteLogger {
 	local value="${1}"		# Sentence to log (in double quotes)
 	local level="${2}"		# Log level
 	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -2837,7 +2892,8 @@ function _GetDirectoriesSizeRemote {
 	# Error output is different from stdout because not all files in list may fail at once
 $SSH_CMD env _REMOTE_TOKEN=$_REMOTE_TOKEN \
 env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
-env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" dirList="'$dirList'" \
+env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
+dirList="'$dirList'" \
 $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
 
 ## allow debugging from command line with _DEBUG=yes
@@ -2899,6 +2955,8 @@ function RemoteLogger {
 	local value="${1}"		# Sentence to log (in double quotes)
 	local level="${2}"		# Log level
 	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -3028,7 +3086,7 @@ function _CreateDirectoryRemote {
 
 $SSH_CMD env _REMOTE_TOKEN=$_REMOTE_TOKEN \
 env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
-env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
+env _REMOTE_EXECUTION=true env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
 env dirToCreate="'$dirToCreate'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
 
 ## allow debugging from command line with _DEBUG=yes
@@ -3090,6 +3148,8 @@ function RemoteLogger {
 	local value="${1}"		# Sentence to log (in double quotes)
 	local level="${2}"		# Log level
 	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -3244,7 +3304,7 @@ function GetDiskSpaceRemote {
 
 $SSH_CMD env _REMOTE_TOKEN=$_REMOTE_TOKEN \
 env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
-env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
+env _REMOTE_EXECUTION=true env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
 env DF_CMD="'$DF_CMD'" \
 env pathToCheck="'$pathToCheck'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
 
@@ -3307,6 +3367,8 @@ function RemoteLogger {
 	local value="${1}"		# Sentence to log (in double quotes)
 	local level="${2}"		# Log level
 	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -3937,7 +3999,7 @@ function Rsync {
 	## Manage to backup recursive directories lists files only (not recursing into subdirectories)
 	if [ $recursive == false ]; then
 		# Fixes symlinks to directories in target cannot be deleted when backing up root directory without recursion
-		rsyncArgs="$RSYNC_DEFAULT_NONRECURSIVE_ARGS -k"
+		rsyncArgs="$RSYNC_DEFAULT_ARGS -f '- /*/*/'"
 	else
 		rsyncArgs="$RSYNC_DEFAULT_ARGS"
 	fi
@@ -3980,7 +4042,8 @@ function FilesBackup {
 	local backupTask
 	local backupTasks
 	local destinationDir
-	local withoutCryptPath
+	local encryptDir
+	
 
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
@@ -3994,6 +4057,7 @@ function FilesBackup {
 			else
 				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
 		else
 			destinationDir="$FILE_STORAGE"
 			encryptDir="$FILE_STORAGE"
@@ -4020,7 +4084,7 @@ function FilesBackup {
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$RECURSIVE_DIRECTORY_LIST"
 	for backupTask in "${backupTasks[@]}"; do
-	# Backup recursive directories withouht recursion
+	# Backup recursive directories without recursion
 
 		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
 			# Fix for backup of '/'
@@ -4065,6 +4129,7 @@ function FilesBackup {
 			else
 				destinationDir=$(dirname "$FILE_STORAGE/${backupTask#/}/")
 			fi
+			encryptDir="$FILE_STORAGE/${backupTask#/}"
 		else
 			destinationDir="$FILE_STORAGE"
 			encryptDir="$FILE_STORAGE"
@@ -4188,7 +4253,7 @@ function _RotateBackupsRemote {
 
 $SSH_CMD env _REMOTE_TOKEN=$_REMOTE_TOKEN \
 env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
-env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
+env _REMOTE_EXECUTION=true env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
 env REMOTE_FIND_CMD="'$REMOTE_FIND_CMD'" env rotateCopies="'$rotateCopies'" env backupPath="'$backupPath'" \
 $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 
@@ -4251,6 +4316,8 @@ function RemoteLogger {
 	local value="${1}"		# Sentence to log (in double quotes)
 	local level="${2}"		# Log level
 	local retval="${3:-undef}"	# optional return value of command
+
+	local prefix
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
 		prefix="TIME: $SECONDS - "
@@ -4406,9 +4473,6 @@ function Init {
 	local hosturiandpath
 	local hosturi
 
-	trap TrapStop INT QUIT TERM HUP
-	trap TrapQuit EXIT
-
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
 	if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
 		REMOTE_OPERATION="yes"
@@ -4539,6 +4603,9 @@ function Usage {
 	echo "$0 --encrypt=/path/to/files --destination=/path/to/encrypted/files --recipient=\"Your Name\""
 	exit 128
 }
+
+#### SCRIPT ENTRY POINT ####
+trap TrapQuit EXIT
 
 # Command line argument flags
 _DRYRUN=false
