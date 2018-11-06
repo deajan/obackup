@@ -9,7 +9,7 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
-XX YYY 2018: obackup v2.1 RC1 released
+06 Nov 2018: obackup v2.1 RC1 released
 --------------------------------------
 
 - File backup rotation will always make copies instead of moving files, in order to let rsync do deltas even in local backup scheme
