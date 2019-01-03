@@ -4,11 +4,11 @@
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
-AUTHOR="(C) 2013-2018 by Orsiris de Jong"
+AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
 PROGRAM_BUILD=2018110602
-IS_STABLE=no
+IS_STABLE=yes
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
 # GetLocalOS						#__WITH_PARANOIA_DEBUG
@@ -35,7 +35,7 @@ IS_STABLE=no
 #	FilesBackup					#__WITH_PARANOIA_DEBUG
 
 _OFUNCTIONS_VERSION=2.3.0-RC2
-_OFUNCTIONS_BUILD=2018110502
+_OFUNCTIONS_BUILD=2018122103
 _OFUNCTIONS_BOOTSTRAP=true
 
 if ! type "$BASH" > /dev/null; then
@@ -728,9 +728,11 @@ function TrapError {
 
 function LoadConfigFile {
 	local configFile="${1}"
+	local revisionRequired="${2}"
 
 	__CheckArguments 1 $# "$@"	#__WITH_PARANOIA_DEBUG
 
+	local revisionPresent
 
 	if [ ! -f "$configFile" ]; then
 		Logger "Cannot load configuration file [$configFile]. Cannot start." "CRITICAL"
@@ -739,6 +741,16 @@ function LoadConfigFile {
 		Logger "Wrong configuration file supplied [$configFile]. Cannot start." "CRITICAL"
 		exit 1
 	else
+		revisionPresent=$(GetConfFileValue "$configFile" "CONFIG_FILE_REVISION" true)
+		if [ "$(IsNumeric $revisionPresent)" -eq 0 ]; then
+			revisionPresent=0
+		fi
+		if [ "$revisionRequired" != "" ]; then
+			if [ $(VerComp "$revisionPresent" "$revisionRequired") -eq 2 ]; then
+				Logger "Configuration file seems out of date. Required version [$revisionRequired]. Actual version [$revisionPresent]." "CRITICAL"
+				exit 1
+			fi
+		fi
 		# Remove everything that is not a variable assignation
 		grep '^[^ ]*=[^;&]*' "$configFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
 		source "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
@@ -895,7 +907,8 @@ function ExecTasks {
 	local commandsConditionArray=() # Array containing conditional commands
 	local currentCommand		# Variable containing currently processed command
 	local currentCommandCondition	# Variable containing currently processed conditional command
-	local commandsArrayPid=()	# Array containing pids of commands currently run
+	local commandsArrayPid=()	# Array containing commands indexed by pids
+	local commandsArrayOutput=()	# Array contining command results indexed by pids
 	local postponedRetryCount=0	# Number of current postponed commands retries
 	local postponedItemCount=0	# Number of commands that have been postponed (keep at least one in order to check once)
 	local postponedCounter=0
@@ -924,8 +937,9 @@ function ExecTasks {
 	local executeCommand		# Boolean to check if currentCommand can be executed given a condition
 	local hasPids=false		# Are any valable pids given to function ?		#__WITH_PARANOIA_DEBUG
 	local functionMode
-	local softAlert=false
+	local softAlert=false		# Does a soft alert need to be triggered, if yes, send an alert once
 	local failedPidsList		# List containing failed pids with exit code separated by semicolons (eg : 2355:1;4534:2;2354:3)
+	local randomOutputName		# Random filename for command outputs
 
 	# Initialise global variable
 	eval "WAIT_FOR_TASK_COMPLETION_$id=\"\""
@@ -1090,6 +1104,9 @@ function ExecTasks {
 							if [ "$functionMode" == "ParallelExec" ]; then
 								Logger "Command was [${commandsArrayPid[$pid]}]." "ERROR"
 							fi
+							if [ -f "${commandsArrayOutput[$pid]}" ]; then
+								Logger "Command output was [\$(cat ${commandsArrayOutput[$pid]})\n]." "ERROR"
+							fi
 						fi
 						errorcount=$((errorcount+1))
 						# Welcome to variable variable bash hell
@@ -1233,10 +1250,12 @@ function ExecTasks {
 
 				if [ $executeCommand == true ]; then
 					Logger "Running command [$currentCommand]." "DEBUG"
-					eval "$currentCommand" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$id.$SCRIPT_PID.$TSTAMP" 2>&1 &
+					randomOutputName=$(date '+%Y%m%dT%H%M%S').$(PoorMansRandomGenerator 5)
+					eval "$currentCommand" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$randomOutputName.$SCRIPT_PID.$TSTAMP" 2>&1 &
 					pid=$!
 					pidsArray+=($pid)
 					commandsArrayPid[$pid]="$currentCommand"
+					commandsArrayOutput[$pid]="$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$randomOutputName.$SCRIPT_PID.$TSTAMP"
 					# Initialize pid execution time array
 					pidsTimeArray[$pid]=0
 				else
@@ -1301,7 +1320,7 @@ function EscapeSpaces {
 # Usage var=$(EscapeDoubleQuotes "$var") or var="$(EscapeDoubleQuotes "$var")"
 function EscapeDoubleQuotes {
 	local value="${1}"
-		
+
 	echo "${value//\"/\\\"}"
 }
 
