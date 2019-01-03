@@ -10,7 +10,7 @@ PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
 SSH_FILTER="ssh_filter.sh"
 
-SCRIPT_BUILD=2018100201
+SCRIPT_BUILD=2018100206
 INSTANCE_ID="installer-$SCRIPT_BUILD"
 
 ## osync / obackup / pmocr / zsnap install script
@@ -144,14 +144,36 @@ function GetInit {
 
 function CreateDir {
 	local dir="${1}"
+	local dirMask="${2}"
+	local dirUser="${3}"
+	local dirGroup="${4}"
 
 	if [ ! -d "$dir" ]; then
+		(
+		if [ $(IsInteger $dirMask) -eq 1 ]; then
+			umask $dirMask
+		fi
 		mkdir -p "$dir"
+		)
 		if [ $? == 0 ]; then
 			Logger "Created directory [$dir]." "SIMPLE"
 		else
 			Logger "Cannot create directory [$dir]." "SIMPLE"
 			exit 1
+		fi
+	fi
+
+	if [ "$dirUser" != "" ]; then
+		userGroup="$dirUser"
+		if [ "$dirGroup" != "" ]; then
+			userGroup="$userGroup"":$dirGroup"
+		fi
+		chown "$userGroup" "$dir"
+		if [ $? != 0 ]; then
+			Logger "Could not set directory ownership on [$dir] to [$userGroup]." "SIMPLE"
+			exit 1
+		else
+			Logger "Set file ownership on [$dir] to [$userGroup]." "SIMPLE"
 		fi
 	fi
 }
@@ -185,7 +207,7 @@ function CopyFile {
 		exit 1
 	else
 		Logger "Copied [$sourcePath/$sourceFileName] to [$destPath/$destFileName]." "SIMPLE"
-		if [ "$fileMod" != "" ]; then
+		if [ "$(IsInteger $fileMod)" -eq 1 ]; then
 			chmod "$fileMod" "$destPath/$destFileName"
 			if [ $? != 0 ]; then
 				Logger "Cannot set file permissions of [$destPath/$destFileName] to [$fileMod]." "SIMPLE"
@@ -193,6 +215,8 @@ function CopyFile {
 			else
 				Logger "Set file permissions to [$fileMod] on [$destPath/$destFileName]." "SIMPLE"
 			fi
+		elif [ "$fileMod" != "" ]; then
+			Logger "Bogus filemod [$fileMod] for [$destPath] given." "SIMPLE"
 		fi
 
 		if [ "$fileUser" != "" ]; then
@@ -371,6 +395,8 @@ else
         Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
 fi
 
+# Set default umask
+umask 0022
 
 GetLocalOS
 SetLocalOSSettings

@@ -4,11 +4,11 @@
 
 ###### Remote push/pull (or local) backup script for files & databases
 PROGRAM="obackup"
-AUTHOR="(C) 2013-2018 by Orsiris de Jong"
+AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
 PROGRAM_BUILD=2018110602
-IS_STABLE=no
+IS_STABLE=yes
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
 # GetLocalOS						#__WITH_PARANOIA_DEBUG
