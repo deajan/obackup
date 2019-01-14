@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2018110602
+## obackup basic tests suite 2019011401
 
 # Supported environment variables
 
@@ -12,6 +12,7 @@
 #TODO Encrypted Pull runs on F25 fail for decryption
 # If gpg key generation hangs, please install and configure rngd service
 #eg yum install rng-tools ; systemctl start rngd
+# or yum install epel-release && yum innstall haveged && systemctl start haveged
 
 if [ "$SKIP_REMOTE" == "" ]; then
 	SKIP_REMOTE=false
@@ -142,15 +143,17 @@ Passphrase: PassPhrase123
 %echo done
 EOF
 
-		if type apt-get > /dev/null 2>&1; then
-			sudo apt-get install rng-tools
-		fi
+		if TRAVIS_RUN=true
+			if type apt-get > /dev/null 2>&1; then
+				sudo apt-get install rng-tools
+			fi
 
-		# Setup fast entropy
-		if type rngd > /dev/null 2>&1; then
-			$SUDO_CMD rngd -r /dev/urandom
-		else
-			echo "No rngd support"
+			# Setup fast entropy
+			if type rngd > /dev/null 2>&1; then
+				$SUDO_CMD rngd -r /dev/urandom
+			else
+				echo "No rngd support"
+			fi
 		fi
 
 		$CRYPT_TOOL --batch --gen-key gpgcommand
