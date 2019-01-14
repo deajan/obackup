@@ -142,8 +142,7 @@ Passphrase: PassPhrase123
 %commit
 %echo done
 EOF
-
-		if TRAVIS_RUN=true
+		if [ "$TRAVIS_RUN" == true ]; then
 			if type apt-get > /dev/null 2>&1; then
 				sudo apt-get install rng-tools
 			fi
