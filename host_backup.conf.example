@@ -13,8 +13,8 @@ INSTANCE_ID="test-backup"
 LOGFILE=""
 
 ## Elements to backup
-SQL_BACKUP=yes
-FILE_BACKUP=yes
+SQL_BACKUP=true
+FILE_BACKUP=true
 
 ## Backups can be done local, pulled from another server or pushed to a backup server. Available options are [local,pull,push].
 ## Pulled backups are the safest option, as the backup server contains the RSA key and cannot be compromised by another server.
@@ -29,7 +29,7 @@ FILE_STORAGE="/home/storage/backup/files"
 ## Backup encryption using GPG and rsync.
 ## Push backups get encrypted locally in CRYPT_STORAGE before they are sent to the remote system
 ## Local and pull backups get encrypted after backup, in CRYPT_STORAGE
-ENCRYPTION=no
+ENCRYPTION=false
 
 ## Backup encryption needs a temporary storage space in order to encrypt files before sending them (absolute paths of the local or remote system)
 ## In case of a pull backup, an encrypted copy of FILE_BACKUP goes here
@@ -42,17 +42,17 @@ GPG_RECIPIENT="John Doe"
 PARALLEL_ENCRYPTION_PROCESSES=
 
 ## Create backup directories if they do not exist
-CREATE_DIRS=yes
+CREATE_DIRS=true
 
 ## Keep absolute source path in your backup, eg: /your/backup/storage/the/remote/server/files
 ## You should leave this enabled if you intend to use 'backup task division' functionality of oBackup, or everything will end up in the same directory.
-KEEP_ABSOLUTE_PATHS=yes
+KEEP_ABSOLUTE_PATHS=true
 
 ## Generate an alert if backup size is lower than given value in Kb (this can also help identifying empty mount dirs).
 BACKUP_SIZE_MINIMUM=1024
 
 ## Check backup size before proceeding
-GET_BACKUP_SIZE=yes
+GET_BACKUP_SIZE=true
 
 ## Generate an alert if storage free space is lower than given value in Kb.
 ## Keep in mind that disabling backup file size test will only test min space against SQL backup size.
@@ -74,23 +74,23 @@ SSH_PASSWORD_FILE=""
 _REMOTE_TOKEN=SomeAlphaNumericToken9
 
 ## ssh compression should be used unless your remote connection is good enough (LAN)
-SSH_COMPRESSION=yes
+SSH_COMPRESSION=true
 
 ## Ignore ssh known hosts verification. DANGER WILL ROBINSON DANGER: This can lead to security risks. Only enable if you know what you're doing.
 ## Works on Redhat / CentOS, doesn't work on Debian / Ubunutu
-SSH_IGNORE_KNOWN_HOSTS=no
+SSH_IGNORE_KNOWN_HOSTS=false
 
 ## Remote rsync executable path. Leave this empty in most cases
 RSYNC_REMOTE_PATH=""
 
 ## Check for connectivity to remote host before launching remote backup tasks. Be sure the hosts responds to ping. Failing to ping will skip current task.
-REMOTE_HOST_PING=yes
+REMOTE_HOST_PING=true
 
 ## Check for internet access by pinging one or more 3rd party hosts before remote backup tasks. Leave empty if you don't want this check to be be performed. Failing to ping will skip current task.
 REMOTE_3RD_PARTY_HOSTS="www.kernel.org www.google.com"
 
 ## If enabled, commands will be executed as superuser on remote side. See documentation for /etc/sudoers configuration ("find", "du", "tee" and "rsync" need to be allowed). Requiretty needs to be disabled.
-SUDO_EXEC=no
+SUDO_EXEC=false
 
 ###### DATABASE SPECIFIC OPTIONS
 
@@ -99,9 +99,9 @@ SQL_USER=root
 
 ## Enabling the following option will save all databases on local or remote given SQL instance except the ones specified in the exclude list.
 ## Every found database will be backed up as separate backup task.
-DATABASES_ALL=yes
+DATABASES_ALL=true
 DATABASES_ALL_EXCLUDE_LIST="test;mysql"
-## Alternatively, if DATABASES_ALL=no, you can specify a list of databases to backup separated by semi-colons.
+## Alternatively, if DATABASES_ALL=false, you can specify a list of databases to backup separated by semi-colons.
 #DATABASES_LIST="somedatabase"
 
 ## Max backup execution time per Database task. Soft max exec time generates a warning only. Hard max exec time generates a warning and stops current backup task.
@@ -157,40 +157,40 @@ PATH_SEPARATOR_CHAR=";"
 RSYNC_OPTIONAL_ARGS=""
 
 ## Preserve basic linux permissions
-PRESERVE_PERMISSIONS=yes
-PRESERVE_OWNER=yes
-PRESERVE_GROUP=yes
+PRESERVE_PERMISSIONS=true
+PRESERVE_OWNER=true
+PRESERVE_GROUP=true
 ## On MACOS X, does not work and will be ignored 
-PRESERVE_EXECUTABILITY=yes
+PRESERVE_EXECUTABILITY=true
 
 ## Preserve ACLS. Make sure source and target FS can hold same ACLs or you'll get loads of errors.
-PRESERVE_ACL=no
+PRESERVE_ACL=false
 ## Preserve Xattr. MAke sure source and target FS can hold same Xattr or you'll get loads of errors.
-PRESERVE_XATTR=no
+PRESERVE_XATTR=false
 
 ## Transforms symlinks into referent files/dirs
-COPY_SYMLINKS=yes
+COPY_SYMLINKS=true
 ## Treat symlinked dirs as dirs. CAUTION: This also follows symlinks outside of the replica root.
-KEEP_DIRLINKS=yes
+KEEP_DIRLINKS=true
 ## Preserve hard links. Make sure source and target FS can manage hard links or you will lose them.
-PRESERVE_HARDLINKS=no
+PRESERVE_HARDLINKS=false
 
 
 ## Let RSYNC compress file transfers. Do not use this on local-local backup schemes. Also, this is not useful if SSH compression is enabled.
-RSYNC_COMPRESS=no
+RSYNC_COMPRESS=false
 
 ## Max execution time per file backup task. Soft is warning only. Hard is warning, stopping backup and processing next one one file list. Tilme is specified in seconds
 SOFT_MAX_EXEC_TIME_FILE_TASK=3600
 HARD_MAX_EXEC_TIME_FILE_TASK=7200
 
 ## Keep partial uploads that can be resumed on next run, experimental feature
-PARTIAL=no
+PARTIAL=false
 
 ## Delete files on destination that vanished from source. Do not turn this on unless you enabled backup rotation  or a snapshotting FS like zfs to keep those vanished files on the destination.
-DELETE_VANISHED_FILES=no
+DELETE_VANISHED_FILES=false
 
-## Use delta copy algortithm (usefull when local paths are network drives), defaults to yes
-DELTA_COPIES=yes
+## Use delta copy algortithm (usefull when local paths are network drives), defaults to true
+DELTA_COPIES=true
 
 ## Bandwidth limit Kbytes / second for file backups. Leave 0 to disable limitation.
 BANDWIDTH=0
@@ -228,9 +228,9 @@ HARD_MAX_EXEC_TIME_TOTAL=36000
 KEEP_LOGGING=1801
 
 ## Backup Rotation. You may rotate backups if you don't use snapshots on your backup server.
-ROTATE_SQL_BACKUPS=no
+ROTATE_SQL_BACKUPS=false
 ROTATE_SQL_COPIES=7
-ROTATE_FILE_BACKUPS=no
+ROTATE_FILE_BACKUPS=false
 ROTATE_FILE_COPIES=7
 
 ###### EXECUTION HOOKS
@@ -248,7 +248,7 @@ MAX_EXEC_TIME_PER_CMD_BEFORE=0
 MAX_EXEC_TIME_PER_CMD_AFTER=0
 
 ## Stops whole backup execution if one of the above commands fail
-STOP_ON_CMD_ERROR=no
+STOP_ON_CMD_ERROR=false
 
 ## Run local and remote after backup cmd's even on failure
-RUN_AFTER_CMD_ON_ERROR=no
+RUN_AFTER_CMD_ON_ERROR=false

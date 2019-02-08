@@ -8,7 +8,7 @@ AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
 PROGRAM_BUILD=2018110602
-IS_STABLE=yes
+IS_STABLE=true
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
 # GetLocalOS						#__WITH_PARANOIA_DEBUG
@@ -79,14 +79,14 @@ function TrapQuit {
         fi
 
 	if [ $ERROR_ALERT == true ]; then
-		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
+		if [ "$RUN_AFTER_CMD_ON_ERROR" == true ]; then
 			RunAfterHook
 		fi
 		Logger "$PROGRAM finished with errors." "ERROR"
 		SendAlert
 		exitcode=1
 	elif [ $WARN_ALERT == true ]; then
-		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
+		if [ "$RUN_AFTER_CMD_ON_ERROR" == true ]; then
 			RunAfterHook
 		fi
 		Logger "$PROGRAM finished with warnings." "WARN"
@@ -110,7 +110,7 @@ function TrapQuit {
 function CheckEnvironment {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$REMOTE_OPERATION" == "yes" ]; then
+	if [ "$REMOTE_OPERATION" == true ]; then
 		if ! type ssh > /dev/null 2>&1 ; then
 			Logger "ssh not present. Cannot start backup." "CRITICAL"
 			exit 1
@@ -121,7 +121,7 @@ function CheckEnvironment {
                         exit 1
                 fi
 	else
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			if ! type mysqldump > /dev/null 2>&1 ; then
 				Logger "mysqldump not present. Cannot backup SQL." "CRITICAL"
 				CAN_BACKUP_SQL=false
@@ -133,14 +133,14 @@ function CheckEnvironment {
 		fi
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ]; then
+	if [ "$FILE_BACKUP" != false ]; then
 		if ! type rsync > /dev/null 2>&1 ; then
 			Logger "rsync not present. Cannot backup files." "CRITICAL"
 			CAN_BACKUP_FILES=false
 		fi
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
+	if [ "$ENCRYPTION" == true ]; then
 		CheckCryptEnvironnment
 	fi
 
@@ -167,15 +167,20 @@ function CheckCryptEnvironnment {
 function CheckCurrentConfig {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
+	local test
+	local booleans
+	local num_vars
+
 	if [ "$INSTANCE_ID" == "" ]; then
 		Logger "No INSTANCE_ID defined in config file." "CRITICAL"
 		exit 1
 	fi
 
-	# Check all variables that should contain "yes" or "no"
-	declare -a yes_no_vars=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
-	for i in "${yes_no_vars[@]}"; do
-		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ]; then Logger \"Bogus $i value [\$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
+	# v2 config will use true / false instead of yes / no
+        # Check all variables that should contain "yes" or "no", true or false
+	declare -a booleans=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
+	for i in "${booleans[@]}"; do
+		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ] && [ \"\$$i\" != true ] && [ \"\$$i\" != false ]; then Logger \"Bogus $i value [\$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
 	done
 
@@ -191,14 +196,14 @@ function CheckCurrentConfig {
 		eval "$test"
 	done
 
-	if [ "$FILE_BACKUP" == "yes" ]; then
+	if [ "$FILE_BACKUP" == true ]; then
 		if [ "$DIRECTORY_LIST" == "" ] && [ "$RECURSIVE_DIRECTORY_LIST" == "" ]; then
 			Logger "No directories specified in config file, no files to backup." "ERROR"
 			CAN_BACKUP_FILES=false
 		fi
 	fi
 
-	if [ "$REMOTE_OPERATION" == "yes" ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
+	if [ "$REMOTE_OPERATION" == true ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
 		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY]. Cannot connect to remote system." "CRITICAL"
 		exit 1
 	fi
@@ -209,17 +214,17 @@ function CheckCurrentConfig {
 	#	exit 1
 	#fi
 
-	if [ "$SQL_BACKUP" == "yes" ] && [ "$SQL_STORAGE" == "" ]; then
+	if [ "$SQL_BACKUP" == true ] && [ "$SQL_STORAGE" == "" ]; then
 		Logger "SQL_STORAGE not defined." "CRITICAL"
 		exit 1
 	fi
 
-	if [ "$FILE_BACKUP" == "yes" ] && [ "$FILE_STORAGE" == "" ]; then
+	if [ "$FILE_BACKUP" == true ] && [ "$FILE_STORAGE" == "" ]; then
 		Logger "FILE_STORAGE not defined." "CRITICAL"
 		exit 1
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
+	if [ "$ENCRYPTION" == true ]; then
 		if [ "$CRYPT_STORAGE" == "" ]; then
 			Logger "CRYPT_STORAGE not defined." "CRITICAL"
 			exit 1
@@ -230,10 +235,23 @@ function CheckCurrentConfig {
 		fi
 	fi
 
-	if [ "$REMOTE_OPERATION" == "yes" ] && ([ ! -f "$SSH_RSA_PRIVATE_KEY" ] && [ ! -f "$SSH_PASSWORD_FILE" ]); then
+	if [ "$REMOTE_OPERATION" == true ] && ([ ! -f "$SSH_RSA_PRIVATE_KEY" ] && [ ! -f "$SSH_PASSWORD_FILE" ]); then
                 Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY] nor password file [$SSH_PASSWORD_FILE]. No authentication method provided." "CRITICAL"
                 exit 1
         fi
+}
+
+# Change all booleans with "yes" or "no" to true / false for v2 config syntax compatibility
+function UpdateBooleans {
+        local update
+        local booleans
+
+	declare -a booleans=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
+
+        for i in "${booleans[@]}"; do
+                update="if [ \"\$$i\" == \"yes\" ]; then $i=true; fi; if [ \"\$$i\" == \"no\" ]; then $i=false; fi"
+                eval "$update"
+        done
 }
 
 function CheckRunningInstances {
@@ -337,7 +355,7 @@ function ListDatabases {
 		while read -r line; do
 			while read -r name size; do dbName=$name; dbSize=$size; done <<< "$line"
 
-			if [ "$DATABASES_ALL" == "yes" ]; then
+			if [ "$DATABASES_ALL" == true ]; then
 				dbBackup=true
 				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
 				for j in "${dbArray[@]}"; do
@@ -659,11 +677,11 @@ function GetDirectoriesSize {
         Logger "Getting files size" "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST"
 		fi
 	fi
@@ -731,38 +749,38 @@ function CreateStorageDirectories {
         __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			_CreateDirectoryLocal "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_CreateDirectoryLocal "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
-		if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$ENCRYPTION" == true ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			_CreateDirectoryRemote "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_CreateDirectoryRemote "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
-		if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$ENCRYPTION" == true ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
@@ -866,7 +884,7 @@ function CheckDiskSpace {
         __CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			GetDiskSpaceLocal "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
@@ -876,7 +894,7 @@ function CheckDiskSpace {
 				SQL_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			GetDiskSpaceLocal "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
@@ -886,7 +904,7 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$ENCRYPTION" != "no" ]; then
+		if [ "$ENCRYPTION" != false ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
@@ -898,7 +916,7 @@ function CheckDiskSpace {
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			GetDiskSpaceRemote "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
@@ -907,7 +925,7 @@ function CheckDiskSpace {
 				SQL_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			GetDiskSpaceRemote "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
@@ -916,7 +934,7 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$ENCRYPTION" != "no" ]; then
+		if [ "$ENCRYPTION" != false ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
@@ -937,7 +955,7 @@ function CheckDiskSpace {
 		TOTAL_FILES_SIZE=-1
 	fi
 
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
+	if [ "$SQL_BACKUP" != false ] && [ $CAN_BACKUP_SQL == true ]; then
 		if [ $SQL_DISK_SPACE -eq 0 ]; then
 			Logger "Storage space in [$SQL_STORAGE] reported to be 0Ko." "WARN"
 		fi
@@ -950,7 +968,7 @@ function CheckDiskSpace {
 		Logger "SQL storage Space: $SQL_DISK_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko" "NOTICE"
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
+	if [ "$FILE_BACKUP" != false ] && [ $CAN_BACKUP_FILES == true ]; then
 		if [ $FILE_DISK_SPACE -eq 0 ]; then
 			Logger "Storage space in [$FILE_STORAGE] reported to be 0 Ko." "WARN"
 		fi
@@ -963,8 +981,8 @@ function CheckDiskSpace {
 		Logger "File storage space: $FILE_DISK_SPACE Ko - Files size: $TOTAL_FILES_SIZE Ko" "NOTICE"
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+	if [ "$ENCRYPTION" == true ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			if [ "$SQL_DRIVE" == "$CRYPT_DRIVE" ]; then
 				if [ $((SQL_DISK_SPACE/2)) -lt $((TOTAL_DATABASES_SIZE)) ]; then
 					Logger "Disk space in [$SQL_STORAGE] and [$CRYPT_STORAGE] may be insufficient to backup SQL ($SQL_DISK_SPACE Ko available in $SQL_DRIVE) (non compressed databases calculation + crypt storage space)." "WARN"
@@ -976,7 +994,7 @@ function CheckDiskSpace {
 			fi
 		fi
 
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			if [ "$FILE_DRIVE" == "$CRYPT_DRIVE" ]; then
 				if [ $((FILE_DISK_SPACE/2)) -lt $((TOTAL_FILES_SIZE)) ]; then
 					Logger "Disk space in [$FILE_STORAGE] and [$CRYPT_STORAGE] may be insufficient to encrypt Sfiles ($FILE_DISK_SPACE Ko available in $FILE_DRIVE)." "WARN"
@@ -991,7 +1009,7 @@ function CheckDiskSpace {
 		Logger "Crypt storage space: $CRYPT_DISK_SPACE Ko" "NOTICE"
 	fi
 
-	if [ $BACKUP_SIZE_MINIMUM -gt $((TOTAL_DATABASES_SIZE+TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
+	if [ $BACKUP_SIZE_MINIMUM -gt $((TOTAL_DATABASES_SIZE+TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != false ]; then
 		Logger "Backup size is smaller than expected." "WARN"
 	fi
 }
@@ -1152,7 +1170,7 @@ function BackupDatabase {
 		mysqlOptions="$MYSQLDUMP_OPTIONS"
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
+	if [ "$ENCRYPTION" == true ]; then
 		encrypt=true
 		Logger "Backing up encrypted database [$database]." "NOTICE"
 	else
@@ -1461,7 +1479,7 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup directories from simple list
 
-		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$KEEP_ABSOLUTE_PATHS" != false ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
 				destinationDir="$FILE_STORAGE/"
@@ -1475,14 +1493,14 @@ function FilesBackup {
 		fi
 
 		Logger "Beginning file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+		if [ "$ENCRYPTION" == true ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+		elif [ "$ENCRYPTION" == true ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" true
 			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
@@ -1497,7 +1515,7 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup recursive directories without recursion
 
-		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$KEEP_ABSOLUTE_PATHS" != false ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
 				destinationDir="$FILE_STORAGE/"
@@ -1511,14 +1529,14 @@ function FilesBackup {
 		fi
 
 		Logger "Beginning non recursive file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+		if [ "$ENCRYPTION" == true ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+		elif [ "$ENCRYPTION" == true ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" false
 			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" false false
@@ -1533,7 +1551,7 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup sub directories of recursive directories
 
-		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$KEEP_ABSOLUTE_PATHS" != false ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
 				destinationDir="$FILE_STORAGE/"
@@ -1547,14 +1565,14 @@ function FilesBackup {
 		fi
 
 		Logger "Beginning recursive child file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+		if [ "$ENCRYPTION" == true ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+		elif [ "$ENCRYPTION" == true ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" true
 			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
@@ -1637,7 +1655,7 @@ function _RotateBackupsLocal {
 			fi
 
 		else
-		#elif [ "$REMOTE_OPERATION" == "yes" ]; then
+		#elif [ "$REMOTE_OPERATION" == true ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
@@ -1720,7 +1738,7 @@ function _RotateBackupsRemoteSSH {
 			fi
 
 		else
-		#elif [ "$REMOTE_OPERATION" == "yes" ]; then
+		#elif [ "$REMOTE_OPERATION" == true ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
@@ -1782,7 +1800,7 @@ function Init {
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
         if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
-                REMOTE_OPERATION="yes"
+                REMOTE_OPERATION=true
 
                 # remove leadng 'ssh://'
                 uri=${REMOTE_SYSTEM_URI#ssh://*}
@@ -1819,7 +1837,7 @@ function Init {
 		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" -i"
 	fi
 
-	if [ "$DELETE_VANISHED_FILES" == "yes" ]; then
+	if [ "$DELETE_VANISHED_FILES" == true ]; then
 		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --delete"
 	fi
 
@@ -1834,12 +1852,12 @@ function Init {
 function Main {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
+	if [ "$SQL_BACKUP" != false ] && [ $CAN_BACKUP_SQL == true ]; then
 		ListDatabases
 	fi
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
+	if [ "$FILE_BACKUP" != false ] && [ $CAN_BACKUP_FILES == true ]; then
 		ListRecursiveBackupDirectories
-		if [ "$GET_BACKUP_SIZE" != "no" ]; then
+		if [ "$GET_BACKUP_SIZE" != false ]; then
 			GetDirectoriesSize
 		else
 			TOTAL_FILES_SIZE=-1
@@ -1853,21 +1871,21 @@ function Main {
 	SSH_PASSWORD_FILE="${SSH_PASSWORD_FILE/#\~/$HOME}"
 	ENCRYPT_PUBKEY="${ENCRYPT_PUBKEY/#\~/$HOME}"
 
-	if [ "$CREATE_DIRS" != "no" ]; then
+	if [ "$CREATE_DIRS" != false ]; then
 		CreateStorageDirectories
 	fi
 	CheckDiskSpace
 
 	# Actual backup process
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
-		if [ $_DRYRUN == false ] && [ "$ROTATE_SQL_BACKUPS" == "yes" ]; then
+	if [ "$SQL_BACKUP" != false ] && [ $CAN_BACKUP_SQL == true ]; then
+		if [ $_DRYRUN == false ] && [ "$ROTATE_SQL_BACKUPS" == true ]; then
 			RotateBackups "$SQL_STORAGE" "$ROTATE_SQL_COPIES"
 		fi
 		BackupDatabases
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
-		if [ $_DRYRUN == false ] && [ "$ROTATE_FILE_BACKUPS" == "yes" ]; then
+	if [ "$FILE_BACKUP" != false ] && [ $CAN_BACKUP_FILES == true ]; then
+		if [ $_DRYRUN == false ] && [ "$ROTATE_FILE_BACKUPS" == true ]; then
 			RotateBackups "$FILE_STORAGE" "$ROTATE_FILE_COPIES"
 		fi
 	        ## Add Rsync include / exclude patterns
@@ -1880,7 +1898,7 @@ function Usage {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 
-	if [ "$IS_STABLE" != "yes" ]; then
+	if [ "$IS_STABLE" != true ]; then
 		echo -e "\e[93mThis is an unstable dev build. Please use with caution.\e[0m"
 	fi
 
@@ -2038,6 +2056,9 @@ else
 	LOG_FILE="$LOGFILE"
 fi
 
+# v2.3 config syntax compatibility
+UpdateBooleans
+
 if [ ! -w "$(dirname $LOG_FILE)" ]; then
 	echo "Cannot write to log [$(dirname $LOG_FILE)]."
 else
@@ -2054,18 +2075,18 @@ if [ $no_maxtime == true ]; then
 fi
 
 if [ $partial_transfers == true ]; then
-	PARTIAL="yes"
+	PARTIAL=true
 fi
 
 if [ $delete_vanished == true ]; then
-	DELETE_VANISHED_FILES="yes"
+	DELETE_VANISHED_FILES=true
 fi
 
 if [ $dont_get_backup_size == true ]; then
-	GET_BACKUP_SIZE="no"
+	GET_BACKUP_SIZE=false
 fi
 
-if [ "$IS_STABLE" != "yes" ]; then
+if [ "$IS_STABLE" != true ]; then
 	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
 fi
 
