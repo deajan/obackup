@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2019011401
+## obackup basic tests suite 2019022601
 
 # Supported environment variables
 
@@ -181,27 +181,27 @@ function oneTimeSetUp () {
         if [ "$TRAVIS_RUN" == true ]; then
         echo "Running with travis settings"
                 REMOTE_USER="travis"
-		RHOST_PING="no"
+		RHOST_PING=false
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" ""
 		# Config value didn't have S at the end in old files
                 SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_3RD_PARTY_HOST" ""
 
-                SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" "no"
-                SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" "no"
-                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" "no"
+                SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" false
+                SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" false
+                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" false
         else
             	echo "Running with local settings"
                 REMOTE_USER="root"
-		RHOST_PING="yes"
+		RHOST_PING=true
                 SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
                 SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_3RD_PARTY_HOSTS" "\"www.kernel.org www.google.com\""
 		# Config value didn't have S at the end in old files
                 SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_3RD_PARTY_HOST" "\"www.kernel.org www.google.com\""
 
-                SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" "yes"
-                SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" "yes"
-                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" "yes"
+                SetConfFileValue "$CONF_DIR/$PULL_CONF" "REMOTE_HOST_PING" true
+                SetConfFileValue "$CONF_DIR/$PUSH_CONF" "REMOTE_HOST_PING" true
+                SetConfFileValue "$CONF_DIR/$OLD_CONF" "REMOTE_HOST_PING" true
         fi
 
         # Get default ssh port from env
@@ -236,13 +236,13 @@ function oneTimeSetUp () {
 
 	# Set basic values that could get changed later
 	for i in "$LOCAL_CONF" "$PULL_CONF" "$PUSH_CONF"; do
-		SetConfFileValue "$CONF_DIR/$i" "ENCRYPTION" "no"
-		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "ENCRYPTION" false
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" true
 		SetConfFileValue "$CONF_DIR/$i" "DATABASES_LIST" "mysql"
-		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" true
 		SetConfFileValue "$CONF_DIR/$i" "DIRECTORY_LIST" "${HOME}/obackup-testdata/testData"
 		SetConfFileValue "$CONF_DIR/$i" "RECURSIVE_DIRECTORY_LIST" "${HOME}/obackup-testdata/testDataRecursive"
-		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" true
 	done
 }
 
@@ -323,7 +323,7 @@ function test_Merge () {
 	assertEquals "Install failed" "0" $?
 
 	# Set obackup version to stable while testing to avoid warning message
-        SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" "yes"
+        SetConfFileValue "$OBACKUP_DIR/$OBACKUP_EXECUTABLE" "IS_STABLE" true
 }
 
 # Keep this function to check GPG behavior depending on OS. (GPG 2.1 / GPG 2.0x / GPG 1.4 don't behave the same way)
@@ -364,7 +364,7 @@ function test_GPG () {
 }
 
 function test_LocalRun () {
-	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" "no"
+	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" false
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
@@ -437,7 +437,7 @@ function test_PullRun () {
 		return 0
 	fi
 
-	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" "no"
+	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" false
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
@@ -510,7 +510,7 @@ function test_PushRun () {
 		return 0
 	fi
 
-	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" "no"
+	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" false
 
 	# Basic return code tests. Need to go deep into file presence testing
 	cd "$OBACKUP_DIR"
@@ -578,7 +578,7 @@ function test_PushRun () {
 }
 
 function test_EncryptLocalRun () {
-	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" "yes"
+	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" true
 
 	cd "$OBACKUP_DIR"
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$LOCAL_CONF"
@@ -633,7 +633,7 @@ function test_EncryptLocalRun () {
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_CRYPT_LOCAL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_CRYPT_LOCAL]" "0" $?
 
-	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" "no"
+	SetConfFileValue "$CONF_DIR/$LOCAL_CONF" "ENCRYPTION" false
 }
 
 function test_EncryptPullRun () {
@@ -642,7 +642,7 @@ function test_EncryptPullRun () {
 	fi
 
 	# Basic return code tests. Need to go deep into file presence testing
-	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" "yes"
+	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" true
 
 
 	cd "$OBACKUP_DIR"
@@ -699,7 +699,7 @@ function test_EncryptPullRun () {
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_CRYPT_PULL" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_CRYPT_PULL]" "0" $?
 
-	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" "no"
+	SetConfFileValue "$CONF_DIR/$PULL_CONF" "ENCRYPTION" false
 }
 
 function test_EncryptPushRun () {
@@ -708,7 +708,7 @@ function test_EncryptPushRun () {
 	fi
 
 	# Basic return code tests. Need to go deep into file presence testing
-	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" "yes"
+	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" true
 
 
 	cd "$OBACKUP_DIR"
@@ -764,7 +764,7 @@ function test_EncryptPushRun () {
 	REMOTE_HOST_PING=$RHOST_PING ./$OBACKUP_EXECUTABLE --decrypt="$TARGET_DIR_FILE_PUSH" --passphrase-file="$TESTS_DIR/$PASSFILE"
 	assertEquals "Decrypt file storage in [$TARGET_DIR_FILE_PUSH]" "0" $?
 
-	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" "no"
+	SetConfFileValue "$CONF_DIR/$PUSH_CONF" "ENCRYPTION" false
 }
 
 function test_missing_databases () {
@@ -772,25 +772,25 @@ function test_missing_databases () {
 
 	# Prepare files for missing databases
 	for i in "$LOCAL_CONF" "$PUSH_CONF" "$PULL_CONF"; do
-		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" "no"
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" false
 		SetConfFileValue "$CONF_DIR/$i" "DATABASES_LIST" "\"zorglub;mysql\""
-		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "yes"
-		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "no"
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" true
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" false
 
 		REMOTE_HOST=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$i"
 		assertEquals "Missing databases should trigger error with [$i]" "1" $?
 
-		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "DATABASES_ALL" true
 		SetConfFileValue "$CONF_DIR/$i" "DATABASES_LIST" "mysql"
-		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" true
 
 	done
 
 	for i in "$LOCAL_CONF" "$PUSH_CONF" "$PULL_CONF"; do
 		SetConfFileValue "$CONF_DIR/$i" "DIRECTORY_LIST" "${HOME}/obackup-testdata/nonPresentData"
 		SetConfFileValue "$CONF_DIR/$i" "RECURSIVE_DIRECTORY_LIST" "${HOME}/obackup-testdata/nonPresentDataRecursive"
-		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "no"
-		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" false
+		SetConfFileValue "$CONF_DIR/$i" "FILE_BACKUP" true
 
 		REMOTE_HOST=$RHOST_PING ./$OBACKUP_EXECUTABLE "$CONF_DIR/$i"
 		assertEquals "Missing files should trigger error with [$i]" "1" $?
@@ -799,7 +799,7 @@ function test_missing_databases () {
 		echo "nope"
 		SetConfFileValue "$CONF_DIR/$i" "DIRECTORY_LIST" "${HOME}/obackup-testdata/testData"
 		SetConfFileValue "$CONF_DIR/$i" "RECURSIVE_DIRECTORY_LIST" "${HOME}/obackup-testdata/testDataRecursive"
-		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" "yes"
+		SetConfFileValue "$CONF_DIR/$i" "SQL_BACKUP" true
 	done
 }
 
