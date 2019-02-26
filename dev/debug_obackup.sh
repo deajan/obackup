@@ -8,7 +8,7 @@ AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
 PROGRAM_BUILD=2018110602
-IS_STABLE=yes
+IS_STABLE=true
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
 # GetLocalOS						#__WITH_PARANOIA_DEBUG
@@ -35,7 +35,7 @@ IS_STABLE=yes
 #	FilesBackup					#__WITH_PARANOIA_DEBUG
 
 _OFUNCTIONS_VERSION=2.3.0-RC2
-_OFUNCTIONS_BUILD=2018122103
+_OFUNCTIONS_BUILD=2019012801
 _OFUNCTIONS_BOOTSTRAP=true
 
 if ! type "$BASH" > /dev/null; then
@@ -67,13 +67,13 @@ ERROR_ALERT=false
 WARN_ALERT=false
 
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
-if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
-	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == true ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=true				#__WITH_PARANOIA_DEBUG
 fi						#__WITH_PARANOIA_DEBUG
 
-## allow debugging from command line with _DEBUG=yes
-if [ ! "$_DEBUG" == "yes" ]; then
-	_DEBUG=no
+## allow debugging from command line with _DEBUG=true
+if [ ! "$_DEBUG" == true ]; then
+	_DEBUG=false
 	_LOGGER_VERBOSE=false
 else
 	trap 'TrapError ${LINENO} $?' ERR
@@ -104,7 +104,6 @@ else
 	LOG_FILE="/tmp/$PROGRAM.log"
 fi
 
-#### RUN_DIR SUBSET ####
 ## Default directory where to store temporary run files
 
 if [ -w /tmp ]; then
@@ -120,7 +119,6 @@ if [ "$_REMOTE_EXECUTION" == true ]; then
 	mkdir -p "$RUN_DIR/$PROGRAM.remote"
 	RUN_DIR="$RUN_DIR/$PROGRAM.remote"
 fi
-#### RUN_DIR SUBSET END ####
 
 # Get a random number on Windows BusyBox alike, also works on most Unixes that have dd, if dd is not found, then return $RANDOM
 function PoorMansRandomGenerator {
@@ -222,19 +220,19 @@ function RemoteLogger {
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "" "$prefix\e[31m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "" "$prefix\e[33m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
@@ -252,12 +250,12 @@ function RemoteLogger {
 		_Logger	 "" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
+		if [ "$_DEBUG" == true ]; then
 			_Logger "" "$prefix$value"
 			return
 		fi
 	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == true ]; then			#__WITH_PARANOIA_DEBUG
 			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
@@ -279,10 +277,9 @@ function RemoteLogger {
 
 # CRITICAL, ERROR, WARN sent to stderr, color depending on level, level also logged
 # NOTICE sent to stdout
-# VERBOSE sent to stdout if _LOGGER_VERBOSE = true
-# ALWAYS is sent to stdout unless _LOGGER_SILENT = true
-# DEBUG & PARANOIA_DEBUG are only sent to stdout if _DEBUG=yes
-# SIMPLE is a wrapper for QuickLogger that does not use advanced functionality
+# VERBOSE sent to stdout if _LOGGER_VERBOSE=true
+# ALWAYS is sent to stdout unless _LOGGER_SILENT=true
+# DEBUG & PARANOIA_DEBUG are only sent to stdout if _DEBUG=true
 function Logger {
 	local value="${1}"		# Sentence to log (in double quotes)
 	local level="${2}"		# Log level
@@ -332,22 +329,15 @@ function Logger {
 		_Logger "$prefix$value" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
+		if [ "$_DEBUG" == true ]; then
 			_Logger "$prefix$value" "$prefix$value"
 			return
 		fi
 	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == true ]; then			#__WITH_PARANOIA_DEBUG
 			_Logger "$prefix$value" "$prefix\e[35m$value\e[0m"	#__WITH_PARANOIA_DEBUG
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
-	elif [ "$level" == "SIMPLE" ]; then
-		if [ "$_LOGGER_SILENT" == true ]; then
-			_Logger "$preix$value"
-		else
-			_Logger "$preix$value" "$prefix$value"
-		fi
-		return
 	else
 		_Logger "\e[41mLogger function called without proper loglevel [$level].\e[0m" "\e[41mLogger function called without proper loglevel [$level].\e[0m" true
 		_Logger "Value was: $prefix$value" "Value was: $prefix$value" true
@@ -442,7 +432,7 @@ function KillAllChilds {
 }
 
 function CleanUp {
-	if [ "$_DEBUG" != "yes" ]; then
+	if [ "$_DEBUG" != true ]; then
 		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
 		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
 		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
@@ -483,7 +473,7 @@ function SendAlert {
 		return 0
 	fi
 
-	if [ "$_DEBUG" == "yes" ]; then
+	if [ "$_DEBUG" == true ]; then
 		Logger "Debug mode, no warning mail will be sent." "NOTICE"
 		return 0
 	fi
@@ -562,8 +552,9 @@ function SendEmail {
 
 	local i
 
-	if [ "${destinationMails[@]}" != "" ]; then
-		for i in "${destinationMails[@]}"; do
+	if [ "${destinationMails}" != "" ]; then
+		# Not quoted since we split at space character, and emails cannot contain spaces
+		for i in ${destinationMails}; do
 			if [ $(CheckRFC822 "$i") -ne 1 ]; then
 				Logger "Given email [$i] does not seem to be valid." "WARN"
 			fi
@@ -743,7 +734,7 @@ function LoadConfigFile {
 	else
 		revisionPresent=$(GetConfFileValue "$configFile" "CONFIG_FILE_REVISION" true)
 		if [ "$(IsNumeric $revisionPresent)" -eq 0 ]; then
-			revisionPresent=0
+			Logger "CONFIG_FILE_REVISION does not seem numeric [$revisionPresent]." "DEBUG"
 		fi
 		if [ "$revisionRequired" != "" ]; then
 			if [ $(VerComp "$revisionPresent" "$revisionRequired") -eq 2 ]; then
@@ -885,7 +876,7 @@ function ExecTasks {
 	Logger "${FUNCNAME[0]} id [$id] called by [${FUNCNAME[1]} < ${FUNCNAME[2]} < ${FUNCNAME[3]} < ${FUNCNAME[4]} < ${FUNCNAME[5]} < ${FUNCNAME[6]} ...]." "PARANOIA_DEBUG"	 #__WITH_PARANOIA_DEBUG
 
 	# Since ExecTasks takes up to 17 arguments, do a quick preflight check in DEBUG mode
-	if [ "$_DEBUG" == "yes" ]; then
+	if [ "$_DEBUG" == true ]; then
 		declare -a booleans=(readFromFile counting spinner noTimeErrorLog noErrorLogsAtAll)
 		for i in "${booleans[@]}"; do
 			test="if [ \$$i != false ] && [ \$$i != true ]; then Logger \"Bogus $i value [\$$i] given to ${FUNCNAME[0]}.\" \"CRITICAL\"; exit 1; fi"
@@ -1132,7 +1123,7 @@ function ExecTasks {
 		# Trivial wait time for bash to not eat up all CPU
 		sleep $sleepTime
 
-		if [ "$_PERF_PROFILER" == "yes" ]; then				##__WITH_PARANOIA_DEBUG
+		if [ "$_PERF_PROFILER" == true ]; then				##__WITH_PARANOIA_DEBUG
 			_PerfProfiler						##__WITH_PARANOIA_DEBUG
 		fi								##__WITH_PARANOIA_DEBUG
 
@@ -1490,7 +1481,7 @@ function GetLocalOS {
 		LOCAL_OS="BusyBox"
 		;;
 		*)
-		if [ "$IGNORE_OS_TYPE" == "yes" ]; then
+		if [ "$IGNORE_OS_TYPE" == true ]; then
 			Logger "Running on unknown local OS [$localOsVar]." "WARN"
 			return
 		fi
@@ -1547,7 +1538,7 @@ function GetLocalOS {
 function __CheckArguments {
 	# Checks the number of arguments of a function and raises an error if some are missing
 
-	if [ "$_DEBUG" == "yes" ]; then
+	if [ "$_DEBUG" == true ]; then
 		local numberOfArguments="${1}" # Number of arguments the tested function should have, can be a number of a range, eg 0-2 for zero to two arguments
 		local numberOfGivenArguments="${2}" # Number of arguments that have been passed
 
@@ -1603,7 +1594,7 @@ function __CheckArguments {
 function GetRemoteOS {
 	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
-	if [ "$REMOTE_OPERATION" != "yes" ]; then
+	if [ "$REMOTE_OPERATION" != true ]; then
 		return 0
 	fi
 
@@ -1720,7 +1711,7 @@ ENDSSH
 			exit 1
 			;;
 			*)
-			if [ "$IGNORE_OS_TYPE" == "yes" ]; then		#DOC: Undocumented debug only setting
+			if [ "$IGNORE_OS_TYPE" == true ]; then		#DOC: Undocumented debug only setting
 				Logger "Running on unknown remote OS [$remoteOsVar]." "WARN"
 				return
 			fi
@@ -1760,7 +1751,7 @@ function RunLocalCommand {
 		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 	fi
 
-	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]; then
+	if [ "$STOP_ON_CMD_ERROR" == true ] && [ $retval -ne 0 ]; then
 		Logger "Stopping on command execution error." "CRITICAL"
 		exit 1
 	fi
@@ -1773,7 +1764,7 @@ function RunRemoteCommand {
 	__CheckArguments 2 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 
-	if [ "$REMOTE_OPERATION" != "yes" ]; then
+	if [ "$REMOTE_OPERATION" != true ]; then
 		Logger "Ignoring remote command [$command] because remote host is not configured." "WARN"
 		return 0
 	fi
@@ -1803,7 +1794,7 @@ function RunRemoteCommand {
 		Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 	fi
 
-	if [ "$STOP_ON_CMD_ERROR" == "yes" ] && [ $retval -ne 0 ]; then
+	if [ "$STOP_ON_CMD_ERROR" == true ] && [ $retval -ne 0 ]; then
 		Logger "Stopping on command execution error." "CRITICAL"
 		exit 1
 	fi
@@ -1854,9 +1845,9 @@ function CheckConnectivityRemoteHost {
 
 	local retval
 
-	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug		#__WITH_PARANOIA_DEBUG
+	if [ "$_PARANOIA_DEBUG" != true ]; then # Do not loose time in paranoia debug		#__WITH_PARANOIA_DEBUG
 
-		if [ "$REMOTE_HOST_PING" != "no" ] && [ "$REMOTE_OPERATION" != "no" ]; then
+		if [ "$REMOTE_HOST_PING" != false ] && [ "$REMOTE_OPERATION" != false ]; then
 			eval "$PING_CMD $REMOTE_HOST > /dev/null 2>&1" &
 			ExecTasks $! "${FUNCNAME[0]}" false 0 0 60 180 true $SLEEP_TIME $KEEP_LOGGING
 			#ExecTasks "${FUNCNAME[0]}" 0 0 60 180 $SLEEP_TIME $KEEP_LOGGING true true false false 1 $!
@@ -1876,7 +1867,7 @@ function CheckConnectivity3rdPartyHosts {
 	local retval
 	local i
 
-	if [ "$_PARANOIA_DEBUG" != "yes" ]; then # Do not loose time in paranoia debug		#__WITH_PARANOIA_DEBUG
+	if [ "$_PARANOIA_DEBUG" != true ]; then # Do not loose time in paranoia debug		#__WITH_PARANOIA_DEBUG
 
 		if [ "$REMOTE_3RD_PARTY_HOSTS" != "" ]; then
 			remote3rdPartySuccess=false
@@ -1989,14 +1980,14 @@ function PreInit {
 	local compressionString
 
 	## SSH compression
-	if [ "$SSH_COMPRESSION" != "no" ]; then
+	if [ "$SSH_COMPRESSION" != false ]; then
 		SSH_COMP=-C
 	else
 		SSH_COMP=
 	fi
 
 	## Ignore SSH known host verification
-	if [ "$SSH_IGNORE_KNOWN_HOSTS" == "yes" ]; then
+	if [ "$SSH_IGNORE_KNOWN_HOSTS" == true ]; then
 		SSH_OPTS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 	fi
 
@@ -2006,7 +1997,7 @@ function PreInit {
 	fi
 
 	## Sudo execution option
-	if [ "$SUDO_EXEC" == "yes" ]; then
+	if [ "$SUDO_EXEC" == true ]; then
 		if [ "$RSYNC_REMOTE_PATH" != "" ]; then
 			RSYNC_PATH="sudo $RSYNC_REMOTE_PATH/$RSYNC_EXECUTABLE"
 		else
@@ -2170,19 +2161,19 @@ function InitRemoteOSDependingSettings {
 	fi
 
 	RSYNC_ATTR_ARGS=""
-	if [ "$PRESERVE_PERMISSIONS" != "no" ]; then
+	if [ "$PRESERVE_PERMISSIONS" != false ]; then
 		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -p"
 	fi
-	if [ "$PRESERVE_OWNER" != "no" ]; then
+	if [ "$PRESERVE_OWNER" != false ]; then
 		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -o"
 	fi
-	if [ "$PRESERVE_GROUP" != "no" ]; then
+	if [ "$PRESERVE_GROUP" != false ]; then
 		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -g"
 	fi
-	if [ "$PRESERVE_EXECUTABILITY" != "no" ]; then
+	if [ "$PRESERVE_EXECUTABILITY" != false ]; then
 		RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" --executability"
 	fi
-	if [ "$PRESERVE_ACL" == "yes" ]; then
+	if [ "$PRESERVE_ACL" == true ]; then
 		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "msys" ] && [ "$LOCAL_OS" != "Cygwin" ] && [ "$REMOTE_OS" != "Cygwin" ] && [ "$LOCAL_OS" != "BusyBox" ] && [ "$REMOTE_OS" != "BusyBox" ] && [ "$LOCAL_OS" != "Android" ] && [ "$REMOTE_OS" != "Android" ]; then
 			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -A"
 		else
@@ -2190,45 +2181,45 @@ function InitRemoteOSDependingSettings {
 
 		fi
 	fi
-	if [ "$PRESERVE_XATTR" == "yes" ]; then
+	if [ "$PRESERVE_XATTR" == true ]; then
 		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ] && [ "$LOCAL_OS" != "msys" ] && [ "$REMOTE_OS" != "msys" ] && [ "$LOCAL_OS" != "Cygwin" ] && [ "$REMOTE_OS" != "Cygwin" ] && [ "$LOCAL_OS" != "BusyBox" ] && [ "$REMOTE_OS" != "BusyBox" ]; then
 			RSYNC_ATTR_ARGS=$RSYNC_ATTR_ARGS" -X"
 		else
 			Logger "Disabling extended attributes synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
 		fi
 	fi
-	if [ "$RSYNC_COMPRESS" == "yes" ]; then
+	if [ "$RSYNC_COMPRESS" == true ]; then
 		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
 			RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" -zz --skip-compress=gz/xz/lz/lzma/lzo/rz/jpg/mp3/mp4/7z/bz2/rar/zip/sfark/s7z/ace/apk/arc/cab/dmg/jar/kgb/lzh/lha/lzx/pak/sfx"
 		else
 			Logger "Disabling compression skips on synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
 		fi
 	fi
-	if [ "$COPY_SYMLINKS" == "yes" ]; then
+	if [ "$COPY_SYMLINKS" == true ]; then
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" -L"
 	fi
-	if [ "$KEEP_DIRLINKS" == "yes" ]; then
+	if [ "$KEEP_DIRLINKS" == true ]; then
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" -K"
 	fi
 	if [ "$RSYNC_OPTIONAL_ARGS" != "" ]; then
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" "$RSYNC_OPTIONAL_ARGS
 	fi
-	if [ "$PRESERVE_HARDLINKS" == "yes" ]; then
+	if [ "$PRESERVE_HARDLINKS" == true ]; then
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" -H"
 	fi
-	if [ "$CHECKSUM" == "yes" ]; then
+	if [ "$CHECKSUM" == true ]; then
 		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --checksum"
 	fi
 	if [ "$BANDWIDTH" != "" ] && [ "$BANDWIDTH" != "0" ]; then
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" --bwlimit=$BANDWIDTH"
 	fi
 
-	if [ "$PARTIAL" == "yes" ]; then
+	if [ "$PARTIAL" == true ]; then
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" --partial --partial-dir=\"$PARTIAL_DIR\""
 		RSYNC_PARTIAL_EXCLUDE="--exclude=\"$PARTIAL_DIR\""
 	fi
 
-	if [ "$DELTA_COPIES" != "no" ]; then
+	if [ "$DELTA_COPIES" != false ]; then
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" --no-whole-file"
 	else
 		RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" --whole-file"
@@ -2421,14 +2412,14 @@ function TrapQuit {
 	fi
 
 	if [ $ERROR_ALERT == true ]; then
-		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
+		if [ "$RUN_AFTER_CMD_ON_ERROR" == true ]; then
 			RunAfterHook
 		fi
 		Logger "$PROGRAM finished with errors." "ERROR"
 		SendAlert
 		exitcode=1
 	elif [ $WARN_ALERT == true ]; then
-		if [ "$RUN_AFTER_CMD_ON_ERROR" == "yes" ]; then
+		if [ "$RUN_AFTER_CMD_ON_ERROR" == true ]; then
 			RunAfterHook
 		fi
 		Logger "$PROGRAM finished with warnings." "WARN"
@@ -2452,7 +2443,7 @@ function TrapQuit {
 function CheckEnvironment {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$REMOTE_OPERATION" == "yes" ]; then
+	if [ "$REMOTE_OPERATION" == true ]; then
 		if ! type ssh > /dev/null 2>&1 ; then
 			Logger "ssh not present. Cannot start backup." "CRITICAL"
 			exit 1
@@ -2463,7 +2454,7 @@ function CheckEnvironment {
 			exit 1
 		fi
 	else
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			if ! type mysqldump > /dev/null 2>&1 ; then
 				Logger "mysqldump not present. Cannot backup SQL." "CRITICAL"
 				CAN_BACKUP_SQL=false
@@ -2475,14 +2466,14 @@ function CheckEnvironment {
 		fi
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ]; then
+	if [ "$FILE_BACKUP" != false ]; then
 		if ! type rsync > /dev/null 2>&1 ; then
 			Logger "rsync not present. Cannot backup files." "CRITICAL"
 			CAN_BACKUP_FILES=false
 		fi
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
+	if [ "$ENCRYPTION" == true ]; then
 		CheckCryptEnvironnment
 	fi
 
@@ -2509,15 +2500,20 @@ function CheckCryptEnvironnment {
 function CheckCurrentConfig {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
+	local test
+	local booleans
+	local num_vars
+
 	if [ "$INSTANCE_ID" == "" ]; then
 		Logger "No INSTANCE_ID defined in config file." "CRITICAL"
 		exit 1
 	fi
 
-	# Check all variables that should contain "yes" or "no"
-	declare -a yes_no_vars=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
-	for i in "${yes_no_vars[@]}"; do
-		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ]; then Logger \"Bogus $i value [\$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
+	# v2 config will use true / false instead of yes / no
+	# Check all variables that should contain "yes" or "no", true or false
+	declare -a booleans=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
+	for i in "${booleans[@]}"; do
+		test="if [ \"\$$i\" != \"yes\" ] && [ \"\$$i\" != \"no\" ] && [ \"\$$i\" != true ] && [ \"\$$i\" != false ]; then Logger \"Bogus $i value [\$$i] defined in config file. Correct your config file or update it with the update script if using and old version.\" \"CRITICAL\"; exit 1; fi"
 		eval "$test"
 	done
 
@@ -2533,14 +2529,14 @@ function CheckCurrentConfig {
 		eval "$test"
 	done
 
-	if [ "$FILE_BACKUP" == "yes" ]; then
+	if [ "$FILE_BACKUP" == true ]; then
 		if [ "$DIRECTORY_LIST" == "" ] && [ "$RECURSIVE_DIRECTORY_LIST" == "" ]; then
 			Logger "No directories specified in config file, no files to backup." "ERROR"
 			CAN_BACKUP_FILES=false
 		fi
 	fi
 
-	if [ "$REMOTE_OPERATION" == "yes" ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
+	if [ "$REMOTE_OPERATION" == true ] && [ ! -f "$SSH_RSA_PRIVATE_KEY" ]; then
 		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY]. Cannot connect to remote system." "CRITICAL"
 		exit 1
 	fi
@@ -2551,17 +2547,17 @@ function CheckCurrentConfig {
 	#	exit 1
 	#fi
 
-	if [ "$SQL_BACKUP" == "yes" ] && [ "$SQL_STORAGE" == "" ]; then
+	if [ "$SQL_BACKUP" == true ] && [ "$SQL_STORAGE" == "" ]; then
 		Logger "SQL_STORAGE not defined." "CRITICAL"
 		exit 1
 	fi
 
-	if [ "$FILE_BACKUP" == "yes" ] && [ "$FILE_STORAGE" == "" ]; then
+	if [ "$FILE_BACKUP" == true ] && [ "$FILE_STORAGE" == "" ]; then
 		Logger "FILE_STORAGE not defined." "CRITICAL"
 		exit 1
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
+	if [ "$ENCRYPTION" == true ]; then
 		if [ "$CRYPT_STORAGE" == "" ]; then
 			Logger "CRYPT_STORAGE not defined." "CRITICAL"
 			exit 1
@@ -2572,10 +2568,23 @@ function CheckCurrentConfig {
 		fi
 	fi
 
-	if [ "$REMOTE_OPERATION" == "yes" ] && ([ ! -f "$SSH_RSA_PRIVATE_KEY" ] && [ ! -f "$SSH_PASSWORD_FILE" ]); then
+	if [ "$REMOTE_OPERATION" == true ] && ([ ! -f "$SSH_RSA_PRIVATE_KEY" ] && [ ! -f "$SSH_PASSWORD_FILE" ]); then
 		Logger "Cannot find rsa private key [$SSH_RSA_PRIVATE_KEY] nor password file [$SSH_PASSWORD_FILE]. No authentication method provided." "CRITICAL"
 		exit 1
 	fi
+}
+
+# Change all booleans with "yes" or "no" to true / false for v2 config syntax compatibility
+function UpdateBooleans {
+	local update
+	local booleans
+
+	declare -a booleans=(SQL_BACKUP FILE_BACKUP ENCRYPTION CREATE_DIRS KEEP_ABSOLUTE_PATHS GET_BACKUP_SIZE SSH_COMPRESSION SSH_IGNORE_KNOWN_HOSTS REMOTE_HOST_PING SUDO_EXEC DATABASES_ALL PRESERVE_PERMISSIONS PRESERVE_OWNER PRESERVE_GROUP PRESERVE_EXECUTABILITY PRESERVE_ACL PRESERVE_XATTR COPY_SYMLINKS KEEP_DIRLINKS PRESERVE_HARDLINKS RSYNC_COMPRESS PARTIAL DELETE_VANISHED_FILES DELTA_COPIES ROTATE_SQL_BACKUPS ROTATE_FILE_BACKUPS STOP_ON_CMD_ERROR RUN_AFTER_CMD_ON_ERROR)
+
+	for i in "${booleans[@]}"; do
+		update="if [ \"\$$i\" == \"yes\" ]; then $i=true; fi; if [ \"\$$i\" == \"no\" ]; then $i=false; fi"
+		eval "$update"
+	done
 }
 
 function CheckRunningInstances {
@@ -2679,7 +2688,7 @@ function ListDatabases {
 		while read -r line; do
 			while read -r name size; do dbName=$name; dbSize=$size; done <<< "$line"
 
-			if [ "$DATABASES_ALL" == "yes" ]; then
+			if [ "$DATABASES_ALL" == true ]; then
 				dbBackup=true
 				IFS=$PATH_SEPARATOR_CHAR read -r -a dbArray <<< "$DATABASES_ALL_EXCLUDE_LIST"
 				for j in "${dbArray[@]}"; do
@@ -2783,13 +2792,13 @@ env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_P
 env RECURSIVE_DIRECTORY_LIST="'$RECURSIVE_DIRECTORY_LIST'" env PATH_SEPARATOR_CHAR="'$PATH_SEPARATOR_CHAR'" \
 env REMOTE_FIND_CMD="'$REMOTE_FIND_CMD'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
-if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
-	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == true ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=true				#__WITH_PARANOIA_DEBUG
 fi						#__WITH_PARANOIA_DEBUG
 
-## allow debugging from command line with _DEBUG=yes
-if [ ! "$_DEBUG" == "yes" ]; then
-	_DEBUG=no
+## allow debugging from command line with _DEBUG=true
+if [ ! "$_DEBUG" == true ]; then
+	_DEBUG=false
 	_LOGGER_VERBOSE=false
 else
 	trap 'TrapError ${LINENO} $?' ERR
@@ -2859,19 +2868,19 @@ function RemoteLogger {
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "" "$prefix\e[31m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "" "$prefix\e[33m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
@@ -2889,12 +2898,12 @@ function RemoteLogger {
 		_Logger	 "" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
+		if [ "$_DEBUG" == true ]; then
 			_Logger "" "$prefix$value"
 			return
 		fi
 	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == true ]; then			#__WITH_PARANOIA_DEBUG
 			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
@@ -3078,13 +3087,13 @@ env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_P
 dirList="'$dirList'" \
 $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
-if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
-	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == true ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=true				#__WITH_PARANOIA_DEBUG
 fi						#__WITH_PARANOIA_DEBUG
 
-## allow debugging from command line with _DEBUG=yes
-if [ ! "$_DEBUG" == "yes" ]; then
-	_DEBUG=no
+## allow debugging from command line with _DEBUG=true
+if [ ! "$_DEBUG" == true ]; then
+	_DEBUG=false
 	_LOGGER_VERBOSE=false
 else
 	trap 'TrapError ${LINENO} $?' ERR
@@ -3154,19 +3163,19 @@ function RemoteLogger {
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "" "$prefix\e[31m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "" "$prefix\e[33m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
@@ -3184,12 +3193,12 @@ function RemoteLogger {
 		_Logger	 "" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
+		if [ "$_DEBUG" == true ]; then
 			_Logger "" "$prefix$value"
 			return
 		fi
 	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == true ]; then			#__WITH_PARANOIA_DEBUG
 			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
@@ -3237,11 +3246,11 @@ function GetDirectoriesSize {
 	Logger "Getting files size" "NOTICE"
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]; then
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_GetDirectoriesSizeLocal "$FILE_SIZE_LIST"
 		fi
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_GetDirectoriesSizeRemote "$FILE_SIZE_LIST"
 		fi
 	fi
@@ -3283,13 +3292,13 @@ env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILE
 env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
 env dirToCreate="'$dirToCreate'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
-if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
-	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == true ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=true				#__WITH_PARANOIA_DEBUG
 fi						#__WITH_PARANOIA_DEBUG
 
-## allow debugging from command line with _DEBUG=yes
-if [ ! "$_DEBUG" == "yes" ]; then
-	_DEBUG=no
+## allow debugging from command line with _DEBUG=true
+if [ ! "$_DEBUG" == true ]; then
+	_DEBUG=false
 	_LOGGER_VERBOSE=false
 else
 	trap 'TrapError ${LINENO} $?' ERR
@@ -3359,19 +3368,19 @@ function RemoteLogger {
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "" "$prefix\e[31m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "" "$prefix\e[33m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
@@ -3389,12 +3398,12 @@ function RemoteLogger {
 		_Logger	 "" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
+		if [ "$_DEBUG" == true ]; then
 			_Logger "" "$prefix$value"
 			return
 		fi
 	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == true ]; then			#__WITH_PARANOIA_DEBUG
 			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
@@ -3427,38 +3436,38 @@ function CreateStorageDirectories {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			_CreateDirectoryLocal "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_CreateDirectoryLocal "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
-		if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$ENCRYPTION" == true ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			_CreateDirectoryRemote "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_SQL=false
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			_CreateDirectoryRemote "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
 			fi
 		fi
-		if [ "$ENCRYPTION" == "yes" ]; then
+		if [ "$ENCRYPTION" == true ]; then
 			_CreateDirectoryLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CAN_BACKUP_FILES=false
@@ -3514,13 +3523,13 @@ env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_P
 env DF_CMD="'$DF_CMD'" \
 env pathToCheck="'$pathToCheck'" $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
-if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
-	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == true ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=true				#__WITH_PARANOIA_DEBUG
 fi						#__WITH_PARANOIA_DEBUG
 
-## allow debugging from command line with _DEBUG=yes
-if [ ! "$_DEBUG" == "yes" ]; then
-	_DEBUG=no
+## allow debugging from command line with _DEBUG=true
+if [ ! "$_DEBUG" == true ]; then
+	_DEBUG=false
 	_LOGGER_VERBOSE=false
 else
 	trap 'TrapError ${LINENO} $?' ERR
@@ -3590,19 +3599,19 @@ function RemoteLogger {
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "" "$prefix\e[31m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "" "$prefix\e[33m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
@@ -3620,12 +3629,12 @@ function RemoteLogger {
 		_Logger	 "" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
+		if [ "$_DEBUG" == true ]; then
 			_Logger "" "$prefix$value"
 			return
 		fi
 	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == true ]; then			#__WITH_PARANOIA_DEBUG
 			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
@@ -3680,7 +3689,7 @@ function CheckDiskSpace {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 	if [ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "pull" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			GetDiskSpaceLocal "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
@@ -3690,7 +3699,7 @@ function CheckDiskSpace {
 				SQL_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			GetDiskSpaceLocal "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
@@ -3700,7 +3709,7 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$ENCRYPTION" != "no" ]; then
+		if [ "$ENCRYPTION" != false ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
@@ -3712,7 +3721,7 @@ function CheckDiskSpace {
 			fi
 		fi
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			GetDiskSpaceRemote "$SQL_STORAGE"
 			if [ $? -ne 0 ]; then
 				SQL_DISK_SPACE=0
@@ -3721,7 +3730,7 @@ function CheckDiskSpace {
 				SQL_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			GetDiskSpaceRemote "$FILE_STORAGE"
 			if [ $? -ne 0 ]; then
 				FILE_DISK_SPACE=0
@@ -3730,7 +3739,7 @@ function CheckDiskSpace {
 				FILE_DRIVE=$DRIVE
 			fi
 		fi
-		if [ "$ENCRYPTION" != "no" ]; then
+		if [ "$ENCRYPTION" != false ]; then
 			GetDiskSpaceLocal "$CRYPT_STORAGE"
 			if [ $? -ne 0 ]; then
 				CRYPT_DISK_SPACE=0
@@ -3751,7 +3760,7 @@ function CheckDiskSpace {
 		TOTAL_FILES_SIZE=-1
 	fi
 
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
+	if [ "$SQL_BACKUP" != false ] && [ $CAN_BACKUP_SQL == true ]; then
 		if [ $SQL_DISK_SPACE -eq 0 ]; then
 			Logger "Storage space in [$SQL_STORAGE] reported to be 0Ko." "WARN"
 		fi
@@ -3764,7 +3773,7 @@ function CheckDiskSpace {
 		Logger "SQL storage Space: $SQL_DISK_SPACE Ko - Databases size: $TOTAL_DATABASES_SIZE Ko" "NOTICE"
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
+	if [ "$FILE_BACKUP" != false ] && [ $CAN_BACKUP_FILES == true ]; then
 		if [ $FILE_DISK_SPACE -eq 0 ]; then
 			Logger "Storage space in [$FILE_STORAGE] reported to be 0 Ko." "WARN"
 		fi
@@ -3777,8 +3786,8 @@ function CheckDiskSpace {
 		Logger "File storage space: $FILE_DISK_SPACE Ko - Files size: $TOTAL_FILES_SIZE Ko" "NOTICE"
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
-		if [ "$SQL_BACKUP" != "no" ]; then
+	if [ "$ENCRYPTION" == true ]; then
+		if [ "$SQL_BACKUP" != false ]; then
 			if [ "$SQL_DRIVE" == "$CRYPT_DRIVE" ]; then
 				if [ $((SQL_DISK_SPACE/2)) -lt $((TOTAL_DATABASES_SIZE)) ]; then
 					Logger "Disk space in [$SQL_STORAGE] and [$CRYPT_STORAGE] may be insufficient to backup SQL ($SQL_DISK_SPACE Ko available in $SQL_DRIVE) (non compressed databases calculation + crypt storage space)." "WARN"
@@ -3790,7 +3799,7 @@ function CheckDiskSpace {
 			fi
 		fi
 
-		if [ "$FILE_BACKUP" != "no" ]; then
+		if [ "$FILE_BACKUP" != false ]; then
 			if [ "$FILE_DRIVE" == "$CRYPT_DRIVE" ]; then
 				if [ $((FILE_DISK_SPACE/2)) -lt $((TOTAL_FILES_SIZE)) ]; then
 					Logger "Disk space in [$FILE_STORAGE] and [$CRYPT_STORAGE] may be insufficient to encrypt Sfiles ($FILE_DISK_SPACE Ko available in $FILE_DRIVE)." "WARN"
@@ -3805,7 +3814,7 @@ function CheckDiskSpace {
 		Logger "Crypt storage space: $CRYPT_DISK_SPACE Ko" "NOTICE"
 	fi
 
-	if [ $BACKUP_SIZE_MINIMUM -gt $((TOTAL_DATABASES_SIZE+TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != "no" ]; then
+	if [ $BACKUP_SIZE_MINIMUM -gt $((TOTAL_DATABASES_SIZE+TOTAL_FILES_SIZE)) ] && [ "$GET_BACKUP_SIZE" != false ]; then
 		Logger "Backup size is smaller than expected." "WARN"
 	fi
 }
@@ -3966,7 +3975,7 @@ function BackupDatabase {
 		mysqlOptions="$MYSQLDUMP_OPTIONS"
 	fi
 
-	if [ "$ENCRYPTION" == "yes" ]; then
+	if [ "$ENCRYPTION" == true ]; then
 		encrypt=true
 		Logger "Backing up encrypted database [$database]." "NOTICE"
 	else
@@ -4275,7 +4284,7 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup directories from simple list
 
-		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$KEEP_ABSOLUTE_PATHS" != false ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
 				destinationDir="$FILE_STORAGE/"
@@ -4289,14 +4298,14 @@ function FilesBackup {
 		fi
 
 		Logger "Beginning file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+		if [ "$ENCRYPTION" == true ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+		elif [ "$ENCRYPTION" == true ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" true
 			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
@@ -4311,7 +4320,7 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup recursive directories without recursion
 
-		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$KEEP_ABSOLUTE_PATHS" != false ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
 				destinationDir="$FILE_STORAGE/"
@@ -4325,14 +4334,14 @@ function FilesBackup {
 		fi
 
 		Logger "Beginning non recursive file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+		if [ "$ENCRYPTION" == true ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" false true
 			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" false
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+		elif [ "$ENCRYPTION" == true ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" false
 			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" false false
@@ -4347,7 +4356,7 @@ function FilesBackup {
 	for backupTask in "${backupTasks[@]}"; do
 	# Backup sub directories of recursive directories
 
-		if [ "$KEEP_ABSOLUTE_PATHS" != "no" ]; then
+		if [ "$KEEP_ABSOLUTE_PATHS" != false ]; then
 			# Fix for backup of '/'
 			if [ "${backupTask#/}/" == "/" ]; then
 				destinationDir="$FILE_STORAGE/"
@@ -4361,14 +4370,14 @@ function FilesBackup {
 		fi
 
 		Logger "Beginning recursive child file backup of [$backupTask] to [$destinationDir] as $BACKUP_TYPE backup." "NOTICE"
-		if [ "$ENCRYPTION" == "yes" ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
+		if [ "$ENCRYPTION" == true ] && ([ "$BACKUP_TYPE" == "local" ] || [ "$BACKUP_TYPE" == "push" ]); then
 			EncryptFiles "$backupTask" "$CRYPT_STORAGE" "$GPG_RECIPIENT" true true
 			if [ $? -eq 0 ]; then
 				Rsync "$CRYPT_STORAGE/$backupTask" "$destinationDir" true
 			else
 				Logger "backup failed." "ERROR"
 			fi
-		elif [ "$ENCRYPTION" == "yes" ] && [ "$BACKUP_TYPE" == "pull" ]; then
+		elif [ "$ENCRYPTION" == true ] && [ "$BACKUP_TYPE" == "pull" ]; then
 			Rsync "$backupTask" "$destinationDir" true
 			if [ $? -eq 0 ]; then
 				EncryptFiles "$encryptDir" "$CRYPT_STORAGE/$backupTask" "$GPG_RECIPIENT" true false
@@ -4451,7 +4460,7 @@ function _RotateBackupsLocal {
 			fi
 
 		else
-		#elif [ "$REMOTE_OPERATION" == "yes" ]; then
+		#elif [ "$REMOTE_OPERATION" == true ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			Logger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd" &
@@ -4485,13 +4494,13 @@ env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_P
 env REMOTE_FIND_CMD="'$REMOTE_FIND_CMD'" env rotateCopies="'$rotateCopies'" env backupPath="'$backupPath'" \
 $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
 ## allow function call checks			#__WITH_PARANOIA_DEBUG
-if [ "$_PARANOIA_DEBUG" == "yes" ];then		#__WITH_PARANOIA_DEBUG
-	_DEBUG=yes				#__WITH_PARANOIA_DEBUG
+if [ "$_PARANOIA_DEBUG" == true ];then		#__WITH_PARANOIA_DEBUG
+	_DEBUG=true				#__WITH_PARANOIA_DEBUG
 fi						#__WITH_PARANOIA_DEBUG
 
-## allow debugging from command line with _DEBUG=yes
-if [ ! "$_DEBUG" == "yes" ]; then
-	_DEBUG=no
+## allow debugging from command line with _DEBUG=true
+if [ ! "$_DEBUG" == true ]; then
+	_DEBUG=false
 	_LOGGER_VERBOSE=false
 else
 	trap 'TrapError ${LINENO} $?' ERR
@@ -4561,19 +4570,19 @@ function RemoteLogger {
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "" "$prefix\e[1;33;41m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "ERROR" ]; then
 		_Logger "" "$prefix\e[31m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
 	elif [ "$level" == "WARN" ]; then
 		_Logger "" "$prefix\e[33m$value\e[0m" true
-		if [ $_DEBUG == "yes" ]; then
+		if [ $_DEBUG == true ]; then
 			_Logger -e "" "[$retval] in [$(joinString , ${FUNCNAME[@]})] SP=$SCRIPT_PID P=$$" true
 		fi
 		return
@@ -4591,12 +4600,12 @@ function RemoteLogger {
 		_Logger	 "" "$prefix$value"
 		return
 	elif [ "$level" == "DEBUG" ]; then
-		if [ "$_DEBUG" == "yes" ]; then
+		if [ "$_DEBUG" == true ]; then
 			_Logger "" "$prefix$value"
 			return
 		fi
 	elif [ "$level" == "PARANOIA_DEBUG" ]; then				#__WITH_PARANOIA_DEBUG
-		if [ "$_PARANOIA_DEBUG" == "yes" ]; then			#__WITH_PARANOIA_DEBUG
+		if [ "$_PARANOIA_DEBUG" == true ]; then			#__WITH_PARANOIA_DEBUG
 			_Logger "" "$prefix\e[35m$value\e[0m"			#__WITH_PARANOIA_DEBUG
 			return							#__WITH_PARANOIA_DEBUG
 		fi								#__WITH_PARANOIA_DEBUG
@@ -4652,7 +4661,7 @@ function _RotateBackupsRemoteSSH {
 			fi
 
 		else
-		#elif [ "$REMOTE_OPERATION" == "yes" ]; then
+		#elif [ "$REMOTE_OPERATION" == true ]; then
 			cmd="cp -R \"$backup\" \"$backup.$PROGRAM.1\""
 			RemoteLogger "Launching command [$cmd]." "DEBUG"
 			eval "$cmd"
@@ -4714,7 +4723,7 @@ function Init {
 
 	## Test if target dir is a ssh uri, and if yes, break it down it its values
 	if [ "${REMOTE_SYSTEM_URI:0:6}" == "ssh://" ] && [ "$BACKUP_TYPE" != "local" ]; then
-		REMOTE_OPERATION="yes"
+		REMOTE_OPERATION=true
 
 		# remove leadng 'ssh://'
 		uri=${REMOTE_SYSTEM_URI#ssh://*}
@@ -4751,7 +4760,7 @@ function Init {
 		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" -i"
 	fi
 
-	if [ "$DELETE_VANISHED_FILES" == "yes" ]; then
+	if [ "$DELETE_VANISHED_FILES" == true ]; then
 		RSYNC_TYPE_ARGS=$RSYNC_TYPE_ARGS" --delete"
 	fi
 
@@ -4766,12 +4775,12 @@ function Init {
 function Main {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
+	if [ "$SQL_BACKUP" != false ] && [ $CAN_BACKUP_SQL == true ]; then
 		ListDatabases
 	fi
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
+	if [ "$FILE_BACKUP" != false ] && [ $CAN_BACKUP_FILES == true ]; then
 		ListRecursiveBackupDirectories
-		if [ "$GET_BACKUP_SIZE" != "no" ]; then
+		if [ "$GET_BACKUP_SIZE" != false ]; then
 			GetDirectoriesSize
 		else
 			TOTAL_FILES_SIZE=-1
@@ -4785,21 +4794,21 @@ function Main {
 	SSH_PASSWORD_FILE="${SSH_PASSWORD_FILE/#\~/$HOME}"
 	ENCRYPT_PUBKEY="${ENCRYPT_PUBKEY/#\~/$HOME}"
 
-	if [ "$CREATE_DIRS" != "no" ]; then
+	if [ "$CREATE_DIRS" != false ]; then
 		CreateStorageDirectories
 	fi
 	CheckDiskSpace
 
 	# Actual backup process
-	if [ "$SQL_BACKUP" != "no" ] && [ $CAN_BACKUP_SQL == true ]; then
-		if [ $_DRYRUN == false ] && [ "$ROTATE_SQL_BACKUPS" == "yes" ]; then
+	if [ "$SQL_BACKUP" != false ] && [ $CAN_BACKUP_SQL == true ]; then
+		if [ $_DRYRUN == false ] && [ "$ROTATE_SQL_BACKUPS" == true ]; then
 			RotateBackups "$SQL_STORAGE" "$ROTATE_SQL_COPIES"
 		fi
 		BackupDatabases
 	fi
 
-	if [ "$FILE_BACKUP" != "no" ] && [ $CAN_BACKUP_FILES == true ]; then
-		if [ $_DRYRUN == false ] && [ "$ROTATE_FILE_BACKUPS" == "yes" ]; then
+	if [ "$FILE_BACKUP" != false ] && [ $CAN_BACKUP_FILES == true ]; then
+		if [ $_DRYRUN == false ] && [ "$ROTATE_FILE_BACKUPS" == true ]; then
 			RotateBackups "$FILE_STORAGE" "$ROTATE_FILE_COPIES"
 		fi
 		## Add Rsync include / exclude patterns
@@ -4812,7 +4821,7 @@ function Usage {
 	__CheckArguments 0 $# "$@"    #__WITH_PARANOIA_DEBUG
 
 
-	if [ "$IS_STABLE" != "yes" ]; then
+	if [ "$IS_STABLE" != true ]; then
 		echo -e "\e[93mThis is an unstable dev build. Please use with caution.\e[0m"
 	fi
 
@@ -4970,6 +4979,9 @@ else
 	LOG_FILE="$LOGFILE"
 fi
 
+# v2.3 config syntax compatibility
+UpdateBooleans
+
 if [ ! -w "$(dirname $LOG_FILE)" ]; then
 	echo "Cannot write to log [$(dirname $LOG_FILE)]."
 else
@@ -4986,18 +4998,18 @@ if [ $no_maxtime == true ]; then
 fi
 
 if [ $partial_transfers == true ]; then
-	PARTIAL="yes"
+	PARTIAL=true
 fi
 
 if [ $delete_vanished == true ]; then
-	DELETE_VANISHED_FILES="yes"
+	DELETE_VANISHED_FILES=true
 fi
 
 if [ $dont_get_backup_size == true ]; then
-	GET_BACKUP_SIZE="no"
+	GET_BACKUP_SIZE=false
 fi
 
-if [ "$IS_STABLE" != "yes" ]; then
+if [ "$IS_STABLE" != true ]; then
 	Logger "This is an unstable dev build [$PROGRAM_BUILD]. Please use with caution." "WARN"
 fi
 
