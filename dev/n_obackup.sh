@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2018110602
+PROGRAM_BUILD=2019052001
 IS_STABLE=true
 
 #### Execution order					#__WITH_PARANOIA_DEBUG
@@ -1953,7 +1953,7 @@ function GetCommandlineArguments {
 	fi
 
 	for i in "$@"; do
-		case $i in
+		case "$i" in
 			--dry)
 			_DRYRUN=true
 			;;
@@ -2025,6 +2025,7 @@ function GetCommandlineArguments {
 }
 
 GetCommandlineArguments "$@"
+
 if [ "$_DECRYPT_MODE" == true ]; then
 	CheckCryptEnvironnment
 	GetLocalOS
@@ -2044,6 +2045,10 @@ if [ "$_ENCRYPT_MODE" == true ]; then
 fi
 
 LoadConfigFile "$1"
+
+# Reload GetCommandlineArguments to override config file with runtime arguments
+GetCommandlineArguments "$@"
+
 if [ "$LOGFILE" == "" ]; then
 	if [ -w /var/log ]; then
 		LOG_FILE="/var/log/$PROGRAM.$INSTANCE_ID.log"
