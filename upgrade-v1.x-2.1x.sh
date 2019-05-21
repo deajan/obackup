@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_REVISION=2.1
-PROGRAM_BUILD=2019052101
+PROGRAM_BUILD=2019052102
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -254,8 +254,8 @@ function RewriteOldConfigFiles {
 	sed -i'.tmp' 's/^LOCAL_STORAGE_KEEP_ABSOLUTE_PATHS=/KEEP_ABSOLUTE_PATHS=/g' "$config_file"
 	sed -i'.tmp' 's/^LOCAL_STORAGE_WARN_MIN_SPACE=/SQL_WARN_MIN_SPACE=/g' "$config_file"
 	if ! grep "^FILE_WARN_MIN_SPACE=" "$config_file" > /dev/null; then
-		VALUE=$(cat $config_file | grep "SQL_WARN_MIN_SPACE=")
-		VALUE=${VALUE#*=}
+		VALUE=$(grep "SQL_WARN_MIN_SPACE=" "$config_file")
+		VALUE="${VALUE#*=}"
 		sed -i'.tmp' '/^SQL_WARN_MIN_SPACE=*/a\'$'\n''FILE_WARN_MIN_SPACE='$VALUE'\'$'\n''' "$config_file"
 	fi
 	sed -i'.tmp' 's/^DIRECTORIES_SIMPLE_LIST=/DIRECTORY_LIST=/g' "$config_file"
@@ -263,25 +263,25 @@ function RewriteOldConfigFiles {
 	sed -i'.tmp' 's/^DIRECTORIES_RECURSE_EXCLUDE_LIST=/RECURSIVE_EXCLUDE_LIST=/g' "$config_file"
 	sed -i'.tmp' 's/^ROTATE_BACKUPS=/ROTATE_SQL_BACKUPS=/g' "$config_file"
 	if ! grep "^ROTATE_FILE_BACKUPS=" "$config_file" > /dev/null; then
-		VALUE=$(cat $config_file | grep "ROTATE_SQL_BACKUPS=")
-		VALUE=${VALUE#*=}
+		VALUE=$(grep "ROTATE_SQL_BACKUPS=" "$config_file")
+		VALUE="${VALUE#*=}"
 		sed -i'.tmp' '/^ROTATE_SQL_BACKUPS=*/a\'$'\n''ROTATE_FILE_BACKUPS='$VALUE'\'$'\n''' "$config_file"
 	fi
 	sed -i'.tmp' 's/^ROTATE_COPIES=/ROTATE_SQL_COPIES=/g' "$config_file"
 	if ! grep "^ROTATE_FILE_COPIES=" "$config_file" > /dev/null; then
-		VALUE=$(cat $config_file | grep "ROTATE_SQL_COPIES=")
-		VALUE=${VALUE#*=}
+		VALUE=$(grep "ROTATE_SQL_COPIES=" "$config_file")
+		VALUE="${VALUE#*=}"
 		sed -i'.tmp' '/^ROTATE_SQL_COPIES=*/a\'$'\n''ROTATE_FILE_COPIES='$VALUE'\'$'\n''' "$config_file"
 	fi
-	REMOTE_BACKUP=$(cat $config_file | grep "REMOTE_BACKUP=")
-	REMOTE_BACKUP=${REMOTE_BACKUP#*=}
+	REMOTE_BACKUP=$(grep "REMOTE_BACKUP=" "$config_file")
+	REMOTE_BACKUP="${REMOTE_BACKUP#*=}"
 	if [ "$REMOTE_BACKUP" == "true" ]; then
-		REMOTE_USER=$(cat $config_file | grep "REMOTE_USER=")
-		REMOTE_USER=${REMOTE_USER#*=}
-		REMOTE_HOST=$(cat $config_file | grep "REMOTE_HOST=")
-		REMOTE_HOST=${REMOTE_HOST#*=}
-		REMOTE_PORT=$(cat $config_file | grep "REMOTE_PORT=")
-		REMOTE_PORT=${REMOTE_PORT#*=}
+		REMOTE_USER=$(grep "REMOTE_USER=" "$config_file")
+		REMOTE_USER="${REMOTE_USER#*=}"
+		REMOTE_HOST=$(grep "REMOTE_HOST=" "$config_file")
+		REMOTE_HOST="${REMOTE_HOST#*=}"
+		REMOTE_PORT=$(grep "REMOTE_PORT=" "$config_file")
+		REMOTE_PORT="${REMOTE_PORT#*=}"
 
 		REMOTE_SYSTEM_URI="ssh://$REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT/"
 
