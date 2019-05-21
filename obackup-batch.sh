@@ -57,8 +57,8 @@ function _Logger {
 		echo -e "$logValue" >> "$LOG_FILE"
 
 		# Build current log file for alerts if we have a sufficient environment
-		if [ "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" != "" ]; then
-			echo -e "$logValue" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP"
+		if [ "$RUN_DIR/$PROGRAM" != "/" ]; then
+			echo -e "$logValue" >> "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID.$TSTAMP.log"
 		fi
 	fi
 
