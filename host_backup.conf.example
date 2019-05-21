@@ -3,7 +3,7 @@
 ###### obackup - Local or Remote, push or pull backup script for files & mysql databases
 ###### (C) 2013-2019 by Orsiris de Jong (www.netpower.fr)
 
-###### GENERAL BACKUP OPTIONS
+[GENERAL]
 CONFIG_FILE_REVISION=2.1
 
 ## Backup identification string.
@@ -20,7 +20,7 @@ FILE_BACKUP=true
 ## Pulled backups are the safest option, as the backup server contains the RSA key and cannot be compromised by another server.
 BACKUP_TYPE=local
 
-###### BACKUP STORAGE
+[BACKUP STORAGE]
 
 ## Storage paths of the backups (absolute paths of the local or remote system). Please use ${HOME} instead of ~ if needed.
 SQL_STORAGE="/home/storage/backup/sql"
@@ -59,7 +59,7 @@ GET_BACKUP_SIZE=true
 SQL_WARN_MIN_SPACE=1048576
 FILE_WARN_MIN_SPACE=1048576
 
-###### REMOTE ONLY OPTIONS
+[REMOTE_OPTIONS]
 
 ## In case of pulled or pushed backups, remote system URI needs to be supplied.
 REMOTE_SYSTEM_URI="ssh://backupuser@remote.system.tld:22/"
@@ -92,7 +92,7 @@ REMOTE_3RD_PARTY_HOSTS="www.kernel.org www.google.com"
 ## If enabled, commands will be executed as superuser on remote side. See documentation for /etc/sudoers configuration ("find", "du", "tee" and "rsync" need to be allowed). Requiretty needs to be disabled.
 SUDO_EXEC=false
 
-###### DATABASE SPECIFIC OPTIONS
+[DATABASE BACKUP SETTINGS]
 
 ## Database backup user (should be the same you are running obackup with)
 SQL_USER=root
@@ -101,6 +101,8 @@ SQL_USER=root
 ## Every found database will be backed up as separate backup task.
 DATABASES_ALL=true
 DATABASES_ALL_EXCLUDE_LIST="test;mysql"
+DATABASES_LIST=""
+
 ## Alternatively, if DATABASES_ALL=false, you can specify a list of databases to backup separated by semi-colons.
 #DATABASES_LIST="somedatabase"
 
@@ -118,7 +120,7 @@ MYSQLDUMP_OPTIONS="--opt --single-transaction"
 ## If you use encryption, compression will only bring small benefits as GPG already has pretty good compression included
 COMPRESSION_LEVEL=3
 
-###### FILES SPECIFIC OPTIONS
+[FILE BACKUP SETTINGS]
 
 ## File backups are divided in tasks. Every directory in DIRECTORY_LIST will be processed as a unique task.
 ## Every subdirectory of each directory in RECURSIVE_DIRECTORY_LIST will be processed as a unique task.
@@ -198,7 +200,7 @@ BANDWIDTH=0
 ## Paranoia option. Don't change this unless you read the documentation.
 RSYNC_EXECUTABLE=rsync
 
-###### ALERT OPTIONS
+[ALERT_OPTIONS]
 
 ## Alert email addresses separated by a space character
 DESTINATION_MAILS="your@mail.address"
@@ -217,7 +219,7 @@ SMTP_ENCRYPTION=none
 SMTP_USER=
 SMTP_PASSWORD=
 
-###### GENERAL BACKUP OPTIONS
+[BACKUP SETTINGS]
 
 ## Max execution time of whole backup process. Soft max exec time generates a warning only.
 ## Hard max exec time generates a warning and stops the whole backup execution.
@@ -233,7 +235,7 @@ ROTATE_SQL_COPIES=7
 ROTATE_FILE_BACKUPS=false
 ROTATE_FILE_COPIES=7
 
-###### EXECUTION HOOKS
+[EXECUTION_HOOKS]
 
 ## Commands can will be run before and / or after backup execution (remote execution will only happen if REMOTE_BACKUP is set).
 ## This is useful to make a snapshot before backing up data, or even handle snapshots of backed up data.
