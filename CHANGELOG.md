@@ -9,6 +9,13 @@ KNOWN ISSUES
 CHANGELOG
 ---------
 
+dd Mmm YYYY: obackup v2.1 RC2 released
+--------------------------------------
+
+- Added a default required config file revision
+- Updated ofunctions to use booleans instead of yes/no syntax which still works
+- Fixed verbose rsync output not working
+
 03 Jan 2019: obackup v2.1 RC1 released
 --------------------------------------
 
