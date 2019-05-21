@@ -6,8 +6,8 @@ AUTHOR="(C) 2016 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
-CONFIG_FILE_VERSION=2017020901
-PROGRAM_BUILD=2016113001
+CONFIG_FILE_REVISION=2.1
+PROGRAM_BUILD=2019052101
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -109,33 +109,33 @@ RUN_AFTER_CMD_ON_ERROR
 VALUES=(
 test-backup
 ''
-yes
-yes
+true
+true
 local
 /home/storage/sql
 /home/storage/files
-no
+false
 /home/storage/crypt
 'Your Name used with GPG signature'
 ''
-yes
-yes
+true
+true
 1024
-yes
+true
 1048576
 1048576
 ssh://backupuser@remote.system.tld:22/
 ${HOME}/.ssh/id_rsa
 ''
 SomeAlphaNumericToken9
-yes
-no
+true
+false
 ''
-yes
+true
 'www.kernel.org www.google.com'
-no
+false
 root
-yes
+true
 test
 ''
 3600
@@ -152,21 +152,21 @@ include
 ''
 \;
 ''
-yes
-yes
-yes
-yes
-no
-no
-yes
-yes
-no
-no
+true
+true
+true
+true
+false
+false
+true
+true
+false
+false
 3600
 7200
-no
-no
-yes
+false
+false
+true
 0
 rsync
 infrastructure@example.com
@@ -174,15 +174,15 @@ infrastructure@example.com
 sender@example.com
 smtp.isp.tld
 25
-none
+falsene
 ''
 ''
 30000
 36000
 1801
-no
+false
 7
-no
+false
 7
 ''
 ''
@@ -190,8 +190,8 @@ no
 ''
 0
 0
-no
-no
+false
+false
 )
 
 function Usage {
@@ -222,7 +222,7 @@ function LoadConfigFile {
 	fi
 }
 
-function RewriteOldConfigFiles {
+function CheckAndBackup {
 	local config_file="${1}"
 
 	if ! grep "BACKUP_ID=" $config_file > /dev/null && ! grep "INSTANCE_ID=" $config_file > /dev/null; then
@@ -236,6 +236,10 @@ function RewriteOldConfigFiles {
 		echo "Cannot backup config file."
 		exit 1
 	fi
+}
+
+function RewriteOldConfigFiles {
+	local config_file="${1}"
 
 	echo "Rewriting config file $config_file"
 
@@ -245,8 +249,8 @@ function RewriteOldConfigFiles {
 	sed -i'.tmp' 's/^LOCAL_SQL_STORAGE=/SQL_STORAGE=/g' "$config_file"
 	sed -i'.tmp' 's/^LOCAL_FILE_STORAGE=/FILE_STORAGE=/g' "$config_file"
 
-	sed -i'.tmp' 's/^DISABLE_GET_BACKUP_FILE_SIZE=no/GET_BACKUP_SIZE=yes/g' "$config_file"
-	sed -i'.tmp' 's/^DISABLE_GET_BACKUP_FILE_SIZE=yes/GET_BACKUP_SIZE=no/g' "$config_file"
+	sed -i'.tmp' 's/^DISABLE_GET_BACKUP_FILE_SIZE=no/GET_BACKUP_SIZE=true/g' "$config_file"
+	sed -i'.tmp' 's/^DISABLE_GET_BACKUP_FILE_SIZE=yes/GET_BACKUP_SIZE=false/g' "$config_file"
 	sed -i'.tmp' 's/^LOCAL_STORAGE_KEEP_ABSOLUTE_PATHS=/KEEP_ABSOLUTE_PATHS=/g' "$config_file"
 	sed -i'.tmp' 's/^LOCAL_STORAGE_WARN_MIN_SPACE=/SQL_WARN_MIN_SPACE=/g' "$config_file"
 	if ! grep "^FILE_WARN_MIN_SPACE=" "$config_file" > /dev/null; then
@@ -271,7 +275,7 @@ function RewriteOldConfigFiles {
 	fi
 	REMOTE_BACKUP=$(cat $config_file | grep "REMOTE_BACKUP=")
 	REMOTE_BACKUP=${REMOTE_BACKUP#*=}
-	if [ "$REMOTE_BACKUP" == "yes" ]; then
+	if [ "$REMOTE_BACKUP" == "true" ]; then
 		REMOTE_USER=$(cat $config_file | grep "REMOTE_USER=")
 		REMOTE_USER=${REMOTE_USER#*=}
 		REMOTE_HOST=$(cat $config_file | grep "REMOTE_HOST=")
@@ -281,7 +285,7 @@ function RewriteOldConfigFiles {
 
 		REMOTE_SYSTEM_URI="ssh://$REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT/"
 
-		sed -i'.tmp' 's#^REMOTE_BACKUP=yes#REMOTE_SYSTEM_URI='$REMOTE_SYSTEM_URI'#g' "$config_file"
+		sed -i'.tmp' 's#^REMOTE_BACKUP=true#REMOTE_SYSTEM_URI='$REMOTE_SYSTEM_URI'#g' "$config_file"
 		sed -i'.tmp' '/^REMOTE_USER==*/d' "$config_file"
 		sed -i'.tmp' '/^REMOTE_HOST==*/d' "$config_file"
 		sed -i'.tmp' '/^REMOTE_PORT==*/d' "$config_file"
@@ -303,27 +307,65 @@ function AddMissingConfigOptions {
 		if ! grep "^${KEYWORDS[$counter]}=" > /dev/null "$config_file"; then
 			echo "${KEYWORDS[$counter]} not found"
 			if [ $counter -gt 0 ]; then
-				sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
+				if [ "{$VALUES[$counter]}" == true ] || [ "${VALUES[$counter]}" == false ]; then
+					sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'='"${VALUES[$counter]}"'\'$'\n''' "$config_file"
+				else
+					sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
+				fi
 				if [ $? -ne 0 ]; then
 					echo "Cannot add missing ${[KEYWORDS[$counter]}."
 					exit 1
 				fi
 			else
-				sed -i'.tmp' '/onfig file rev*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
+				if [ "{$VALUES[$counter]}" == true ] || [ "${VALUES[$counter]}" == false ]; then
+					sed -i'.tmp' '/[GENERAL\]$//a\'$'\n'${KEYWORDS[$counter]}'='"${VALUES[$counter]}"'\'$'\n''' "$config_file"
+				else
+					sed -i'.tmp' '/[GENERAL\]$//a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
+				fi
 			fi
 			echo "Added missing ${KEYWORDS[$counter]} config option with default option [${VALUES[$counter]}]"
+		else
+			# Not the most elegant but the quickest way :)
+                        if grep "^{$KEYWORDS[$counter]}=yes" > /dev/null "$config_file"; then
+                                sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=true/g' "$config_file"
+                                if [ $? -ne 0 ]; then
+                                        echo "Cannot rewrite ${[KEYWORDS[$counter]} boolean to true."
+                                        exit 1
+                                fi
+                        elif grep "^{$KEYWORDS[$counter]}=no" > /dev/null "$config_file"; then
+                                if [ $? -ne 0 ]; then
+                                        echo "Cannot rewrite ${[KEYWORDS[$counter]} boolean to false."
+                                        exit 1
+                                fi
+                                sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=false/g' "$config_file"
+                        fi
 		fi
 		counter=$((counter+1))
 	done
 }
 
+function RewriteSections {
+        local config_file="${1}"
+
+        sed -i'.tmp' 's/###### GENERAL BACKUP OPTIONS/[GENERAL]/g' "$config_file"
+        sed -i'.tmp' 's/###### BACKUP STORAGE/[BACKUP STORAGE]/g' "$config_file"
+        sed -i'.tmp' 's/###### REMOTE ONLY OPTIONS/[REMOTE_OPTIONS]/g' "$config_file"
+        sed -i'.tmp' 's/###### DATABASE SPECIFIC OPTIONS/[DATABASE BACKUP SETTINGS]/g' "$config_file"
+        sed -i'.tmp' 's/###### FILES SPECIFIC OPTIONS/[FILE BACKUP SETTINGS]/g' "$config_file"
+        sed -i'.tmp' 's/###### ALERT OPTIONS/[ALERT_OPTIONS]/g' "$config_file"
+        sed -i'.tmp' 's/###### GENERAL BACKUP OPTIONS/[BACKUP SETTINGS]/g' "$config_file"
+        sed -i'.tmp' 's/###### EXECUTION HOOKS/[EXECUTION_HOOKS]/g' "$config_file"
+}
+
 function UpdateConfigHeader {
 	local config_file="${1}"
 
-	# "onfig file rev" to deal with earlier variants of the file
-        sed -i'.tmp' 's/.*onfig file rev.*/##### '$SUBPROGRAM' config file rev '$CONFIG_FILE_VERSION' '$NEW_PROGRAM_VERSION'/' "$config_file"
-
-	rm -f "$config_file.tmp"
+	if ! grep "^CONFIG_FILE_REVISION=" > /dev/null "$config_file"; then
+		# "onfig file rev" to deal with earlier variants of the file
+		sed -i'.tmp' 's/.*onfig file rev.*//' "$config_file"
+		sed -i'.tmp' '/^\[GENERAL\]$/a\'$'\n'CONFIG_FILE_REVISION=$CONFIG_FILE_REVISION$'\n''' "$config_file"
+		rm -f "$config_file.tmp"
+	fi
 }
 
 if [ "$1" != "" ] && [ -f "$1" ] && [ -w "$1" ]; then
@@ -331,6 +373,8 @@ if [ "$1" != "" ] && [ -f "$1" ] && [ -w "$1" ]; then
 	# Make sure there is no ending slash
 	CONF_FILE="${CONF_FILE%/}"
 	LoadConfigFile "$CONF_FILE"
+	CheckAndBackup "$CONF_FILE"
+	RewriteSections "$CONF_FILE"
 	RewriteOldConfigFiles "$CONF_FILE"
 	AddMissingConfigOptions "$CONF_FILE"
 	UpdateConfigHeader "$CONF_FILE"
