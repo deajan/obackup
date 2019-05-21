@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_REVISION=2.1
-PROGRAM_BUILD=2019052104
+PROGRAM_BUILD=2019052105
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -286,6 +286,7 @@ function RewriteOldConfigFiles {
 		REMOTE_SYSTEM_URI="ssh://$REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT/"
 
 		sed -i'.tmp' 's#^REMOTE_BACKUP=true#REMOTE_SYSTEM_URI='$REMOTE_SYSTEM_URI'#g' "$config_file"
+		sed -i'.tmp' 's#^REMOTE_BACKUP=yes#REMOTE_SYSTEM_URI='$REMOTE_SYSTEM_URI'#g' "$config_file"
 		sed -i'.tmp' '/^REMOTE_USER==*/d' "$config_file"
 		sed -i'.tmp' '/^REMOTE_HOST==*/d' "$config_file"
 		sed -i'.tmp' '/^REMOTE_PORT==*/d' "$config_file"
