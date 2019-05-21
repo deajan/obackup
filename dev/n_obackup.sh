@@ -6,7 +6,7 @@
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.1-RC1
+PROGRAM_VERSION=2.1-dev-postRC1
 PROGRAM_BUILD=2019052102
 IS_STABLE=true
 
