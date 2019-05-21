@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_REVISION=2.1
-PROGRAM_BUILD=2019052103
+PROGRAM_BUILD=2019052104
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -174,7 +174,7 @@ infrastructure@example.com
 sender@example.com
 smtp.isp.tld
 25
-falsene
+none
 ''
 ''
 30000
@@ -275,7 +275,7 @@ function RewriteOldConfigFiles {
 	fi
 	REMOTE_BACKUP=$(grep "REMOTE_BACKUP=" "$config_file")
 	REMOTE_BACKUP="${REMOTE_BACKUP#*=}"
-	if [ "$REMOTE_BACKUP" == "true" ]; then
+	if [ "$REMOTE_BACKUP" == "yes" ]; then
 		REMOTE_USER=$(grep "REMOTE_USER=" "$config_file")
 		REMOTE_USER="${REMOTE_USER#*=}"
 		REMOTE_HOST=$(grep "REMOTE_HOST=" "$config_file")
@@ -307,7 +307,7 @@ function AddMissingConfigOptions {
 		if ! grep "^${KEYWORDS[$counter]}=" > /dev/null "$config_file"; then
 			echo "${KEYWORDS[$counter]} not found"
 			if [ $counter -gt 0 ]; then
-				if [ "{$VALUES[$counter]}" == true ] || [ "${VALUES[$counter]}" == false ]; then
+				if [ "${VALUES[$counter]}" == true ] || [ "${VALUES[$counter]}" == false ]; then
 					sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'='"${VALUES[$counter]}"'\'$'\n''' "$config_file"
 				else
 					sed -i'.tmp' '/^'${KEYWORDS[$((counter-1))]}'=*/a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
@@ -317,7 +317,7 @@ function AddMissingConfigOptions {
 					exit 1
 				fi
 			else
-				if [ "{$VALUES[$counter]}" == true ] || [ "${VALUES[$counter]}" == false ]; then
+				if [ "${VALUES[$counter]}" == true ] || [ "${VALUES[$counter]}" == false ]; then
 					sed -i'.tmp' '/[GENERAL\]$//a\'$'\n'${KEYWORDS[$counter]}'='"${VALUES[$counter]}"'\'$'\n''' "$config_file"
 				else
 					sed -i'.tmp' '/[GENERAL\]$//a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
@@ -330,13 +330,13 @@ function AddMissingConfigOptions {
 			echo "Added missing ${KEYWORDS[$counter]} config option with default option [${VALUES[$counter]}]"
 		else
 			# Not the most elegant but the quickest way :)
-                        if grep "^{$KEYWORDS[$counter]}=yes" > /dev/null "$config_file"; then
+                        if grep "^${KEYWORDS[$counter]}=yes" > /dev/null "$config_file"; then
                                 sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=true/g' "$config_file"
                                 if [ $? -ne 0 ]; then
                                         echo "Cannot rewrite ${[KEYWORDS[$counter]} boolean to true."
                                         exit 1
                                 fi
-                        elif grep "^{$KEYWORDS[$counter]}=no" > /dev/null "$config_file"; then
+                        elif grep "^${KEYWORDS[$counter]}=no" > /dev/null "$config_file"; then
                                 sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=false/g' "$config_file"
                                 if [ $? -ne 0 ]; then
                                         echo "Cannot rewrite ${[KEYWORDS[$counter]} boolean to false."
@@ -368,10 +368,15 @@ function UpdateConfigHeader {
 	local config_file="${1}"
 
 	if ! grep "^CONFIG_FILE_REVISION=" > /dev/null "$config_file"; then
+		if grep "\[GENERAL\]" > /dev/null "$config_file"; then
+			sed -i'.tmp' '/^\[GENERAL\]$/a\'$'\n'CONFIG_FILE_REVISION=$CONFIG_FILE_REVISION$'\n''' "$config_file"
+		else
+			sed -i'.tmp' '/.*onfig file rev.*/a\'$'\n'CONFIG_FILE_REVISION=$CONFIG_FILE_REVISION$'\n''' "$config_file"
+		fi
 		# "onfig file rev" to deal with earlier variants of the file
-		sed -i'.tmp' 's/.*onfig file rev.*//' "$config_file"
-		sed -i'.tmp' '/^\[GENERAL\]$/a\'$'\n'CONFIG_FILE_REVISION=$CONFIG_FILE_REVISION$'\n''' "$config_file"
+		#sed -i'.tmp' 's/.*onfig file rev.*//' "$config_file"
 		rm -f "$config_file.tmp"
+
 	fi
 }
 
