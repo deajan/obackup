@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_REVISION=2.1
-PROGRAM_BUILD=2019052102
+PROGRAM_BUILD=2019052103
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -337,11 +337,11 @@ function AddMissingConfigOptions {
                                         exit 1
                                 fi
                         elif grep "^{$KEYWORDS[$counter]}=no" > /dev/null "$config_file"; then
+                                sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=false/g' "$config_file"
                                 if [ $? -ne 0 ]; then
                                         echo "Cannot rewrite ${[KEYWORDS[$counter]} boolean to false."
                                         exit 1
                                 fi
-                                sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=false/g' "$config_file"
                         fi
 		fi
 		counter=$((counter+1))
