@@ -2,9 +2,9 @@
 
 ###### obackup - Local or Remote, push or pull backup script for files & mysql databases
 ###### (C) 2013-2019 by Orsiris de Jong (www.netpower.fr)
-###### obackup v2.1x config file rev 2017020901
 
 ###### GENERAL BACKUP OPTIONS
+CONFIG_FILE_REVISION=2.1
 
 ## Backup identification string.
 INSTANCE_ID="test-backup"
@@ -136,10 +136,10 @@ RECURSIVE_EXCLUDE_LIST="/home/backupuser;/home/lost+found"
 RSYNC_PATTERN_FIRST=include
 
 ## List of files / directories to incldue / exclude from sync on both sides (see rsync patterns, wildcards work).
-## Paths are relative to sync dirs. List elements are separated by a semicolon.
+## Paths are relative to sync dirs. List elements are separated by a semicolon. Specifying "cache" will remove every found cache subdirectory.
 RSYNC_INCLUDE_PATTERN=""
 RSYNC_EXCLUDE_PATTERN=""
-#RSYNC_EXCLUDE_PATTERN="tmp;archives"
+#RSYNC_EXCLUDE_PATTERN="tmp;archives;cache"
 
 ## Files that contains lists of files / directories to include / exclude from sync on both sides. Leave this empty if you don't want to use an exclusion file.
 ## This file has to be in the same directory as the config file
