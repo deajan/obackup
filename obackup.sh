@@ -6,9 +6,11 @@
 PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
-PROGRAM_VERSION=2.1-RC1
-PROGRAM_BUILD=2019052001
+PROGRAM_VERSION=2.1-dev-postRC1
+PROGRAM_BUILD=2019052102
 IS_STABLE=true
+
+CONFIG_FILE_REVISION_REQUIRED=2.1
 
 
 _OFUNCTIONS_VERSION=2.3.0-RC2
@@ -4038,19 +4040,19 @@ function Rsync {
 	# Creating subdirectories because rsync cannot handle multiple subdirectory creation
 	if [ "$BACKUP_TYPE" == "local" ]; then
 		_CreateDirectoryLocal "$destinationDir"
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$sourceDir\" \"$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"$RSYNC_PATH\" \"$sourceDir\" \"$destinationDir\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
 	elif [ "$BACKUP_TYPE" == "pull" ]; then
 		_CreateDirectoryLocal "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
 		sourceDir=$(EscapeSpaces "$sourceDir")
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$sourceDir\" \"$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$sourceDir\" \"$destinationDir\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
 		destinationDir=$(EscapeSpaces "$destinationDir")
 		_CreateDirectoryRemote "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$sourceDir\" \"$REMOTE_USER@$REMOTE_HOST:$destinationDir\" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$sourceDir\" \"$REMOTE_USER@$REMOTE_HOST:$destinationDir\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
 	fi
 
 	Logger "Launching command [$rsyncCmd]." "DEBUG"
@@ -4062,6 +4064,7 @@ function Rsync {
 		 _LOGGER_SILENT=true Logger "Command was [$rsyncCmd]." "WARN"
 		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
+		Logger "Output:\n$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "VERBOSE"
 		Logger "File backup succeed." "NOTICE"
 	fi
 
@@ -4668,7 +4671,7 @@ function GetCommandlineArguments {
 			_LOGGER_VERBOSE=true
 			;;
 			--stats)
-			stats=false
+			stats=true
 			;;
 			--partial)
 			partial_transfers=true
