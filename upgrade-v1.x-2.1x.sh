@@ -322,6 +322,10 @@ function AddMissingConfigOptions {
 				else
 					sed -i'.tmp' '/[GENERAL\]$//a\'$'\n'${KEYWORDS[$counter]}'="'"${VALUES[$counter]}"'"\'$'\n''' "$config_file"
 				fi
+				if [ $? -ne 0 ]; then
+					echo "Cannot add missing ${[KEYWORDS[$counter]}."
+					exit 1
+				fi
 			fi
 			echo "Added missing ${KEYWORDS[$counter]} config option with default option [${VALUES[$counter]}]"
 		else
@@ -347,8 +351,11 @@ function AddMissingConfigOptions {
 function RewriteSections {
         local config_file="${1}"
 
-        sed -i'.tmp' 's/###### GENERAL BACKUP OPTIONS/[GENERAL]/g' "$config_file"
-        sed -i'.tmp' 's/###### BACKUP STORAGE/[BACKUP STORAGE]/g' "$config_file"
+	# Earlier config files has GENERAL BACKUP OPTIONS set twice. Let's replace the first one only. sed does a horrible job doing this, at least if portability is required
+	awk '/###### GENERAL BACKUP OPTIONS/ && !done { gsub(/###### GENERAL BACKUP OPTIONS/, "[GENERAL]"); done=1}; 1' "$config_file" >> "$config_file.tmp"
+        #sed -i'.tmp' 's/###### GENERAL BACKUP OPTIONS/[GENERAL]/' "$config_file"
+	# Fix using earlier tmp file from awk
+        sed 's/###### BACKUP STORAGE/[BACKUP STORAGE]/g' "$config_file.tmp" > "$config_file"
         sed -i'.tmp' 's/###### REMOTE ONLY OPTIONS/[REMOTE_OPTIONS]/g' "$config_file"
         sed -i'.tmp' 's/###### DATABASE SPECIFIC OPTIONS/[DATABASE BACKUP SETTINGS]/g' "$config_file"
         sed -i'.tmp' 's/###### FILES SPECIFIC OPTIONS/[FILE BACKUP SETTINGS]/g' "$config_file"
