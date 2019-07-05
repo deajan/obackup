@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_REVISION=2.1
-PROGRAM_BUILD=2019052105
+PROGRAM_BUILD=2019070501
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -331,13 +331,13 @@ function AddMissingConfigOptions {
 			echo "Added missing ${KEYWORDS[$counter]} config option with default option [${VALUES[$counter]}]"
 		else
 			# Not the most elegant but the quickest way :)
-                        if grep "^${KEYWORDS[$counter]}=yes" > /dev/null "$config_file"; then
+                        if grep "^${KEYWORDS[$counter]}=yes$" > /dev/null "$config_file"; then
                                 sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=true/g' "$config_file"
                                 if [ $? -ne 0 ]; then
                                         echo "Cannot rewrite ${[KEYWORDS[$counter]} boolean to true."
                                         exit 1
                                 fi
-                        elif grep "^${KEYWORDS[$counter]}=no" > /dev/null "$config_file"; then
+                        elif grep "^${KEYWORDS[$counter]}=no$" > /dev/null "$config_file"; then
                                 sed -i'.tmp' 's/^'${KEYWORDS[$counter]}'=.*/'${KEYWORDS[$counter]}'=false/g' "$config_file"
                                 if [ $? -ne 0 ]; then
                                         echo "Cannot rewrite ${[KEYWORDS[$counter]} boolean to false."
@@ -376,7 +376,6 @@ function UpdateConfigHeader {
 		fi
 		# "onfig file rev" to deal with earlier variants of the file
 		#sed -i'.tmp' 's/.*onfig file rev.*//' "$config_file"
-		rm -f "$config_file.tmp"
 
 	fi
 }
@@ -391,6 +390,7 @@ if [ "$1" != "" ] && [ -f "$1" ] && [ -w "$1" ]; then
 	RewriteOldConfigFiles "$CONF_FILE"
 	AddMissingConfigOptions "$CONF_FILE"
 	UpdateConfigHeader "$CONF_FILE"
+	rm -f "$CONF_FILE.tmp"
 else
 	Usage
 fi
