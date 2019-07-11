@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2019022601
+## obackup basic tests suite 2019071101
 
 # Supported environment variables
 
@@ -339,6 +339,8 @@ function test_GPG () {
         cryptToolSubVersion=${cryptToolVersion#*.}
         cryptToolSubVersion=${cryptToolSubVersion%.*}
 
+	echo "$CRYPT_TOOL is $cryptToolVersion"
+
         if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
                 additionalParameters="--pinentry-mode loopback"
         fi
@@ -351,6 +353,7 @@ function test_GPG () {
 
 
 	echo "Decrypt using passphrase file"
+	echo $CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	$CRYPT_TOOL $options --out "$TESTS_DIR/$CRYPT_TESTFILE" --batch --yes $additionalParameters --passphrase-file="$TESTS_DIR/$PASSFILE" --decrypt "$TESTS_DIR/$CRYPT_TESTFILE$CRYPT_EXTENSION"
 	assertEquals "Decrypt file using passfile" "0" $?
 
