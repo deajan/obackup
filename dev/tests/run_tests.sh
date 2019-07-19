@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2019071101
+## obackup basic tests suite 2019071901
 
 # Supported environment variables
 
@@ -87,9 +87,9 @@ OBACKUP_MIN_VERSION=x
 OBACKUP_IS_STABLE=maybe
 
 function SetupSSH {
-        echo -e  'y\n'| ssh-keygen -t rsa -b 2048 -N "" -f "${HOME}/.ssh/id_rsa_local"
-        if ! grep "$(cat ${HOME}/.ssh/id_rsa_local.pub)" "${HOME}/.ssh/authorized_keys"; then
-		echo "from=\"*\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty,command=\"/usr/local/bin/ssh_filter.sh SomeAlphaNumericToken9\" $(cat ${HOME}/.ssh/id_rsa_local.pub)" >> "${HOME}/.ssh/authorized_keys"
+        echo -e  'y\n'| ssh-keygen -t rsa -b 2048 -N "" -f "${HOME}/.ssh/id_rsa_local_obackup_tests"
+        if ! grep "$(cat ${HOME}/.ssh/id_rsa_local_obackup_tests.pub)" "${HOME}/.ssh/authorized_keys"; then
+		echo "from=\"*\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty,command=\"/usr/local/bin/ssh_filter.sh SomeAlphaNumericToken9\" $(cat ${HOME}/.ssh/id_rsa_local_obackup_tests.pub)" >> "${HOME}/.ssh/authorized_keys"
         fi
 	chmod 600 "${HOME}/.ssh/authorized_keys"
 
@@ -104,13 +104,10 @@ function SetupSSH {
 }
 
 function RemoveSSH {
-        local pubkey
-
-        if [ -f "${HOME}/.ssh/id_rsa_local" ]; then
-
-                pubkey=$(cat "${HOME}/.ssh/id_rsa_local.pub")
-		sed -i.bak "s|.*$pubkey.*||g" "${HOME}/.ssh/authorized_keys"
-                rm -f "${HOME}/.ssh/{id_rsa_local.pub,id_rsa_local}"
+        if [ -f "${HOME}/.ssh/id_rsa_local_obackup_tests" ]; then
+		echo "Restoring SSH authorized_keys file"
+		sed -i.bak "s|.*$(cat "${HOME}/.ssh/id_rsa_local_obackup_tests.pub")||g" "${HOME}/.ssh/authorized_keys"
+                rm -f "${HOME}/.ssh/{id_rsa_local_obackup_tests.pub,id_rsa_local_obackup_tests}"
         fi
 }
 
