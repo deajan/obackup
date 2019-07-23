@@ -345,7 +345,9 @@ function test_GPG () {
 
         if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
 		if [ $cryptToolMinorVersion -ge 11 ]; then
+			echo "Using --pinentry-mode loopback [$cryptToolMajorVersion.$cryptToolSubVersion.$cryptToolMinorVersion]"
 	                additionalParameters="--pinentry-mode loopback"
+			additionalParameters="" # WIP
 		fi
         fi
 
