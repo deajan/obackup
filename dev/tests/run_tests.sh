@@ -331,15 +331,22 @@ function test_GPG () {
 
 
         # Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
+
+	# GnuPG 2.1.11 has a bug that does not allow usage of pinentry mode 'loopback'
+	# GnuPC 2.1.22 has that bug resolved
+
         cryptToolVersion=$($CRYPT_TOOL --version | head -1 | awk '{print $3}')
         cryptToolMajorVersion=${cryptToolVersion%%.*}
         cryptToolSubVersion=${cryptToolVersion#*.}
         cryptToolSubVersion=${cryptToolSubVersion%.*}
+	cryptToolMinorVersion=${cryptToolVersion##*.}
 
 	echo "$CRYPT_TOOL is $cryptToolVersion"
 
         if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
-                additionalParameters="--pinentry-mode loopback"
+		if [ $cryptToolMinorVersion -ge 11 ]; then
+	                additionalParameters="--pinentry-mode loopback"
+		fi
         fi
 
 	if [ "$CRYPT_TOOL" == "gpg2" ]; then
