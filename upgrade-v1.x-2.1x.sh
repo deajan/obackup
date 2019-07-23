@@ -144,7 +144,7 @@ test
 3
 ''
 ''
-;/lost+found
+'/lost+found;/tmp'
 include
 ''
 ''
