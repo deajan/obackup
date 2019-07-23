@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_REVISION=2.1
-PROGRAM_BUILD=2019070501
+PROGRAM_BUILD=2019072301
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -142,9 +142,9 @@ test
 7200
 '--opt --single-transaction'
 3
-/some/path
-/home
-/home/backupuser\;/host/lost+found
+''
+''
+;/lost+found
 include
 ''
 ''
