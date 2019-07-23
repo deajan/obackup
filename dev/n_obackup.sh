@@ -1625,10 +1625,10 @@ function _RotateBackupsLocal {
 					cmd="rm -rf \"$path\""
 					Logger "Launching command [$cmd]." "DEBUG"
 					eval "$cmd" &
-						ExecTasks $! "${FUNCNAME[0]}" false 0 0 3600 0 true $SLEEP_TIME $KEEP_LOGGING
+					ExecTasks $! "${FUNCNAME[0]}" false 0 0 3600 0 true $SLEEP_TIME $KEEP_LOGGING
 					if [ $? -ne 0 ]; then
 						Logger "Cannot delete oldest copy [$path]." "ERROR"
-						 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
+						_LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 					fi
 				fi
 			fi
@@ -1641,7 +1641,7 @@ function _RotateBackupsLocal {
 				ExecTasks $! "${FUNCNAME[0]}" false 0 0 3600 0 true $SLEEP_TIME $KEEP_LOGGING
 				if [ $? -ne 0 ]; then
 					Logger "Cannot move [$path] to [$backup.$PROGRAM.$copy]." "ERROR"
-					 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
+					_LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 				fi
 
 			fi
