@@ -260,7 +260,7 @@ function CheckRunningInstances {
 	__CheckArguments 0 $# "$@"	#__WITH_PARANOIA_DEBUG
 
 	if [ -f "$RUN_DIR/$PROGRAM.$INSTANCE_ID" ]; then
-		pid=$(cat "$RUN_DIR/$PROGRAM.$INSTANCE_ID")
+		pid="$(head -c16384 "$RUN_DIR/$PROGRAM.$INSTANCE_ID")"
 		if ps aux | awk '{print $2}' | grep $pid > /dev/null; then
 			Logger "Another instance [$INSTANCE_ID] of obackup is already running." "CRITICAL"
 			exit 1
@@ -287,7 +287,7 @@ function _ListDatabasesLocal {
                 Logger "Listing databases failed." "ERROR"
 	        _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                        Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
                 return 1
         fi
@@ -313,7 +313,7 @@ function _ListDatabasesRemote {
                 Logger "Listing databases failed." "ERROR"
 	        Logger "Command output: $sqlCmd" "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                        Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
                 return $retval
         fi
@@ -431,10 +431,10 @@ function _ListRecursiveBackupDirectoriesLocal {
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
 			 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+				Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+				Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
 			failuresPresent=true
 		else
@@ -503,10 +503,10 @@ ENDSSH
 	retval=$?
 	if [ $retval -ne 0 ]; then
 		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 	fi
 	return $retval
@@ -606,17 +606,17 @@ function _GetDirectoriesSizeLocal {
                 Logger "Could not get files size for some or all local directories." "ERROR"
 		 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                        Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
         else
                 Logger "File size fetched successfully." "NOTICE"
         fi
 
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-                TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
+                TOTAL_FILES_SIZE="$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
 		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
@@ -657,16 +657,16 @@ ENDSSH
         if  [ $retval -ne 0 ] || [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
                 Logger "Could not get files size for some or all remote directories." "ERROR"
                 if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-                        Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                        Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		fi
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 fi
         else
                 Logger "File size fetched successfully." "NOTICE"
 	fi
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-		TOTAL_FILES_SIZE="$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
+		TOTAL_FILES_SIZE="$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
 		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
 			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
 		fi
@@ -705,7 +705,7 @@ function _CreateDirectoryLocal {
                 if [ $retval -ne 0 ]; then
                         Logger "Cannot create directory [$dirToCreate]" "CRITICAL"
 			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Command output: $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+				Logger "Truncated output: $(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 			fi
                         return $retval
                 fi
@@ -745,7 +745,7 @@ ENDSSH
 	ExecTasks $! "${FUNCNAME[0]}" false 0 0 720 1800 true $SLEEP_TIME $KEEP_LOGGING
 	retval=$?
         if [ $retval -ne 0 ]; then
-                Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
                 return $retval
         fi
 }
@@ -812,7 +812,7 @@ function GetDiskSpaceLocal {
         	if [ $retval -ne 0 ]; then
         		DISK_SPACE=0
 			Logger "Cannot get disk space in [$pathToCheck] on local system." "ERROR"
-			Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
         	else
                 	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
                 	DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
@@ -872,8 +872,8 @@ ENDSSH
         if [ $retval -ne 0 ]; then
         	DISK_SPACE=0
 		Logger "Cannot get disk space in [$pathToCheck] on remote system." "ERROR"
-		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
-		Logger "Command Output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		return $retval
         else
                	DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
@@ -1057,7 +1057,7 @@ function _BackupDatabaseLocalToLocal {
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 			eval "$drySqlCmd" &
 		fi
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
         fi
@@ -1106,7 +1106,7 @@ function _BackupDatabaseLocalToRemote {
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 			eval "$drySqlCmd" &
 		fi
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
         fi
@@ -1155,7 +1155,7 @@ function _BackupDatabaseRemoteToLocal {
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 			eval "$drySqlCmd" &
 		fi
-		Logger "Error output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
         fi
@@ -1267,7 +1267,7 @@ function EncryptFiles {
 			$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 			if [ $? -ne 0 ]; then
 				Logger "Cannot encrypt [$sourceFile]." "ERROR"
-				Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+				Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 				errorCounter=$((errorCounter+1))
 			else
 				successCounter=$((successCounter+1))
@@ -1294,7 +1294,7 @@ function EncryptFiles {
 		if [ $retval -ne 0 ]; then
 			Logger "Encryption error." "ERROR"
 			# Output file is defined in ParallelExec
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ExecTasks.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.ExecTasks.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 		fi
 		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
 		errorCounter=$retval
@@ -1369,7 +1369,7 @@ function DecryptFiles {
 			retval=$?
 			if [ $retval -ne 0 ]; then
 				Logger "Cannot decrypt [$encryptedFile]." "ERROR"
-				Logger "Command output\n$(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
+				Logger "Truncated output\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
 				errorCounter=$((errorCounter+1))
 			else
 				successCounter=$((successCounter+1))
@@ -1400,7 +1400,7 @@ function DecryptFiles {
 		if [ $retval -ne 0 ]; then
 			Logger "Decrypting error.." "ERROR"
 			# Output file is defined in ParallelExec
-			Logger "Command output:\n$(cat $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
 		fi
 		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
 		errorCounter=$retval
@@ -1463,9 +1463,9 @@ function Rsync {
 	if [ $retval -ne 0 ]; then
 		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
 		 _LOGGER_SILENT=true Logger "Command was [$rsyncCmd]." "WARN"
-		Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated output:\n $(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
 	else
-		Logger "Output:\n$(cat "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "VERBOSE"
+		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "VERBOSE"
 		Logger "File backup succeed." "NOTICE"
 	fi
 
@@ -1479,7 +1479,6 @@ function FilesBackup {
 	local backupTasks
 	local destinationDir
 	local encryptDir
-	
 
 
 	IFS=$PATH_SEPARATOR_CHAR read -r -a backupTasks <<< "$FILE_BACKUP_TASKS"
@@ -1774,7 +1773,7 @@ ENDSSH
 	ExecTasks $! "${FUNCNAME[0]}" false 0 0 1800 0 true $SLEEP_TIME $KEEP_LOGGING
         if [ $? -ne 0 ]; then
                 Logger "Could not rotate backups in [$backupPath]." "ERROR"
-                Logger "Command output:\n $(cat $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+                Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
         else
                 Logger "Remote rotation succeed." "NOTICE"
         fi        ## Need to add a trivial sleep time to give ssh time to log to local file
