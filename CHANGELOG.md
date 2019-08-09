@@ -16,6 +16,7 @@ dd Mmm YYYY: obackup v2.1 RC2 released
 	- ! Update script updated accordingly
 - Updated ofunctions to use booleans instead of yes/no syntax which still works
 - Fixed verbose rsync output not working
+- Fixed a potential bash buffer overflow when very large file lists are logged
 
 03 Jan 2019: obackup v2.1 RC1 released
 --------------------------------------
