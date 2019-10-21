@@ -7,7 +7,7 @@ CONTACT="http://www.netpower.fr/obacup - ozy@netpower.fr"
 OLD_PROGRAM_VERSION="v1.x"
 NEW_PROGRAM_VERSION="v2.1x"
 CONFIG_FILE_REVISION=2.1
-PROGRAM_BUILD=2019072301
+PROGRAM_BUILD=2019102101
 
 if ! type "$BASH" > /dev/null; then
         echo "Please run this script only with bash shell. Tested on bash >= 3.2"
@@ -391,6 +391,7 @@ if [ "$1" != "" ] && [ -f "$1" ] && [ -w "$1" ]; then
 	AddMissingConfigOptions "$CONF_FILE"
 	UpdateConfigHeader "$CONF_FILE"
 	rm -f "$CONF_FILE.tmp"
+	echo "Configuration file upgrade finished"
 else
 	Usage
 fi
