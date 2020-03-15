@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev-postRC1
-PROGRAM_BUILD=2019080901
+PROGRAM_BUILD=2020031501
 IS_STABLE=true
 
 CONFIG_FILE_REVISION_REQUIRED=2.1
@@ -3900,10 +3900,8 @@ function _BackupDatabaseLocalToLocal {
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
 			 _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
-			eval "$sqlCmd" &
 		else
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
-			eval "$drySqlCmd" &
 		fi
 		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
@@ -3949,10 +3947,8 @@ function _BackupDatabaseLocalToRemote {
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
 			 _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
-			eval "$sqlCmd" &
 		else
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
-			eval "$drySqlCmd" &
 		fi
 		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
@@ -3998,10 +3994,8 @@ function _BackupDatabaseRemoteToLocal {
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		if [ $_DRYRUN == false ]; then
 			 _LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
-			eval "$sqlCmd" &
 		else
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
-			eval "$drySqlCmd" &
 		fi
 		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
 		# Dirty fix for mysqldump return code not honored
