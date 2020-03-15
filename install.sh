@@ -10,15 +10,15 @@ PROGRAM_BINARY=$PROGRAM".sh"
 PROGRAM_BATCH=$PROGRAM"-batch.sh"
 SSH_FILTER="ssh_filter.sh"
 
-SCRIPT_BUILD=2019052001
+SCRIPT_BUILD=2020031502
 INSTANCE_ID="installer-$SCRIPT_BUILD"
 
 ## osync / obackup / pmocr / zsnap install script
 ## Tested on RHEL / CentOS 6 & 7, Fedora 23, Debian 7 & 8, Mint 17 and FreeBSD 8, 10 and 11
 ## Please adapt this to fit your distro needs
 
-_OFUNCTIONS_VERSION=2.3.0-RC2
-_OFUNCTIONS_BUILD=2019031502
+_OFUNCTIONS_VERSION=2.3.0-RC4
+_OFUNCTIONS_BUILD=2020031503
 _OFUNCTIONS_BOOTSTRAP=true
 
 if ! type "$BASH" > /dev/null; then
@@ -63,7 +63,27 @@ if [ "$SLEEP_TIME" == "" ]; then # Leave the possibity to set SLEEP_TIME as envi
 	SLEEP_TIME=.05
 fi
 
+# The variables SCRIPT_PID and TSTAMP needs to be declared as soon as the program begins. The function PoorMansRandomGenerator is needed for TSTAMP (since some systems date function does not give nanoseconds)
+
 SCRIPT_PID=$$
+
+# Get a random number of digits length on Windows BusyBox alike, also works on most Unixes that have dd
+function PoorMansRandomGenerator {
+	local digits="${1}" # The number of digits to generate
+	local number
+
+	# Some read bytes can't be used, se we read twice the number of required bytes
+	dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
+		number=$number$(printf "%d" "'$char")
+		if [ ${#number} -ge $digits ]; then
+			echo ${number:0:$digits}
+			break;
+		fi
+	done
+}
+
+# Initial TSTMAP value before function declaration
+TSTAMP=$(date '+%Y%m%dT%H%M%S').$(PoorMansRandomGenerator 5)
 
 LOCAL_USER=$(whoami)
 LOCAL_HOST=$(hostname)
@@ -94,52 +114,12 @@ else
 fi
 
 ## Special note when remote target is on the same host as initiator (happens for unit tests): we'll have to differentiate RUN_DIR so remote CleanUp won't affect initiator.
+## If the same program gets remotely executed, add _REMOTE_EXECUTION=true to it's environment so it knows it has to write into a separate directory
+## This will thus not affect local $RUN_DIR variables
 if [ "$_REMOTE_EXECUTION" == true ]; then
-	mkdir -p "$RUN_DIR/$PROGRAM.remote"
-	RUN_DIR="$RUN_DIR/$PROGRAM.remote"
+	mkdir -p "$RUN_DIR/$PROGRAM.remote.$SCRIPT_PID.$TSTAMP"
+	RUN_DIR="$RUN_DIR/$PROGRAM.remote.$SCRIPT_PID.$TSTAMP"
 fi
-
-# Get a random number on Windows BusyBox alike, also works on most Unixes that have dd, if dd is not found, then return $RANDOM
-function PoorMansRandomGenerator {
-	local digits="${1}" # The number of digits to generate
-	local number
-	local isFirst=true
-
-	if type dd >/dev/null 2>&1; then
-
-		# Some read bytes can't be used, se we read twice the number of required bytes
-		dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
-			if [ $isFirst == false ] || [ $(printf "%d" "'$char") != "0" ]; then
-				number=$number$(printf "%d" "'$char")
-				isFirst=false
-			fi
-			if [ ${#number} -ge $digits ]; then
-				echo ${number:0:$digits}
-				break;
-			fi
-		done
-	elif [ "$RANDOM" -ne 0 ]; then
-		 echo $RANDOM
-	else
-		Logger "Cannot generate random number." "ERROR"
-	fi
-}
-function PoorMansRandomGenerator {
-	local digits="${1}" # The number of digits to generate
-	local number
-
-	# Some read bytes can't be used, se we read twice the number of required bytes
-	dd if=/dev/urandom bs=$digits count=2 2> /dev/null | while read -r -n1 char; do
-		number=$number$(printf "%d" "'$char")
-		if [ ${#number} -ge $digits ]; then
-			echo ${number:0:$digits}
-			break;
-		fi
-	done
-}
-
-# Initial TSTMAP value before function declaration
-TSTAMP=$(date '+%Y%m%dT%H%M%S').$(PoorMansRandomGenerator 5)
 
 # Default alert attachment filename
 ALERT_LOG_FILE="$RUN_DIR/$PROGRAM.$SCRIPT_PID.$TSTAMP.last.log"
@@ -166,7 +146,7 @@ function _Logger {
 
 		# Build current log file for alerts if we have a sufficient environment
 		if [ "$RUN_DIR/$PROGRAM" != "/" ]; then
-			echo -e "$logValue" >> "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID.$TSTAMP.log"
+			echo -e "$logValue" >> "$RUN_DIR/$PROGRAM._Logger.$SCRIPT_PID.$TSTAMP"
 		fi
 	fi
 
@@ -190,7 +170,7 @@ function RemoteLogger {
 	local prefix
 
 	if [ "$_LOGGER_PREFIX" == "time" ]; then
-		prefix="TIME: $SECONDS - "
+		prefix="RTIME: $SECONDS - "
 	elif [ "$_LOGGER_PREFIX" == "date" ]; then
 		prefix="R $(date) - "
 	else
@@ -270,8 +250,8 @@ function Logger {
 	fi
 
 	## Obfuscate _REMOTE_TOKEN in logs (for ssh_filter usage only in osync and obackup)
-	value="${value/env _REMOTE_TOKEN=$_REMOTE_TOKEN/__(o_O)__}"
-	value="${value/env _REMOTE_TOKEN=\$_REMOTE_TOKEN/__(o_O)__}"
+	value="${value/env _REMOTE_TOKEN=$_REMOTE_TOKEN/env _REMOTE_TOKEN=__(o_O)__}"
+	value="${value/env _REMOTE_TOKEN=\$_REMOTE_TOKEN/env _REMOTE_TOKEN=__(o_O)__}"
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "$prefix($level):$value" "$prefix\e[1;33;41m$value\e[0m" true
@@ -398,14 +378,6 @@ function KillAllChilds {
 	return $errorcount
 }
 
-function CleanUp {
-	if [ "$_DEBUG" != true ]; then
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
-		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
-		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
-	fi
-}
-
 function GenericTrapQuit {
 	local exitcode=0
 
@@ -424,6 +396,25 @@ function GenericTrapQuit {
 }
 
 
+function CleanUp {
+	# Exit controlmaster before it's socket gets deleted
+	if [ "$SSH_CONTROLMASTER" == true ] && [ "$SSH_CMD" != "" ]; then
+		$SSH_CMD -O exit
+	fi
+
+	if [ "$_DEBUG" != true ]; then
+		# Removing optional remote $RUN_DIR that goes into local $RUN_DIR
+		if [ -d "$RUN_DIR/$PROGRAM.remote.$SCRIPT_PID.$TSTAMP" ]; then
+			rm -rf "$RUN_DIR/$PROGRAM.remote.$SCRIPT_PID.$TSTAMP"
+                fi
+		# Removing all temporary run files
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
+		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
+	fi
+}
+
+
 
 # Get current install.sh path from http://stackoverflow.com/a/246128/2635443
 SCRIPT_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -432,62 +423,6 @@ _LOGGER_SILENT=false
 _STATS=1
 ACTION="install"
 FAKEROOT=""
-
-function GetCommandlineArguments {
-        for i in "$@"; do
-                case $i in
-			--prefix=*)
-                        FAKEROOT="${i##*=}"
-                        ;;
-			--silent)
-			_LOGGER_SILENT=true
-			;;
-			--no-stats)
-			_STATS=0
-			;;
-			--remove)
-			ACTION="uninstall"
-			;;
-			--help|-h|-?)
-			Usage
-			;;
-                        *)
-			Logger "Unknown option '$i'" "ERROR"
-			Usage
-			exit
-                        ;;
-                esac
-	done
-}
-
-GetCommandlineArguments "$@"
-
-CONF_DIR=$FAKEROOT/etc/$PROGRAM
-BIN_DIR="$FAKEROOT/usr/local/bin"
-SERVICE_DIR_INIT=$FAKEROOT/etc/init.d
-# Should be /usr/lib/systemd/system, but /lib/systemd/system exists on debian & rhel / fedora
-SERVICE_DIR_SYSTEMD_SYSTEM=$FAKEROOT/lib/systemd/system
-SERVICE_DIR_SYSTEMD_USER=$FAKEROOT/etc/systemd/user
-SERVICE_DIR_OPENRC=$FAKEROOT/etc/init.d
-
-if [ "$PROGRAM" == "osync" ]; then
-	SERVICE_NAME="osync-srv"
-	TARGET_HELPER_SERVICE_NAME="osync-target-helper-srv"
-
-	TARGET_HELPER_SERVICE_FILE_INIT="$TARGET_HELPER_SERVICE_NAME"
-	TARGET_HELPER_SERVICE_FILE_SYSTEMD_SYSTEM="$TARGET_HELPER_SERVICE_NAME@.service"
-	TARGET_HELPER_SERVICE_FILE_SYSTEMD_USER="$TARGET_HELPER_SERVICE_NAME@.service.user"
-	TARGET_HELPER_SERVICE_FILE_OPENRC="$TARGET_HELPER_SERVICE_NAME-openrc"
-elif [ "$PROGRAM" == "pmocr" ]; then
-	SERVICE_NAME="pmocr-srv"
-fi
-
-SERVICE_FILE_INIT="$SERVICE_NAME"
-SERVICE_FILE_SYSTEMD_SYSTEM="$SERVICE_NAME@.service"
-SERVICE_FILE_SYSTEMD_USER="$SERVICE_NAME@.service.user"
-SERVICE_FILE_OPENRC="$SERVICE_NAME-openrc"
-
-## Generic code
 
 ## Default log file
 if [ -w "$FAKEROOT/var/log" ]; then
@@ -582,10 +517,10 @@ function GetLocalOS {
 
 	# Get linux versions
 	if [ -f "/etc/os-release" ]; then
-		localOsName=$(GetConfFileValue "/etc/os-release" "NAME" true)
-		localOsVer=$(GetConfFileValue "/etc/os-release" "VERSION" true)
+		localOsName="$(GetConfFileValue "/etc/os-release" "NAME" true)"
+		localOsVer="$(GetConfFileValue "/etc/os-release" "VERSION" true)"
 	elif [ "$LOCAL_OS" == "BusyBox" ]; then
-		localOsVer=$(ls --help 2>&1 | head -1 | cut -f2 -d' ')
+		localOsVer="$(ls --help 2>&1 | head -1 | cut -f2 -d' ')"
 		localOsName="BusyBox"
 	fi
 
@@ -639,6 +574,41 @@ function GetConfFileValue () {
 			Logger "Cannot get value for [$name] in config file [$file]." "ERROR"
 		fi
 	fi
+}
+
+function CleanUp {
+	# Exit controlmaster before it's socket gets deleted
+	if [ "$SSH_CONTROLMASTER" == true ] && [ "$SSH_CMD" != "" ]; then
+		$SSH_CMD -O exit
+	fi
+
+	if [ "$_DEBUG" != true ]; then
+		# Removing optional remote $RUN_DIR that goes into local $RUN_DIR
+		if [ -d "$RUN_DIR/$PROGRAM.remote.$SCRIPT_PID.$TSTAMP" ]; then
+			rm -rf "$RUN_DIR/$PROGRAM.remote.$SCRIPT_PID.$TSTAMP"
+                fi
+		# Removing all temporary run files
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP"
+		# Fix for sed -i requiring backup extension for BSD & Mac (see all sed -i statements)
+		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
+	fi
+}
+
+function GenericTrapQuit {
+	local exitcode=0
+
+	# Get ERROR / WARN alert flags from subprocesses that call Logger
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
+		exitcode=2
+	fi
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
+		exitcode=1
+	fi
+
+	CleanUp
+	exit $exitcode
 }
 
 
@@ -741,15 +711,14 @@ function CopyFile {
 	local overwrite="${8:-false}"
 
 	local userGroup=""
-	local oldFileName
 
 	if [ "$destFileName" == "" ]; then
 		destFileName="$sourceFileName"
 	fi
 
 	if [ -f "$destPath/$destFileName" ] && [ $overwrite == false ]; then
-		destfileName="$sourceFileName.new"
-		Logger "Copying [$sourceFileName] to [$destPath/$destFilename]." "NOTICE"
+		destFileName="$sourceFileName.new"
+		Logger "Copying [$sourceFileName] to [$destPath/$destFileName]." "NOTICE"
 	fi
 
 	cp "$sourcePath/$sourceFileName" "$destPath/$destFileName"
@@ -837,11 +806,11 @@ function CopyServiceFiles {
 		fi
 
 		if [ -f "$SCRIPT_PATH/$TARGET_HELPER_SERVICE_FILE_SYSTEMD_SYSTEM" ]; then
-			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_SYSTEM" "$TARGET_HELPER_SERVICE_FILE_SYSTEMD_SYSTEM" "$SERVICE_FILE_SYSTEMD_SYSTEM" "" "" "" true
+			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_SYSTEM" "$TARGET_HELPER_SERVICE_FILE_SYSTEMD_SYSTEM" "$TARGET_HELPER_SERVICE_FILE_SYSTEMD_SYSTEM" "" "" "" true
 			Logger "Created optional service [$TARGET_HELPER_SERVICE_NAME] with same specifications as below." "NOTICE"
 		fi
 		if [ -f "$SCRIPT_PATH/$TARGET_HELPER_SERVICE_FILE_SYSTEMD_USER" ]; then
-			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_USER" "$TARGET_HELPER_SERVICE_FILE_SYSTEMD_USER" "$SERVICE_FILE_SYSTEMD_USER" "" "" "" true
+			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_SYSTEMD_USER" "$TARGET_HELPER_SERVICE_FILE_SYSTEMD_USER" "$TARGET_HELPER_SERVICE_FILE_SYSTEMD_USER" "" "" "" true
 		fi
 
 
@@ -853,7 +822,7 @@ function CopyServiceFiles {
 		#CreateDir "$SERVICE_DIR_INIT"
 		CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_INIT" "$SERVICE_FILE_INIT" "$SERVICE_FILE_INIT" "755" "" "" true
 		if [ -f "$SCRIPT_PATH/$TARGET_HELPER_SERVICE_FILE_INIT" ]; then
-			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_INIT" "$TARGET_HELPER_SERVICE_FILE_INIT" "$SERVICE_FILE_INIT" "755" "" "" true
+			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_INIT" "$TARGET_HELPER_SERVICE_FILE_INIT" "$TARGET_HELPER_SERVICE_FILE_INIT" "755" "" "" true
 			Logger "Created optional service [$TARGET_HELPER_SERVICE_NAME] with same specifications as below." "NOTICE"
 		fi
 		Logger "Created [$SERVICE_NAME] service in [$SERVICE_DIR_INIT]." "NOTICE"
@@ -863,7 +832,7 @@ function CopyServiceFiles {
 		# Rename service to usual service file
 		CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_OPENRC" "$SERVICE_FILE_OPENRC" "$SERVICE_FILE_INIT" "755" "" "" true
 		if [ -f "$SCRPT_PATH/$TARGET_HELPER_SERVICE_FILE_OPENRC" ]; then
-			CopyFile "$SCRIPT_PATH" "$TARGET_HELPER_SERVICE_DIR_OPENRC" "$SERVICE_FILE_OPENRC" "$SERVICE_FILE_INIT" "755" "" "" true
+			CopyFile "$SCRIPT_PATH" "$SERVICE_DIR_OPENRC" "$TARGET_HELPER_SERVICE_FILE_OPENRC" "$TARGET_HELPER_SERVICE_FILE_OPENRC" "755" "" "" true
 			Logger "Created optional service [$TARGET_HELPER_SERVICE_NAME] with same specifications as below." "NOTICE"
 		fi
 		Logger "Created [$SERVICE_NAME] service in [$SERVICE_DIR_OPENRC]." "NOTICE"
@@ -923,6 +892,10 @@ function RemoveAll {
 	RemoveFile "$SERVICE_DIR_SYSTEMD_USER/$SERVICE_FILE_SYSTEMD_USER"
 	RemoveFile "$SERVICE_DIR_INIT/$SERVICE_FILE_INIT"
 
+	RemoveFile "$TARGET_HELPER_SERVICE_DIR_SYSTEMD_SYSTEM/$SERVICE_FILE_SYSTEMD_SYSTEM"
+	RemoveFile "$TARGET_HELPER_SERVICE_DIR_SYSTEMD_USER/$SERVICE_FILE_SYSTEMD_USER"
+	RemoveFile "$TARGET_HELPER_SERVICE_DIR_INIT/$SERVICE_FILE_INIT"
+
 	Logger "Skipping configuration files in [$CONF_DIR]. You may remove this directory manually." "NOTICE"
 }
 
@@ -936,26 +909,65 @@ function Usage {
 	exit 127
 }
 
-function TrapQuit {
-	local exitcode=0
-
-	# Get ERROR / WARN alert flags from subprocesses that call Logger
-	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
-		WARN_ALERT=true
-		exitcode=2
-	fi
-	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
-		ERROR_ALERT=true
-		exitcode=1
-	fi
-
-	CleanUp
-	exit $exitcode
-}
-
 ############################## Script entry point
 
-trap TrapQuit TERM EXIT HUP QUIT
+function GetCommandlineArguments {
+        for i in "$@"; do
+                case $i in
+			--prefix=*)
+                        FAKEROOT="${i##*=}"
+                        ;;
+			--silent)
+			_LOGGER_SILENT=true
+			;;
+			--no-stats)
+			_STATS=0
+			;;
+			--remove)
+			ACTION="uninstall"
+			;;
+			--help|-h|-?)
+			Usage
+			;;
+                        *)
+			Logger "Unknown option '$i'" "ERROR"
+			Usage
+			exit
+                        ;;
+                esac
+	done
+}
+
+GetCommandlineArguments "$@"
+
+CONF_DIR=$FAKEROOT/etc/$PROGRAM
+BIN_DIR="$FAKEROOT/usr/local/bin"
+SERVICE_DIR_INIT=$FAKEROOT/etc/init.d
+# Should be /usr/lib/systemd/system, but /lib/systemd/system exists on debian & rhel / fedora
+SERVICE_DIR_SYSTEMD_SYSTEM=$FAKEROOT/lib/systemd/system
+SERVICE_DIR_SYSTEMD_USER=$FAKEROOT/etc/systemd/user
+SERVICE_DIR_OPENRC=$FAKEROOT/etc/init.d
+
+if [ "$PROGRAM" == "osync" ]; then
+	SERVICE_NAME="osync-srv"
+	TARGET_HELPER_SERVICE_NAME="osync-target-helper-srv"
+
+	TARGET_HELPER_SERVICE_FILE_INIT="$TARGET_HELPER_SERVICE_NAME"
+	TARGET_HELPER_SERVICE_FILE_SYSTEMD_SYSTEM="$TARGET_HELPER_SERVICE_NAME@.service"
+	TARGET_HELPER_SERVICE_FILE_SYSTEMD_USER="$TARGET_HELPER_SERVICE_NAME@.service.user"
+	TARGET_HELPER_SERVICE_FILE_OPENRC="$TARGET_HELPER_SERVICE_NAME-openrc"
+elif [ "$PROGRAM" == "pmocr" ]; then
+	SERVICE_NAME="pmocr-srv"
+fi
+
+SERVICE_FILE_INIT="$SERVICE_NAME"
+SERVICE_FILE_SYSTEMD_SYSTEM="$SERVICE_NAME@.service"
+SERVICE_FILE_SYSTEMD_USER="$SERVICE_NAME@.service.user"
+SERVICE_FILE_OPENRC="$SERVICE_NAME-openrc"
+
+## Generic code
+
+trap GenericTrapQuit TERM EXIT HUP QUIT
 
 if [ ! -w "$(dirname $LOG_FILE)" ]; then
         echo "Cannot write to log [$(dirname $LOG_FILE)]."
