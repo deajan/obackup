@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 SUBPROGRAM=[prgname]
 PROGRAM="$SUBPROGRAM-batch" # Batch program to run osync / obackup instances sequentially and rerun failed ones
-AUTHOR="(L) 2013-2018 by Orsiris de Jong"
+AUTHOR="(L) 2013-2020 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr - ozy@netpower.fr"
-PROGRAM_BUILD=2018100201
+PROGRAM_BUILD=2020031502
 
 ## Runs an osync /obackup instance for every conf file found
 ## If an instance fails, run it again if time permits
@@ -34,12 +34,11 @@ elif [ -w /var/tmp ]; then
 else
 	RUN_DIR=.
 fi
-
-trap TrapQuit TERM EXIT HUP QUIT
-
 # No need to edit under this line ##############################################################
 
 include #### Logger SUBSET ####
+include #### CleanUp SUBSET ####
+include #### GenericTrapQuit SUBSET ####
 
 function CheckEnvironment {
 	## osync / obackup executable full path can be set here if it cannot be found on the system
@@ -128,6 +127,8 @@ function Usage {
 	echo "Verify log file in [$LOG_FILE]."
 	exit 128
 }
+
+trap GenericTrapQuit TERM EXIT HUP QUIT
 
 opts=""
 for i in "$@"

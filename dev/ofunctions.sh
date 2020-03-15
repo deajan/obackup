@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-## Generic and highly portable bash functions written in 2013-2019 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
+## Generic and highly portable bash functions written in 2013-2020 by Orsiris de Jong - http://www.netpower.fr - ozy@netpower.fr
 
 #TODO: ExecTasks postponed arrays / files grow a lot. Consider having them "rolling" (cleaned at numberOfEvents)
 #TODO: command line arguments don't take -AaqV for example
@@ -30,8 +30,8 @@
 #### OFUNCTIONS FULL SUBSET ####
 #### OFUNCTIONS MINI SUBSET ####
 #### OFUNCTIONS MICRO SUBSET ####
-_OFUNCTIONS_VERSION=2.3.0-dev-postRC2
-_OFUNCTIONS_BUILD=2019080904
+_OFUNCTIONS_VERSION=2.3.0-RC4
+_OFUNCTIONS_BUILD=2020031502
 #### _OFUNCTIONS_BOOTSTRAP SUBSET ####
 _OFUNCTIONS_BOOTSTRAP=true
 #### _OFUNCTIONS_BOOTSTRAP SUBSET END ####
@@ -421,6 +421,26 @@ function KillAllChilds {
 	return $errorcount
 }
 
+#### GenericTrapQuit SUBSET ####
+function GenericTrapQuit {
+	local exitcode=0
+
+	# Get ERROR / WARN alert flags from subprocesses that call Logger
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
+		WARN_ALERT=true
+		exitcode=2
+	fi
+	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
+		ERROR_ALERT=true
+		exitcode=1
+	fi
+
+	CleanUp
+	exit $exitcode
+}
+
+#### TrapQuit SUBSET END ####
+
 #### CleanUp SUBSET ####
 function CleanUp {
 	# Exit controlmaster before it's socket gets deleted
@@ -439,25 +459,8 @@ function CleanUp {
 		rm -f "$RUN_DIR/$PROGRAM."*".$SCRIPT_PID.$TSTAMP.tmp"
 	fi
 }
+
 #### CleanUp SUBSET END ####
-
-function GenericTrapQuit {
-	local exitcode=0
-
-	# Get ERROR / WARN alert flags from subprocesses that call Logger
-	if [ -f "$RUN_DIR/$PROGRAM.Logger.warn.$SCRIPT_PID.$TSTAMP" ]; then
-		WARN_ALERT=true
-		exitcode=2
-	fi
-	if [ -f "$RUN_DIR/$PROGRAM.Logger.error.$SCRIPT_PID.$TSTAMP" ]; then
-		ERROR_ALERT=true
-		exitcode=1
-	fi
-
-	CleanUp
-	exit $exitcode
-}
-
 
 #### OFUNCTIONS MICRO SUBSET END ####
 
@@ -561,7 +564,7 @@ function SendEmail {
 			fi
 		done
 	else
-		Logger "No valid email adresses given." "WARN"
+		Logger "No valid email addresses given." "WARN"
 		return 1
 	fi
 
@@ -776,7 +779,7 @@ function _PerfProfiler {												#__WITH_PARANOIA_DEBUG
 
 _OFUNCTIONS_SPINNER="|/-\\"
 function Spinner {
-	if [ $_LOGGER_SILENT == true ] || [ "$_LOGGER_ERR_ONLY" == true ]; then
+	if [ $_LOGGER_SILENT == true ] || [ "$_LOGGER_ERR_ONLY" == true ] || [ "$_SYNC_ON_CHANGES" == "initiator" ] || [ "$_SYNC_ON_CHANGES" == "target" ] ; then
 		return 0
 	else
 		printf " [%c]  \b\b\b\b\b\b" "$_OFUNCTIONS_SPINNER"
@@ -905,7 +908,7 @@ function ExecTasks {
 	local currentCommand		# Variable containing currently processed command
 	local currentCommandCondition	# Variable containing currently processed conditional command
 	local commandsArrayPid=()	# Array containing commands indexed by pids
-	local commandsArrayOutput=()	# Array contining command results indexed by pids
+	local commandsArrayOutput=()	# Array containing command results indexed by pids
 	local postponedRetryCount=0	# Number of current postponed commands retries
 	local postponedItemCount=0	# Number of commands that have been postponed (keep at least one in order to check once)
 	local postponedCounter=0
@@ -2021,6 +2024,11 @@ function PreInit {
 		SSH_OPTS="$SSH_OPTS -o ControlMaster=auto -o ControlPersist=yes -o ControlPath=\"$RUN_DIR/$PROGRAM.ctrlm.%r@%h.$SCRIPT_PID.$TSTAMP\""
 	fi
 
+	## Optional SSH arguments
+	if [ "$SSH_OPTIONAL_ARGS" != "" ]; then
+		SSH_OPTS="$SSH_OPTS $SSH_OPTIONAL_ARGS"
+	fi
+
 	## Support for older config files without RSYNC_EXECUTABLE option
 	if [ "$RSYNC_EXECUTABLE" == "" ]; then
 		RSYNC_EXECUTABLE=rsync
@@ -2234,7 +2242,7 @@ function InitRemoteOSDependingSettings {
 	fi
 	if [ "$RSYNC_COMPRESS" == true ]; then
 		if [ "$LOCAL_OS" != "MacOSX" ] && [ "$REMOTE_OS" != "MacOSX" ]; then
-			RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" -zz --skip-compress=gz/xz/lz/lzma/lzo/rz/jpg/mp3/mp4/7z/bz2/rar/zip/sfark/s7z/ace/apk/arc/cab/dmg/jar/kgb/lzh/lha/lzx/pak/sfx"
+			RSYNC_DEFAULT_ARGS=$RSYNC_DEFAULT_ARGS" -zz --skip-compress=3fr/3g2/3gp/3gpp/7z/aac/ace/amr/apk/appx/appxbundle/arc/arj/arw/asf/avi/bz/bz2/cab/cr2/crypt[5678]/dat/dcr/deb/dmg/drc/ear/erf/flac/flv/gif/gpg/gz/iiq/jar/jp2/jpeg/jpg/h26[45]/k25/kdc/kgb/lha/lz/lzma/lzo/lzx/m4[apv]/mef/mkv/mos/mov/mp[34]/mpeg/mp[gv]/msi/nef/oga/ogg/ogv/opus/orf/pak/pef/png/qt/rar/r[0-9][0-9]/rz/rpm/rw2/rzip/s7z/sfark/sfx/sr2/srf/svgz/t[gb]z/tlz/txz/vob/wim/wma/wmv/xz/zip"
 		else
 			Logger "Disabling compression skips on synchronization on [$LOCAL_OS] due to lack of support." "NOTICE"
 		fi
@@ -2417,5 +2425,26 @@ function WildcardFileExists () {
 		echo 0
 	fi
 }
+
+# Some MacOS versions might loose file ownsership when using mv from /tmp dir (see #175)
+# This is a "mv" function wrapper that helps out with macOS
+#### FileMove SUBSET ####
+function FileMove () {
+	local source="${1}"
+	local dest="${2}"
+
+	# If file is symlink or OS is not Mac, just make a standard mv
+	if [ -L "$source" ] || [ "$LOCAL_OS" != "MacOSX" ]; then
+		mv -f "$source" "$dest"
+		return $?
+	elif [ -w "$source" ]; then
+		[ -f "$dest" ] && rm -f "$dest"
+		cp -p "$source" "$dest" && rm -f "$source"
+		return $?
+	else
+		return -1
+	fi
+}
+#### FileMove SUBSET END ####
 
 #### OFUNCTIONS FULL SUBSET END ####
