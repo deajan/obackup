@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev-postRC1
-PROGRAM_BUILD=2020050302
+PROGRAM_BUILD=2020050303
 IS_STABLE=true
 
 CONFIG_FILE_REVISION_REQUIRED=2.1
@@ -276,7 +276,7 @@ function _ListDatabasesLocal {
 	local retval
 	local sqlCmd
 
-        sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1"
+        sqlCmd="mysql -u $SQL_USER -Bse 'SELECT table_schema, round(sum( data_length + index_length ) / 1024) FROM information_schema.TABLES GROUP by table_schema;' > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
         Logger "Launching command [$sqlCmd]." "DEBUG"
         eval "$sqlCmd" &
 	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
@@ -423,7 +423,7 @@ function _ListRecursiveBackupDirectoriesLocal {
 		# Make sure there is only one trailing slash
 		directory="${directory%/}/"
 		# No sudo here, assuming you should have all necessary rights for local checks
-		cmd="$FIND_CMD -L $directory -mindepth 1 -maxdepth 1 -type d >> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+		cmd="$FIND_CMD -L $directory -mindepth 1 -maxdepth 1 -type d >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
 		Logger "Launching command [$cmd]." "DEBUG"
 		eval "$cmd"
 		retval=$?
@@ -596,7 +596,7 @@ function _GetDirectoriesSizeLocal {
 
 	# No sudo here, assuming you should have all the necessary rights
 	# This is not pretty, but works with all supported systems
-	cmd="du -cs $dirList | tail -n1 | cut -f1 > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	cmd="du -cs \"$dirList\" | tail -n1 | cut -f1 > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
 	Logger "Launching command [$cmd]." "DEBUG"
         eval "$cmd" &
 	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
@@ -643,7 +643,7 @@ include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
 include #### RemoteLogger SUBSET ####
 
-	cmd="du -cs $dirList | tail -n1 | cut -f1"
+	cmd="du -cs \"$dirList\" | tail -n1 | cut -f1"
         eval "$cmd"
 	retval=$?
 	if [ $retval != 0 ]; then
@@ -1037,8 +1037,8 @@ function _BackupDatabaseLocalToLocal {
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
-	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > $SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
 
 	if [ $_DRYRUN == false ]; then
 		Logger "Launching command [$sqlCmd]." "DEBUG"
@@ -1084,8 +1084,8 @@ function _BackupDatabaseLocalToRemote {
 		encryptExtension="$CRYPT_FILE_EXTENSION"
 	fi
 
-	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
-	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD 'env _REMOTE_TOKEN=$_REMOTE_TOKEN $COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP"
+	local drySqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions > /dev/null 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
+	local sqlCmd="mysqldump -u $SQL_USER $exportOptions --databases $database $COMPRESSION_PROGRAM $COMPRESSION_OPTIONS $encryptOptions | $SSH_CMD 'env _REMOTE_TOKEN=$_REMOTE_TOKEN $COMMAND_SUDO tee \"$SQL_STORAGE/$database.sql$COMPRESSION_EXTENSION$encryptExtension\" > /dev/null' 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
 
 	if [ $_DRYRUN == false ]; then
 		Logger "Launching command [$sqlCmd]." "DEBUG"
