@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev-postRC1
-PROGRAM_BUILD=2020031501
+PROGRAM_BUILD=2020050302
 IS_STABLE=true
 
 CONFIG_FILE_REVISION_REQUIRED=2.1
@@ -37,7 +37,7 @@ CONFIG_FILE_REVISION_REQUIRED=2.1
 #	FilesBackup					#__WITH_PARANOIA_DEBUG
 
 _OFUNCTIONS_VERSION=2.3.0-RC4
-_OFUNCTIONS_BUILD=2020031503
+_OFUNCTIONS_BUILD=2020050301
 _OFUNCTIONS_BOOTSTRAP=true
 
 if ! type "$BASH" > /dev/null; then
@@ -278,8 +278,8 @@ function Logger {
 	fi
 
 	## Obfuscate _REMOTE_TOKEN in logs (for ssh_filter usage only in osync and obackup)
-	value="${value/env _REMOTE_TOKEN=$_REMOTE_TOKEN/env _REMOTE_TOKEN=__(o_O)__}"
-	value="${value/env _REMOTE_TOKEN=\$_REMOTE_TOKEN/env _REMOTE_TOKEN=__(o_O)__}"
+	value="${value/env _REMOTE_TOKEN=$_REMOTE_TOKEN/env _REMOTE_TOKEN=__o_O__}"
+	value="${value/env _REMOTE_TOKEN=\$_REMOTE_TOKEN/env _REMOTE_TOKEN=__o_O__}"
 
 	if [ "$level" == "CRITICAL" ]; then
 		_Logger "$prefix($level):$value" "$prefix\e[1;33;41m$value\e[0m" true
@@ -430,6 +430,7 @@ function GenericTrapQuit {
 	exit $exitcode
 }
 
+#### TrapQuit SUBSET END ####
 
 function CleanUp {
 	# Exit controlmaster before it's socket gets deleted
@@ -1754,11 +1755,7 @@ function RunLocalCommand {
 	if [ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ]; then
 		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "NOTICE"
 	fi
-
-	if [ "$STOP_ON_CMD_ERROR" == true ] && [ $retval -ne 0 ]; then
-		Logger "Stopping on command execution error." "CRITICAL"
-		exit 1
-	fi
+	return $retval
 }
 
 ## Runs remote command $1 and waits for completition in $2 seconds
@@ -1792,15 +1789,10 @@ function RunRemoteCommand {
 		Logger "Command failed." "ERROR"
 	fi
 
-	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ] && ([ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ])
-	then
+	if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ] && ([ $_LOGGER_VERBOSE == true ] || [ $retval -ne 0 ]); then
 		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "NOTICE"
 	fi
-
-	if [ "$STOP_ON_CMD_ERROR" == true ] && [ $retval -ne 0 ]; then
-		Logger "Stopping on command execution error." "CRITICAL"
-		exit 1
-	fi
+	return $retval
 }
 
 function RunBeforeHook {
@@ -1819,6 +1811,14 @@ function RunBeforeHook {
 	fi
 	if [ "$pids" != "" ]; then
 		ExecTasks $pids "${FUNCNAME[0]}" false 0 0 0 0 true $SLEEP_TIME $KEEP_LOGGING
+		retval=$?
+	fi
+
+	echo "ert=$retval"
+
+	if [ "$STOP_ON_CMD_ERROR" == true ] && [ $retval -ne 0 ]; then
+		Logger "Stopping on command execution error." "CRITICAL"
+		exit 1
 	fi
 }
 
@@ -2026,7 +2026,7 @@ function PreInit {
 	fi
 
 	## Set compression executable and extension
-	if [ "$(IsInteger $COMPRESSION_LEVEL)" -eq 0 ]; then
+	if [ "$(IsInteger "$COMPRESSION_LEVEL")" -eq 0 ]; then
 		COMPRESSION_LEVEL=3
 	fi
 }
@@ -2663,7 +2663,7 @@ function _ListDatabasesLocal {
 		Logger "Listing databases failed." "ERROR"
 		_LOGGER_SILENT=true Logger "Command was [$sqlCmd]." "WARN"
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
 		return 1
 	fi
@@ -2689,7 +2689,7 @@ function _ListDatabasesRemote {
 		Logger "Listing databases failed." "ERROR"
 		Logger "Command output: $sqlCmd" "WARN"
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
 		return $retval
 	fi
@@ -2806,11 +2806,11 @@ function _ListRecursiveBackupDirectoriesLocal {
 		if  [ $retval -ne 0 ]; then
 			Logger "Could not enumerate directories in [$directory]." "ERROR"
 			 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+				Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 			fi
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+				Logger "Truncated error output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 			fi
 			failuresPresent=true
 		else
@@ -2996,11 +2996,11 @@ exit $?
 ENDSSH
 	retval=$?
 	if [ $retval -ne 0 ]; then
-		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
-		if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP ]; then
-			Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
+			Logger "Truncated error output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
 	fi
 	return $retval
@@ -3100,19 +3100,19 @@ function _GetDirectoriesSizeLocal {
 		Logger "Could not get files size for some or all local directories." "ERROR"
 		 _LOGGER_SILENT=true Logger "Command was [$cmd]." "WARN"
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated error output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
 	else
 		Logger "File size fetched successfully." "NOTICE"
 	fi
 
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-		TOTAL_FILES_SIZE="$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
-		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
-			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
+		TOTAL_FILES_SIZE="$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")"
+		if [ $(IsInteger "$TOTAL_FILES_SIZE") -eq 0 ]; then
+			TOTAL_FILES_SIZE="$(HumanToNumeric "$TOTAL_FILES_SIZE")"
 		fi
 	else
 		TOTAL_FILES_SIZE=-1
@@ -3269,18 +3269,18 @@ ENDSSH
 	if  [ $retval -ne 0 ] || [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
 		Logger "Could not get files size for some or all remote directories." "ERROR"
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
 		if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" ]; then
-			Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated error output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		fi
 	else
 		Logger "File size fetched successfully." "NOTICE"
 	fi
 	if [ -s "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
-		TOTAL_FILES_SIZE="$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)"
-		if [ $(IsInteger $TOTAL_FILES_SIZE) -eq 0 ]; then
-			TOTAL_FILES_SIZE="$(HumanToNumeric $TOTAL_FILES_SIZE)"
+		TOTAL_FILES_SIZE="$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")"
+		if [ $(IsInteger "$TOTAL_FILES_SIZE") -eq 0 ]; then
+			TOTAL_FILES_SIZE="$(HumanToNumeric "$TOTAL_FILES_SIZE")"
 		fi
 	else
 		TOTAL_FILES_SIZE=-1
@@ -3311,13 +3311,13 @@ function _CreateDirectoryLocal {
 
 	if [ ! -d "$dirToCreate" ]; then
 		# No sudo, you should have all necessary rights
-		mkdir -p "$dirToCreate" > $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP 2>&1 &
+		mkdir -p "$dirToCreate" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1 &
 		ExecTasks $! "${FUNCNAME[0]}" false 0 0 720 1800 true $SLEEP_TIME $KEEP_LOGGING
 		retval=$?
 		if [ $retval -ne 0 ]; then
 			Logger "Cannot create directory [$dirToCreate]" "CRITICAL"
-			if [ -f $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP ]; then
-				Logger "Truncated output: $(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			if [ -f "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" ]; then
+				Logger "Truncated output: $(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 			fi
 			return $retval
 		fi
@@ -3475,7 +3475,7 @@ ENDSSH
 	ExecTasks $! "${FUNCNAME[0]}" false 0 0 720 1800 true $SLEEP_TIME $KEEP_LOGGING
 	retval=$?
 	if [ $retval -ne 0 ]; then
-		Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		return $retval
 	fi
 }
@@ -3542,12 +3542,12 @@ function GetDiskSpaceLocal {
 		if [ $retval -ne 0 ]; then
 			DISK_SPACE=0
 			Logger "Cannot get disk space in [$pathToCheck] on local system." "ERROR"
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		else
 			DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
 			DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
-			if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
-				DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
+			if [ $(IsInteger "$DISK_SPACE") -eq 0 ]; then
+				DISK_SPACE="$(HumanToNumeric "$DISK_SPACE")"
 			fi
 		fi
 	else
@@ -3720,14 +3720,14 @@ ENDSSH
 	if [ $retval -ne 0 ]; then
 		DISK_SPACE=0
 		Logger "Cannot get disk space in [$pathToCheck] on remote system." "ERROR"
-		Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
-		Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
+		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		return $retval
 	else
 		DISK_SPACE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $4}')
 		DRIVE=$(tail -1 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" | awk '{print $1}')
-		if [ $(IsInteger $DISK_SPACE) -eq 0 ]; then
-			DISK_SPACE="$(HumanToNumeric $DISK_SPACE)"
+		if [ $(IsInteger "$DISK_SPACE") -eq 0 ]; then
+			DISK_SPACE="$(HumanToNumeric "$DISK_SPACE")"
 		fi
 	fi
 }
@@ -3903,7 +3903,7 @@ function _BackupDatabaseLocalToLocal {
 		else
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 		fi
-		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated error output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
 	fi
@@ -3950,7 +3950,7 @@ function _BackupDatabaseLocalToRemote {
 		else
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 		fi
-		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated error output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
 	fi
@@ -3997,7 +3997,7 @@ function _BackupDatabaseRemoteToLocal {
 		else
 			 _LOGGER_SILENT=true Logger "Command was [$drySqlCmd]." "WARN"
 		fi
-		Logger "Truncated error output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated error output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP")" "ERROR"
 		# Dirty fix for mysqldump return code not honored
 		retval=1
 	fi
@@ -4103,13 +4103,13 @@ function EncryptFiles {
 		fi
 
 		Logger "Encrypting file [$sourceFile] to [$path/$file$cryptFileExtension]." "VERBOSE"
-		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+		if [ $(IsNumeric "$PARALLEL_ENCRYPTION_PROCESSES") -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
 			echo "$CRYPT_TOOL --batch --yes --out \"$path/$file$cryptFileExtension\" --recipient=\"$recipient\" --encrypt \"$sourceFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
 			$CRYPT_TOOL --batch --yes --out "$path/$file$cryptFileExtension" --recipient="$recipient" --encrypt "$sourceFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 			if [ $? -ne 0 ]; then
 				Logger "Cannot encrypt [$sourceFile]." "ERROR"
-				Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+				Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "DEBUG"
 				errorCounter=$((errorCounter+1))
 			else
 				successCounter=$((successCounter+1))
@@ -4118,16 +4118,16 @@ function EncryptFiles {
 	#TODO: This redirection does not work with busybox since there is no subshell support
 	done < <($FIND_CMD "$filePath" $recursiveArgs -type f ! -name "*$cryptFileExtension" -print0)
 
-	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+	if [ $(IsNumeric "$PARALLEL_ENCRYPTION_PROCESSES") -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
 		# Handle batch mode where SOFT /HARD MAX EXEC TIME TOTAL is not defined
-		if [ $(IsNumeric $SOFT_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
-			softMaxExecTime=$SOFT_MAX_EXEC_TIME_TOTAL
+		if [ $(IsNumeric "$SOFT_MAX_EXEC_TIME_TOTAL") -eq 1 ]; then
+			softMaxExecTime="$SOFT_MAX_EXEC_TIME_TOTAL"
 		else
 			softMaxExecTime=0
 		fi
 
-		if [ $(IsNumeric $HARD_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
-			hardMaxExecTime=$HARD_MAX_EXEC_TIME_TOTAL
+		if [ $(IsNumeric "$HARD_MAX_EXEC_TIME_TOTAL") -eq 1 ]; then
+			hardMaxExecTime="$HARD_MAX_EXEC_TIME_TOTAL"
 		else
 			hardMaxExecTime=0
 		fi
@@ -4136,7 +4136,7 @@ function EncryptFiles {
 		if [ $retval -ne 0 ]; then
 			Logger "Encryption error." "ERROR"
 			# Output file is defined in ParallelExec
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.ExecTasks.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.ExecTasks.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "DEBUG"
 		fi
 		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
 		errorCounter=$retval
@@ -4177,7 +4177,7 @@ function DecryptFiles {
 	fi
 
 	# Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
-	cryptToolVersion=$($CRYPT_TOOL --version | head -1 | awk '{print $3}')
+	cryptToolVersion=$("$CRYPT_TOOL" --version | head -1 | awk '{print $3}')
 	cryptToolMajorVersion=${cryptToolVersion%%.*}
 	cryptToolSubVersion=${cryptToolVersion#*.}
 	cryptToolSubVersion=${cryptToolSubVersion%.*}
@@ -4204,14 +4204,14 @@ function DecryptFiles {
 	while IFS= read -r -d $'\0' encryptedFile; do
 		Logger "Decrypting [$encryptedFile]." "VERBOSE"
 
-		if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+		if [ $(IsNumeric "$PARALLEL_ENCRYPTION_PROCESSES") -eq 1  ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
 			echo "$CRYPT_TOOL $options --out \"${encryptedFile%%$cryptFileExtension}\" $additionalParameters $secret --decrypt \"$encryptedFile\" >> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1" >> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP"
 		else
 			$CRYPT_TOOL $options --out "${encryptedFile%%$cryptFileExtension}" $additionalParameters $secret --decrypt "$encryptedFile" > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2>&1
 			retval=$?
 			if [ $retval -ne 0 ]; then
 				Logger "Cannot decrypt [$encryptedFile]." "ERROR"
-				Logger "Truncated output\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "NOTICE"
+				Logger "Truncated output\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "NOTICE"
 				errorCounter=$((errorCounter+1))
 			else
 				successCounter=$((successCounter+1))
@@ -4223,15 +4223,15 @@ function DecryptFiles {
 		fi
 	done < <($FIND_CMD "$filePath" -type f -name "*$cryptFileExtension" -print0)
 
-	if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
+	if [ $(IsNumeric "$PARALLEL_ENCRYPTION_PROCESSES") -eq 1 ] && [ "$PARALLEL_ENCRYPTION_PROCESSES" != "1" ]; then
 		# Handle batch mode where SOFT /HARD MAX EXEC TIME TOTAL is not defined
-		if [ $(IsNumeric $SOFT_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+		if [ $(IsNumeric "$SOFT_MAX_EXEC_TIME_TOTAL") -eq 1 ]; then
 			softMaxExecTime=$SOFT_MAX_EXEC_TIME_TOTAL
 		else
 			softMaxExecTime=0
 		fi
 
-		if [ $(IsNumeric $HARD_MAX_EXEC_TIME_TOTAL) -eq 1 ]; then
+		if [ $(IsNumeric "$HARD_MAX_EXEC_TIME_TOTAL") -eq 1 ]; then
 			hardMaxExecTime=$HARD_MAX_EXEC_TIME_TOTAL
 		else
 			hardMaxExecTime=0
@@ -4242,7 +4242,7 @@ function DecryptFiles {
 		if [ $retval -ne 0 ]; then
 			Logger "Decrypting error.." "ERROR"
 			# Output file is defined in ParallelExec
-			Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP)" "DEBUG"
+			Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.ParallelExec.EncryptFiles.$SCRIPT_PID.$TSTAMP")" "DEBUG"
 		fi
 		successCounter=$(($(wc -l < "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.parallel.$SCRIPT_PID.$TSTAMP") - retval))
 		errorCounter=$retval
@@ -4288,14 +4288,12 @@ function Rsync {
 		_CreateDirectoryLocal "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		sourceDir=$(EscapeSpaces "$sourceDir")
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:$sourceDir\" \"$destinationDir\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$REMOTE_USER@$REMOTE_HOST:'$sourceDir'\" \"$destinationDir\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
 	elif [ "$BACKUP_TYPE" == "push" ]; then
-		destinationDir=$(EscapeSpaces "$destinationDir")
 		_CreateDirectoryRemote "$destinationDir"
 		CheckConnectivity3rdPartyHosts
 		CheckConnectivityRemoteHost
-		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$sourceDir\" \"$REMOTE_USER@$REMOTE_HOST:$destinationDir\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
+		rsyncCmd="$(type -p $RSYNC_EXECUTABLE) $rsyncArgs $RSYNC_DRY_ARG $RSYNC_ATTR_ARGS $RSYNC_TYPE_ARGS $RSYNC_NO_RECURSE_ARGS $RSYNC_DELETE $RSYNC_PATTERNS $RSYNC_PARTIAL_EXCLUDE --rsync-path=\"env _REMOTE_TOKEN=$_REMOTE_TOKEN $RSYNC_PATH\" -e \"$RSYNC_SSH_CMD\" \"$sourceDir\" \"$REMOTE_USER@$REMOTE_HOST:'$destinationDir'\" > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2>&1"
 	fi
 
 	Logger "Launching command [$rsyncCmd]." "DEBUG"
@@ -4305,7 +4303,7 @@ function Rsync {
 	if [ $retval -ne 0 ]; then
 		Logger "Failed to backup [$sourceDir] to [$destinationDir]." "ERROR"
 		 _LOGGER_SILENT=true Logger "Command was [$rsyncCmd]." "WARN"
-		Logger "Truncated output:\n $(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 	else
 		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "VERBOSE"
 		Logger "File backup succeed." "NOTICE"
@@ -4733,7 +4731,7 @@ ENDSSH
 	ExecTasks $! "${FUNCNAME[0]}" false 0 0 1800 0 true $SLEEP_TIME $KEEP_LOGGING
 	if [ $? -ne 0 ]; then
 		Logger "Could not rotate backups in [$backupPath]." "ERROR"
-		Logger "Truncated output:\n$(head -c16384 $RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP)" "ERROR"
+		Logger "Truncated output:\n$(head -c16384 "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP")" "ERROR"
 	else
 		Logger "Remote rotation succeed." "NOTICE"
 	fi        ## Need to add a trivial sleep time to give ssh time to log to local file
@@ -4976,7 +4974,7 @@ function GetCommandlineArguments {
 			;;
 			--parallel=*)
 			PARALLEL_ENCRYPTION_PROCESSES="${i##*=}"
-			if [ $(IsNumeric $PARALLEL_ENCRYPTION_PROCESSES) -ne 1 ]; then
+			if [ $(IsNumeric "$PARALLEL_ENCRYPTION_PROCESSES") -ne 1 ]; then
 				Logger "Bogus --parallel value. Using only one CPU." "WARN"
 			fi
 			;;
@@ -5031,8 +5029,8 @@ fi
 # v2.3 config syntax compatibility
 UpdateBooleans
 
-if [ ! -w "$(dirname $LOG_FILE)" ]; then
-	echo "Cannot write to log [$(dirname $LOG_FILE)]."
+if [ ! -w "$(dirname "$LOG_FILE")" ]; then
+	echo "Cannot write to log [$(dirname "$LOG_FILE")]."
 else
 	Logger "Script begin, logging to [$LOG_FILE]." "DEBUG"
 fi
