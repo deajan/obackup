@@ -1335,7 +1335,11 @@ function DecryptFiles {
 	cryptToolSubVersion=${cryptToolSubVersion%.*}
 
 	if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
-		additionalParameters="--pinentry-mode loopback"
+		if [ $cryptToolMinorVersion -gt 11 ]; then
+			additionalParameters="--pinentry-mode loopback"
+		elif [ $cryptToolMinorVersion -eq 11 ]; then
+			Logger "GPG automatism via --pinentry-mode loopback not supported in gpg version 2.1.11. Please add allow-loopback-pinentry to your gpg-agent.conf file." "NOTICE"
+		fi
 	fi
 
 	if [ -f "$passphraseFile" ]; then
