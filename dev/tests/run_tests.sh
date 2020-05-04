@@ -352,6 +352,9 @@ function test_GPG () {
 			[ -f "${HOME}/.gnupg/gpg-agent.conf" ] || touch "${HOME}/.gnupg/gpg-agent.conf"
 			echo "allow-loopback-pinentry" >> "${HOME}/.gnupg/gpg-agent.conf"
 			gpgconf --reload gpg-agent
+			cat "${HOME}/.gnupg/gpg-agent.conf"
+	                additionalParameters="--pinentry-mode loopback"
+
 		else
 			echo "Not using --pinentry-mode loopback [$cryptToolMajorVersion.$cryptToolSubVersion.$cryptToolMinorVersion]"
 		fi
