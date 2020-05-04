@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## obackup basic tests suite 2019071901
+## obackup basic tests suite 2020050401
 
 # Supported environment variables
 
@@ -347,7 +347,8 @@ function test_GPG () {
 		if [ $cryptToolMinorVersion -ge 11 ]; then
 			echo "Using --pinentry-mode loopback [$cryptToolMajorVersion.$cryptToolSubVersion.$cryptToolMinorVersion]"
 	                additionalParameters="--pinentry-mode loopback"
-			additionalParameters="" # WIP
+		else
+			echo "Not using --pinentry-mode loopback [$cryptToolMajorVersion.$cryptToolSubVersion.$cryptToolMinorVersion]"
 		fi
         fi
 
