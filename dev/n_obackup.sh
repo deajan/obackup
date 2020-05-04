@@ -596,7 +596,7 @@ function _GetDirectoriesSizeLocal {
 
 	# No sudo here, assuming you should have all the necessary rights
 	# This is not pretty, but works with all supported systems
-	cmd="du -cs \"$dirList\" | tail -n1 | cut -f1 > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
+	cmd="du -cs $dirList | tail -n1 | cut -f1 > \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP\" 2> \"$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP\""
 	Logger "Launching command [$cmd]." "DEBUG"
         eval "$cmd" &
 	ExecTasks $! "${FUNCNAME[0]}" false 0 0 $SOFT_MAX_EXEC_TIME_TOTAL $HARD_MAX_EXEC_TIME_TOTAL true $SLEEP_TIME $KEEP_LOGGING
@@ -643,7 +643,7 @@ include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
 include #### RemoteLogger SUBSET ####
 
-	cmd="du -cs \"$dirList\" | tail -n1 | cut -f1"
+	cmd="du -cs $dirList | tail -n1 | cut -f1"
         eval "$cmd"
 	retval=$?
 	if [ $retval != 0 ]; then
