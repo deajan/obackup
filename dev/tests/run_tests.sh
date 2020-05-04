@@ -344,9 +344,12 @@ function test_GPG () {
 	echo "$CRYPT_TOOL is $cryptToolVersion"
 
         if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
-		if [ $cryptToolMinorVersion -ge 11 ]; then
+		if [ $cryptToolMinorVersion -gt 11 ]; then
 			echo "Using --pinentry-mode loopback [$cryptToolMajorVersion.$cryptToolSubVersion.$cryptToolMinorVersion]"
 	                additionalParameters="--pinentry-mode loopback"
+		elif [ $cryptToolMinorVersion -eq 11 ]; then
+			echo "Using fix to allow --pinentry-mode loopback"
+			echo "allow-loopback-pinentry" >> {$HOME}/.gnupg/gpg-agent.conf
 		else
 			echo "Not using --pinentry-mode loopback [$cryptToolMajorVersion.$cryptToolSubVersion.$cryptToolMinorVersion]"
 		fi
