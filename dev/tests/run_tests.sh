@@ -333,7 +333,7 @@ function test_GPG () {
         # Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
 
 	# GnuPG 2.1.11 has a bug that does not allow usage of pinentry mode 'loopback'
-	# GnuPC 2.1.22 has that bug resolved
+	# GnuPC 2.1.12 has that bug resolved
 
         cryptToolVersion=$($CRYPT_TOOL --version | head -1 | awk '{print $3}')
         cryptToolMajorVersion=${cryptToolVersion%%.*}
@@ -349,7 +349,9 @@ function test_GPG () {
 	                additionalParameters="--pinentry-mode loopback"
 		elif [ $cryptToolMinorVersion -eq 11 ]; then
 			echo "Using fix to allow --pinentry-mode loopback"
-			echo "allow-loopback-pinentry" >> {$HOME}/.gnupg/gpg-agent.conf
+			[ -f "{$HOME}/.gnupg/gpg-agent.conf" ] || touch "{$HOME}/.gnupg/gpg-agent.conf"
+			echo "allow-loopback-pinentry" >> "{$HOME}/.gnupg/gpg-agent.conf"
+			gpgconf --reload gpg-agent
 		else
 			echo "Not using --pinentry-mode loopback [$cryptToolMajorVersion.$cryptToolSubVersion.$cryptToolMinorVersion]"
 		fi
