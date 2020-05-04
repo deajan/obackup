@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev-postRC1
-PROGRAM_BUILD=2020050401
+PROGRAM_BUILD=2020050402
 IS_STABLE=true
 
 CONFIG_FILE_REVISION_REQUIRED=2.1
@@ -636,13 +636,12 @@ function _GetDirectoriesSizeRemote {
 $SSH_CMD env _REMOTE_TOKEN=$_REMOTE_TOKEN \
 env _DEBUG="'$_DEBUG'" env _PARANOIA_DEBUG="'$_PARANOIA_DEBUG'" env _LOGGER_SILENT="'$_LOGGER_SILENT'" env _LOGGER_VERBOSE="'$_LOGGER_VERBOSE'" env _LOGGER_PREFIX="'$_LOGGER_PREFIX'" env _LOGGER_ERR_ONLY="'$_LOGGER_ERR_ONLY'" \
 env _REMOTE_EXECUTION="true" env PROGRAM="'$PROGRAM'" env SCRIPT_PID="'$SCRIPT_PID'" env TSTAMP="'$TSTAMP'" \
-dirList="$dirList" \
+env dirList="\"$dirList\"" \
 $COMMAND_SUDO' bash -s' << 'ENDSSH' > "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.$SCRIPT_PID.$TSTAMP" 2> "$RUN_DIR/$PROGRAM.${FUNCNAME[0]}.error.$SCRIPT_PID.$TSTAMP" &
 _REMOTE_TOKEN="(o_0)"
 include #### DEBUG SUBSET ####
 include #### TrapError SUBSET ####
 include #### RemoteLogger SUBSET ####
-
 	cmd="du -cs $dirList | tail -n1 | cut -f1"
         eval "$cmd"
 	retval=$?
@@ -1328,11 +1327,17 @@ function DecryptFiles {
 		exit 1
 	fi
 
+
+        echo "$CRYPT_TOOL is $cryptToolVersion"
+
 	# Detect if GnuPG >= 2.1 that does not allow automatic pin entry anymore
-	cryptToolVersion=$("$CRYPT_TOOL" --version | head -1 | awk '{print $3}')
-	cryptToolMajorVersion=${cryptToolVersion%%.*}
-	cryptToolSubVersion=${cryptToolVersion#*.}
-	cryptToolSubVersion=${cryptToolSubVersion%.*}
+        cryptToolVersion=$("$CRYPT_TOOL" --version | head -1 | awk '{print $3}')
+        cryptToolMajorVersion=${cryptToolVersion%%.*}
+        cryptToolSubVersion=${cryptToolVersion#*.}
+        cryptToolSubVersion=${cryptToolSubVersion%.*}
+        cryptToolMinorVersion=${cryptToolVersion##*.}
+
+	Logger "Running with gpg $cryptToolMajorVersion$cryptToolSubVersion$cryptToolMinorVersion" "NOTICE"
 
 	if [ $cryptToolMajorVersion -eq 2 ] && [ $cryptToolSubVersion -ge 1 ]; then
 		if [ $cryptToolMinorVersion -gt 11 ]; then
