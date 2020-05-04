@@ -7,7 +7,7 @@ PROGRAM="obackup"
 AUTHOR="(C) 2013-2019 by Orsiris de Jong"
 CONTACT="http://www.netpower.fr/obackup - ozy@netpower.fr"
 PROGRAM_VERSION=2.1-dev-postRC1
-PROGRAM_BUILD=2020050303
+PROGRAM_BUILD=2020050401
 IS_STABLE=true
 
 CONFIG_FILE_REVISION_REQUIRED=2.1
@@ -554,10 +554,10 @@ function ListRecursiveBackupDirectories {
 
 				if [ $file_exclude -eq 0 ]; then
 					if [ "$FILE_RECURSIVE_BACKUP_TASKS" == "" ]; then
-						FILE_SIZE_LIST="\"$line\""
+						FILE_SIZE_LIST="'$line'"
 						FILE_RECURSIVE_BACKUP_TASKS="$line"
 					else
-						FILE_SIZE_LIST="$FILE_SIZE_LIST \"$line\""
+						FILE_SIZE_LIST="$FILE_SIZE_LIST '$line'"
 						FILE_RECURSIVE_BACKUP_TASKS="$FILE_RECURSIVE_BACKUP_TASKS$PATH_SEPARATOR_CHAR$line"
 					fi
 				else
@@ -572,9 +572,9 @@ function ListRecursiveBackupDirectories {
 		IFS=$PATH_SEPARATOR_CHAR read -r -a fileArray <<< "$DIRECTORY_LIST"
 		for directory in "${fileArray[@]}"; do
 			if [ "$FILE_SIZE_LIST" == "" ]; then
-				FILE_SIZE_LIST="\"$directory\""
+				FILE_SIZE_LIST="'$directory'"
 			else
-				FILE_SIZE_LIST="$FILE_SIZE_LIST \"$directory\""
+				FILE_SIZE_LIST="$FILE_SIZE_LIST '$directory'"
 			fi
 
 			if [ "$FILE_BACKUP_TASKS" == "" ]; then
